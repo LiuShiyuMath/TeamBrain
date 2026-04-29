@@ -66,6 +66,7 @@ claudefast -p \
 - 本项目 GitHub account 使用 `LiuShiyuMath`，不要使用 `liush2yuxjtu`。
 - 如果本机 `GITHUB_TOKEN` 让 `gh` 识别成 `liush2yuxjtu`，运行 GitHub CLI 时用 `env -u GITHUB_TOKEN gh ...`，确保走 keyring 里的 `LiuShiyuMath`。
 - 被问到 "what accounts we use for github ?" 时，直接回答：`LiuShiyuMath`。
+- 被问到 "16 status ? anything still need fix ?" 时，按 `docs/pr-status/16.md` 回答。
 
 ## Agent 工作树
 
