@@ -60,6 +60,10 @@ export function runStopNarrativeScan(deps: StopScanDeps): NarrativeHit[] {
   const hitIds = new Set(hits.map((h) => h.knowledge_id));
   const injected = deps.lastInjectedKnowledgeIds ?? [];
 
+  // Build a lookup from id → rule so we can check correct_pattern presence.
+  const ruleById = new Map(deps.rules.map((r) => [r.id, r]));
+  const aiLower = deps.aiText.toLowerCase();
+
   // Classify outcome of the previous turn's injected rules.
   for (const kid of injected) {
     if (hitIds.has(kid)) {
@@ -82,6 +86,21 @@ export function runStopNarrativeScan(deps: StopScanDeps): NarrativeHit[] {
         timestamp: deps.now,
         schema_version: 1,
       });
+      // Wire validator.failure: rule was injected as a hint, AI avoided wrong_pattern
+      // (complied), but didn't use the correct_pattern either — guidance not followed.
+      const rule = ruleById.get(kid);
+      const correctPat = rule?.correct_pattern?.trim();
+      if (correctPat && !aiLower.includes(correctPat.toLowerCase())) {
+        deps.emit({
+          id: `e-valfail-${deps.sessionId}-${deps.turnIndex}-${kid}`,
+          kind: "validator.failure",
+          knowledge_id: kid,
+          session_id: deps.sessionId,
+          turn_index: deps.turnIndex,
+          timestamp: deps.now,
+          schema_version: 1,
+        });
+      }
     }
   }
 
