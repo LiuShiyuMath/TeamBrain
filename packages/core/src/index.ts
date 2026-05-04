@@ -15,6 +15,7 @@ export {
   type NestedRuleArtifact,
   type CompileNestedRuleOptions,
 } from "./compiler/nested-rules.js";
+export { compileCursorRules } from "./compiler/cursor.js";
 export {
   matchRules,
   type ToolCallContext,

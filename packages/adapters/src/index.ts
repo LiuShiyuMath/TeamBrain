@@ -36,6 +36,7 @@ export {
   createRuleCompiler,
   type CreateRuleCompilerOptions,
 } from "./compiler/rule-compiler-factory.js";
+export { CursorRulesCompiler } from "./compiler/cursor-rules-compiler.js";
 export {
   ClaudeSessionSource,
   parseSessionFile,

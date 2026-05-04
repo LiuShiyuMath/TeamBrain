@@ -4,10 +4,12 @@ import fs from "node:fs";
 import {
   DualLayerStore,
   MarkdownCompiler,
+  CursorRulesCompiler,
   makeSkillCompiler,
 } from "@teamagent/adapters";
 import {
   runCompile,
+  compileCursorRules,
   type CompilePipelineResult,
   type MarkdownCompilerLike,
 } from "@teamagent/core";
@@ -17,7 +19,7 @@ import type { KnowledgeEntry } from "@teamagent/types";
 export interface CompileOptions {
   dryRun?: boolean;
   /** Install target for exposing Skills. Defaults to Claude Skills only. */
-  target?: "claude" | "codex" | "both";
+  target?: "claude" | "codex" | "both" | "cursor";
   /** Legacy flag: CLAUDE.md block output is disabled by default, so this writes nothing. */
   markdownOnly?: boolean;
   /** Skills-only compile. This is also the default behavior. */
@@ -31,6 +33,8 @@ export interface CompileOptions {
    * Default commands do not write CLAUDE.md; propagation happens through Skills/docs.
    */
   legacyClaudeMd?: boolean;
+  /** Output path for --target cursor. Defaults to `<cwd>/.cursorrules` */
+  cursorOut?: string;
   // 路径注入，供测试使用
   cwd?: string;
   homeDir?: string;
@@ -69,6 +73,7 @@ function resolvePaths(opts: CompileOptions) {
     teamagentSkillsDir,
     userRulesDir,
     codexSkillsDir: path.join(cwd, ".codex", "skills"),
+    cursorRulesPath: opts.cursorOut ?? path.join(cwd, ".cursorrules"),
   };
 }
 
@@ -129,6 +134,11 @@ export async function executeCompile(opts: CompileOptions = {}): Promise<Compile
       dryRun: opts.dryRun,
       writeMarkdown: legacy && !opts.skillsOnly && !opts.markdownOnly,
     });
+    if (target === "cursor" && !opts.dryRun) {
+      const entries = store.getAll();
+      const compiler = new CursorRulesCompiler(paths.cursorRulesPath);
+      compiler.writeToFile(entries);
+    }
     if (targetIncludesCodex(target) && !opts.skillsOnly && !opts.markdownOnly) {
       if (opts.dryRun) {
         result.agentsMarkdown = { path: "(dry-run)", blockLineCount: 0 };
@@ -195,18 +205,23 @@ export function parseCompileArgs(argv: string[]): CompileOptions {
     else if (a === "--codex") opts.target = "codex";
     else if (a === "--claude") opts.target = "claude";
     else if (a === "--both") opts.target = "both";
+    else if (a === "--cursor") opts.target = "cursor";
     else if (a === "--target") {
       opts.target = parseTarget(argv[++i]);
     } else if (a.startsWith("--target=")) {
       opts.target = parseTarget(a.slice("--target=".length));
+    } else if (a === "--cursor-out") {
+      opts.cursorOut = argv[++i];
+    } else if (a.startsWith("--cursor-out=")) {
+      opts.cursorOut = a.slice("--cursor-out=".length);
     }
   }
   return opts;
 }
 
 function parseTarget(value: string | undefined): NonNullable<CompileOptions["target"]> {
-  if (value === "claude" || value === "codex" || value === "both") return value;
-  throw new Error(`--target 必须是 claude|codex|both，收到: ${value ?? ""}`);
+  if (value === "claude" || value === "codex" || value === "both" || value === "cursor") return value;
+  throw new Error(`--target 必须是 claude|codex|both|cursor，收到: ${value ?? ""}`);
 }
 
 export function renderCompileResult(
