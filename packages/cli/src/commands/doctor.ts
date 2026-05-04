@@ -99,7 +99,8 @@ export async function executeDoctor(opts: DoctorOptions = {}): Promise<DoctorRes
 
   // Check 6: Hook registered
   const settingsPath = path.join(cwd, ".claude", "settings.local.json");
-  const hookCheck = checkHookRegistered(settingsPath);
+  const userSettingsPath = path.join(home, ".claude", "settings.json");
+  const hookCheck = checkHookRegistered(settingsPath, userSettingsPath);
   checks.push(hookCheck);
   if (opts.fix && hookCheck.status === "fail") await autoFix(hookCheck, opts);
   if (hookCheck.status === "fail" && !opts.fix) {
@@ -321,7 +322,38 @@ function checkKnowledgeDb(dbPath: string): DoctorCheckResult {
   }
 }
 
-function checkHookRegistered(settingsPath: string): DoctorCheckResult {
+function hasTeamAgentHookInSettings(filePath: string): boolean {
+  if (!fs.existsSync(filePath)) return false;
+  try {
+    const raw = fs.readFileSync(filePath, "utf-8");
+    const settings = JSON.parse(raw) as Record<string, unknown>;
+    const hooks = settings["hooks"] as Record<string, unknown[]> | undefined;
+    if (!hooks) return false;
+    return Object.values(hooks).some(
+      (entries) =>
+        Array.isArray(entries) &&
+        entries.some(
+          (h: unknown) =>
+            typeof h === "object" &&
+            h !== null &&
+            typeof (h as Record<string, unknown>)["_teamagentTag"] === "string" &&
+            ((h as Record<string, unknown>)["_teamagentTag"] as string).startsWith("teamagent-"),
+        ),
+    );
+  } catch {
+    return false;
+  }
+}
+
+function checkHookRegistered(settingsPath: string, userSettingsPath?: string): DoctorCheckResult {
+  // Project-level settings.local.json takes priority
+  if (hasTeamAgentHookInSettings(settingsPath)) {
+    return { name: "hook-registered", status: "pass", detail: "PreToolUse Hook 已注册" };
+  }
+  // Fall back to user-level ~/.claude/settings.json (SessionStart auto-init hook)
+  if (userSettingsPath && hasTeamAgentHookInSettings(userSettingsPath)) {
+    return { name: "hook-registered", status: "pass", detail: "用户级 Hook 已注册 (teamagent install-user-hook)" };
+  }
   if (!fs.existsSync(settingsPath)) {
     return {
       name: "hook-registered",
@@ -331,15 +363,7 @@ function checkHookRegistered(settingsPath: string): DoctorCheckResult {
     };
   }
   try {
-    const raw = fs.readFileSync(settingsPath, "utf-8");
-    const settings = JSON.parse(raw) as Record<string, unknown>;
-    const hooks = settings["hooks"] as Record<string, unknown> | undefined;
-    const pre = hooks?.["PreToolUse"] as unknown[] | undefined;
-    const hasTeamAgent = Array.isArray(pre) &&
-      pre.some((h: unknown) => (h as Record<string, unknown>)["_teamagentTag"] === "teamagent-pre-tool-use");
-    if (hasTeamAgent) {
-      return { name: "hook-registered", status: "pass", detail: "PreToolUse Hook 已注册" };
-    }
+    JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
     return {
       name: "hook-registered",
       status: "fail",

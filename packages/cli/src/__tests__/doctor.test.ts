@@ -202,6 +202,38 @@ describe("executeDoctor team-sharing boundary", () => {
       workspace.cleanup();
     }
   });
+
+  it("passes hook-registered when only user-level settings.json has a teamagent hook", async () => {
+    const workspace = makeTempWorkspace();
+    try {
+      createKnowledgeDb(workspace.cwd);
+      // Write a user-level settings.json with a teamagent-tagged SessionStart hook
+      const userClaudeDir = path.join(workspace.homeDir, ".claude");
+      fs.mkdirSync(userClaudeDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(userClaudeDir, "settings.json"),
+        JSON.stringify({
+          hooks: {
+            SessionStart: [
+              {
+                _teamagentTag: "teamagent-session-start",
+                hooks: [{ type: "command", command: "node /fake/bin-session-start.cjs", timeout: 10 }],
+              },
+            ],
+          },
+        }),
+      );
+      // No project-level settings.local.json written
+      const result = await executeDoctor({
+        cwd: workspace.cwd,
+        homeDir: workspace.homeDir,
+        claudeProbe: passingClaudeProbe,
+      });
+      expect(result.checks.find((c) => c.name === "hook-registered")?.status).toBe("pass");
+    } finally {
+      workspace.cleanup();
+    }
+  });
 });
 
 describe("checkClaudeCode", () => {
