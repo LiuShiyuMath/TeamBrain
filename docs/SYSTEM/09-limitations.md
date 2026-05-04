@@ -18,9 +18,9 @@ Source index: [SYSTEM.md](../SYSTEM.md)
 
 当前 Phase 1 的 PreToolUse Hook 提供了有限的本地规则匹配（相当于简化版 `check_pitfall`），但 AI 无法在**思考过程中**主动查询知识库。MCP Server 计划在 Phase 2 上线。
 
-### Team Scope 未实现
+### Team Sharing 未完整实现
 
-`DualLayerStore` 中 `scope.level=team` 会直接 throw error。团队知识共享（git tracked 的 `.teamagent/` 目录，审核门，冲突仲裁）计划在 Phase 3 实现。
+本地 `scope.level=team` 已可写入 project DB，并能通过 review/stats 独立读取和统计。未完成的是跨机器团队共享：git transport、隐私脱敏、审核门、冲突仲裁和自动同步仍在后续阶段。
 
 ### Session Monitor 未实现
 

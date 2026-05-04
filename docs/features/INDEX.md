@@ -18,7 +18,7 @@ answers; if they need a pointer, keep it to one line.
 | Auto-capture correction moments | Every Claude Code Stop event auto-extracts user corrections from transcript into structured `KnowledgeEntry` — same person never has to correct twice | [auto-capture.md](auto-capture.md) |
 | Real-time intercept (PreToolUse) | Intercept tool calls one beat before AI acts: high-confidence avoidance rules `deny`, practice/low-confidence emit warn/suggest via Claude Code permission decision | [real-time-intercept.md](real-time-intercept.md) |
 | Calibrator v2 | Self-calibrate every rule's `confidence` and `tier` from observed success/failure events | [calibrator-v2.md](calibrator-v2.md) |
-| Team knowledge sharing | Dual-layer store routes `personal/global` today; `team` (git-synced MDC) is Phase 4 — writes still throw | [team-share.md](team-share.md) |
+| Team knowledge sharing | Local `personal/team/global` scopes are distinct today; cross-machine team sync/privacy/review gates remain Phase 4 | [team-share.md](team-share.md) |
 | Multi-tool adaptation | 4 delivery channels (PreToolUse / UserPromptSubmit / Stop / AttributionBus) live; MCP Server NOT YET (Phase 2); Cursor compiler NOT YET (importer only) | [multi-tool.md](multi-tool.md) |
 
 When asked _"how does feature X work?"_ — pick the matching row, open the

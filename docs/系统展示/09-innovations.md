@@ -25,11 +25,11 @@ Source index: [系统展示.md](../系统展示.md)
 
 ```
 ~/.teamagent/global.db      ← scope.level=global（机器级通用，如 "本机 python3 指向 python3"）
-{project}/.teamagent/knowledge.db ← scope.level=personal（项目专属的个人知识）
-[Phase 4] ~/.teamagent/team/<id>.db ← scope.level=team（团队共享，git-synced）
+{project}/.teamagent/knowledge.db ← scope.level=personal/team（项目本地个人/团队知识）
+[Phase 4] git transport / privacy redaction / review gates ← 团队跨机器共享
 ```
 
-**写入按 scope 自动路由，查询两层合并返回**。这样个人敏感知识永远不会泄露到全局，团队知识永远不会污染个人工作区。
+**写入按 scope 自动路由，查询两层合并返回**。personal/team 留在项目库，global 留在机器级全局库；跨机器团队共享仍要等 transport、脱敏和审核门闭环。
 
 ### 9.3 AttributionBus — 结构化归因而非字符串输出
 

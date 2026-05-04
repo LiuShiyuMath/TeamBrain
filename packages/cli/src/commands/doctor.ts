@@ -416,7 +416,7 @@ export function checkTeamSharingStatus(): DoctorCheckResult {
   return {
     name: "team-sharing",
     status: "skip",
-    detail: "PARTIAL: Phase 4 team sharing is not complete; git transport, privacy redaction, and review gates are required before scope=team is supported",
+    detail: "PARTIAL: local scope=team write/read and approval privacy gate are supported, but team sharing is not complete; git transport, sync/export redaction, and conflict review gates are still required",
     fix: "Track docs/系统展示/13-delivered-vs-planned.md and docs/superpowers/plans/2026-05-01-phase4-team-memory-plan.md",
   };
 }

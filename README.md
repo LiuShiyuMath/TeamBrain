@@ -179,8 +179,8 @@ claudefast -p "hi"
 
 | 层 | 存储 | 作用域 |
 |---|---|---|
-| **project** | `<repo>/.teamagent/knowledge.db` | 仅当前项目（项目独有约定） |
-| **personal** | `~/.teamagent/global.db` | 跨所有项目（个人通用经验） |
+| **project** | `<repo>/.teamagent/knowledge.db` | 当前项目内的 personal / team 本地知识 |
+| **global** | `~/.teamagent/global.db` | 跨所有项目（个人通用经验） |
 | **events** | `~/.teamagent/events.db` | 真实工具调用记录，校准引擎用 |
 
 每条规则不是死规则，有完整的**生命周期**：
@@ -289,9 +289,9 @@ npm uninstall -g teamagent
 
 **自动更新太频繁？** `teamagent update --disable` 完全关掉。或编辑 `~/.teamagent/update-state.json` 把 `interval_hours` 改大（6 / 24）。
 
-**团队共享完成了吗？** 还没有。`teamagent doctor --json` 会把 `team-sharing`
-标为 `skip/PARTIAL`：Phase 4 需要 git transport、privacy redaction、review gates 都落地后，
-`scope=team` 才能算真正支持。
+**团队共享完成了吗？** 还没有。本地 `scope=team` 已支持写入、读取和统计；
+但 `teamagent doctor --json` 仍会把 `team-sharing` 标为 `skip/PARTIAL`：
+跨机器 git transport、privacy redaction、review gates 都落地后，才能说多人团队共享完成。
 
 **模型下载失败？** 设置 `HF_ENDPOINT=https://hf-mirror.com` 重跑 `teamagent warmup`。
 
@@ -302,7 +302,7 @@ npm uninstall -g teamagent
 ## 适合谁
 
 ✅ **天天用 Claude Code 的开发者**——每天被打脸 ≥1 次的，回收成本最快
-✅ **多人协作团队**——把"团队约定"沉淀进 personal/global 知识库
+✅ **多人协作团队**——先把"团队约定"沉淀进本地 team/project/global 知识库；跨成员自动同步仍在后续阶段
 ✅ **大型代码库 owner**——项目级规则（`.teamagent/knowledge.db`）跟随仓库，新人秒同步
 ✅ **有大量重复犯错模式的场景**——任何"这个我说过吧"的瞬间，都是 ROI
 

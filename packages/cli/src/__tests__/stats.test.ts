@@ -234,6 +234,19 @@ describe("executeStats (IO)", () => {
     expect(out).toContain("t2"); // recent first
   });
 
+  it("reads local team-scope entries from SQLite and counts them separately", () => {
+    executePitfall(
+      { trigger: "team-scope", wrong: "w", correct: "c", reason: "r", level: "team" },
+      { cwd: tmp.cwd, homeDir: tmp.home, now: () => "2026-05-04T00:00:00Z", env: {} },
+    );
+
+    const out = executeStats({ cwd: tmp.cwd, homeDir: tmp.home });
+    expect(out).toContain("总数: 1");
+    expect(out).toContain("personal  0");
+    expect(out).toContain("team      1");
+    expect(out).toContain("global    0");
+  });
+
   describe("M6 confidence movements", () => {
     it("aggregateConfidenceMovements sums per-rule deltas in window", () => {
       const events: PersistedEvent[] = [

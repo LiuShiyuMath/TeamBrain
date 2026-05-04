@@ -45,10 +45,10 @@ Source index: [SYSTEM.md](../SYSTEM.md)
 
 TeamAgent 当前将知识分两个 SQLite 数据库存储，而非一个，原因是：**个人知识和全局知识有不同的生命周期和隐私边界**。
 
-- **project 层**（`personal` scope）：存于 `{project}/.teamagent/knowledge.db`，项目专属的个人知识。
+- **project 层**（`personal` / `team` scope）：存于 `{project}/.teamagent/knowledge.db`，项目本地个人知识和本地团队知识。
 - **global 层**（`global` scope）：存于 `~/.teamagent/global.db`，跨所有项目生效的机器环境知识（如"本机 python3 指向 python3，不是 python"）。
 
-查询时两层合并返回，写入时按 `scope.level` 自动路由到正确的 DB。`team` scope 目前抛错，留待 Phase 4 实现。
+查询时两层合并返回，写入时按 `scope.level` 自动路由到正确的 DB。`team` scope 已在本地 project DB 保留；跨机器共享留待 Phase 4 的 transport / redaction / review gates 实现。
 
 实现：`packages/adapters/src/storage/sqlite/dual-layer-store.ts`
 

@@ -7,7 +7,7 @@ import type { KnowledgeEntry } from "@teamagent/types";
 export interface ReviewOptions {
   /** 列出最近 N 条。默认 10。 */
   limit?: number;
-  /** 只看指定 scope 的条目（v2: team 等于 personal） */
+  /** 只看指定 scope 的条目 */
   scope?: "personal" | "team" | "global";
   projectDbPath?: string;
   userGlobalDbPath?: string;
@@ -39,11 +39,8 @@ export function executeReview(opts: ReviewOptions = {}): string {
 
     for (const entry of all) {
       const level = entry.scope.level as "personal" | "team" | "global";
-      // v2: filter by scope if requested
       if (opts.scope) {
-        // team maps to personal in v2
-        const effectiveScope = opts.scope === "team" ? "personal" : opts.scope;
-        if (level !== effectiveScope) continue;
+        if (level !== opts.scope) continue;
       }
       rows.push({ entry, scope: level });
     }

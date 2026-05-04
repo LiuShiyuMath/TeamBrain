@@ -7,8 +7,8 @@
  * - Scenario 3: sessionSeenIds 跨 turn 去重（已注入的规则不再注入）
  * - Scenario 4: rerankByConfidence 使高置信度规则排在前面
  * - Scenario 5: 空 DB → 不崩溃，安静返回空结果
- * - Scenario 6 (bug fix): project DB 里 personal-scope 规则能被检索到
- *   根因：queryRules 写死 scope:"global"，project DB 实际存 personal scope 规则 → 零命中
+ * - Scenario 6 (bug fix): project DB 里 personal/team-scope 规则能被检索到
+ *   根因：queryRules scope 覆盖不完整，project DB 实际规则被过滤掉 → 零命中
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -369,5 +369,32 @@ describe("Scenario 6: personal-scope 规则（project DB 的实际形态）能�
     });
 
     expect(result.tier2Rules.map((r) => r.id)).toContain("global-scope-rule");
+  });
+
+  it("team-scope 规则通过 projectDbPath 被检索到", async () => {
+    const queryText = "team scope prompt retrieval works";
+    const projectDb = openDb(projectDbPath);
+    const rule = mkRule({
+      id: "team-scope-rule",
+      scope: { level: "team" },
+      trigger_description: queryText,
+      pattern_description: queryText,
+      confidence: 0.9,
+      current_tier: "canonical",
+    });
+    await seedRule(projectDb, rule);
+    projectDb.close();
+
+    const result = await retrieveRulesForPrompt({
+      userMessage: queryText,
+      cwd: process.cwd(),
+      projectDbPath,
+      globalDbPath: join(tmpDir, "no-global.db"),
+      sessionSeenIds: new Set(),
+      isFirstPrompt: false,
+      embedder: stubEmbedder as any,
+    });
+
+    expect(result.tier2Rules.map((r) => r.id)).toContain("team-scope-rule");
   });
 });

@@ -82,6 +82,12 @@ import {
   executeReviewCandidates,
   parseReviewCandidatesArgs,
 } from "./commands/review-candidates.js";
+import {
+  executeTeamExport,
+  executeTeamImport,
+  parseTeamExportArgs,
+  parseTeamImportArgs,
+} from "./commands/team-transfer.js";
 import { executePrCycle, parsePrCycleArgs } from "./commands/pr-cycle.js";
 import {
   executePairAccept,
@@ -492,7 +498,7 @@ async function main(): Promise<void> {
       process.stdout.write(`Phase 1 → v2 迁移:\n`);
       process.stdout.write(`  读取条目: ${r.readEntries}\n`);
       process.stdout.write(`    personal: ${r.byScope.personal}\n`);
-      process.stdout.write(`    team → personal: ${r.byScope.team}\n`);
+      process.stdout.write(`    team: ${r.byScope.team}\n`);
       process.stdout.write(`    global: ${r.byScope.global}\n`);
       if (dryRun) {
         process.stdout.write(`\n(dry-run 模式，未写入 SQLite)\n`);
@@ -516,6 +522,18 @@ async function main(): Promise<void> {
       const reviewOpts = parseReviewCandidatesArgs(rest);
       const output = await executeReviewCandidates(reviewOpts);
       if (output) process.stdout.write(output);
+      return;
+    }
+    case "team-export": {
+      const result = executeTeamExport(parseTeamExportArgs(rest));
+      process.stdout.write(result.output);
+      if (!result.ok) process.exit(1);
+      return;
+    }
+    case "team-import": {
+      const result = executeTeamImport(parseTeamImportArgs(rest));
+      process.stdout.write(result.output);
+      if (!result.ok) process.exit(1);
       return;
     }
     case "pr-cycle": {
@@ -717,8 +735,12 @@ async function main(): Promise<void> {
           "  teamagent config show                    查看当前配置",
           "  teamagent scan-errors [--mode=efficient|full] [--since=<duration|ISO>] [--min-freq=N] [--dry-run] [--quiet]",
           "                                   自动采集错误信号 → 提取候选规则 → 写入候选队列",
-          "  teamagent review-candidates [--limit=N]",
-          "                                   交互式审核候选规则：[a]批准 [r]拒绝 [s]跳过 [q]退出",
+          "  teamagent review-candidates [--limit=N] [--approve-scope=personal|team|global]",
+          "                                   交互式审核候选规则：[a]批准 [r]拒绝 [s]跳过 [q]退出；可把批准项提升为本地 team scope",
+          "  teamagent team-export [--out=path]",
+          "                                   导出本地 active team scope 规则到 JSON；导出前执行隐私守门",
+          "  teamagent team-import [--file=path]",
+          "                                   从 team-export JSON 导入本地 team scope 规则，已存在 id 会跳过",
           "  teamagent pr-cycle [--pr=N] [--wait-ms=300000] [--dry-run]",
           "                                   创建/定位 PR，等待后检查 review；有反馈时要求先更新文档/规则并用 claudefast/codexfastg 验证答案",
           "  teamagent migrate-v6 [--dry-run] [--limit=N] [--db=<path>]",

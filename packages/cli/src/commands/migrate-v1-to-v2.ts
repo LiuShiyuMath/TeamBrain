@@ -80,12 +80,9 @@ export async function executeMigrate(opts: MigrateOptions = {}): Promise<Migrate
     const phase1HitTag = `phase1_hit_count:${old.hit_count ?? 0}`;
     const phase1LastHitTag = `phase1_last_hit:${(old as any).last_hit_at || "unknown"}`;
 
-    // team 作用域降级到 personal（Phase 2 不支持 team）
-    const targetLevel = old.scope.level === "team" ? "personal" : old.scope.level;
-
     const newEntry = {
       ...old,
-      scope: { ...old.scope, level: targetLevel },
+      scope: { ...old.scope, level: old.scope.level },
       tags: [...(old.tags ?? []), phase1HitTag, phase1LastHitTag],
       confidence: 0.0,
       enforcement: "passive" as const,

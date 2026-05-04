@@ -30,7 +30,7 @@ export interface PitfallInput {
   category?: "C" | "E" | "S" | "K";
   /** 自由标签列表 */
   tags?: string[];
-  /** personal / team / global，默认 personal (v2: team→personal) */
+  /** personal / team / global，默认 personal */
   level?: "personal" | "team" | "global";
   /** objective / subjective，默认 subjective（入门友好，不强制 block）*/
   nature?: "objective" | "subjective";
@@ -70,17 +70,14 @@ function resolvePaths(opts: PitfallOptions) {
 }
 
 function generateId(level: string, ts: string): string {
-  const prefix = level === "personal" || level === "team"
-    ? "pers"
-    : "glob";
+  const prefix = level === "global" ? "glob" : level === "team" ? "team" : "pers";
   const short = Math.random().toString(36).slice(2, 8);
   return `${prefix}-${ts.replace(/[-:T.Z]/g, "").slice(0, 14)}-${short}`;
 }
 
 function buildEntry(input: PitfallInput, now: string): KnowledgeEntry {
-  // v2: team → personal
   const rawLevel = input.level ?? "personal";
-  const level: "personal" | "global" = rawLevel === "global" ? "global" : "personal";
+  const level: "personal" | "team" | "global" = rawLevel;
   const nature = input.nature ?? "subjective";
   const confidence = 0.7;
   const enforcement = computeEnforcement(confidence, nature);

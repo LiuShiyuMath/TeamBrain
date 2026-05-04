@@ -38,15 +38,15 @@ pnpm teamagent pitfall --non-interactive \
 ```
 
 CLI 会：
-- 写入对应 scope 的 `knowledge.jsonl`
-- 重新编译项目的 `CLAUDE.md` 的 TEAMAGENT 区块
+- 写入对应 scope 的 SQLite knowledge store
+- 触发 compile / propagation，刷新 TeamAgent Skills / docs 知识传播产物
 - 输出归因块（"做了什么 / 知识库变化 / 传播到 / 下次体验"）
 
 ## 3. 把归因块原样展示给用户
 
 CLI 输出的归因块结构已对齐产品设计规范，不要重写或总结——直接透传。
 
-用户看到归因块后就知道：知识条目 id、知识库条目数变化、CLAUDE.md 被更新到第几行、下次 AI 会如何应用这条经验。
+用户看到归因块后就知道：知识条目 id、知识库条目数变化、传播产物、下次 AI 会如何应用这条经验。
 
 ## 注意
 

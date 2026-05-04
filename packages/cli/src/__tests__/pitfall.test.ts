@@ -227,7 +227,7 @@ describe("executePitfall", () => {
     expect(all[0]?.type).toBe("practice");
   });
 
-  it("team level → personal scope in project DB (v2 maps team→personal)", async () => {
+  it("team level writes team scope in project DB", async () => {
     await executePitfall(
       {
         trigger: "t",
@@ -245,7 +245,8 @@ describe("executePitfall", () => {
     const all = store.getAll();
     store.close();
     expect(all).toHaveLength(1);
-    expect(all[0]?.scope.level).toBe("personal");
+    expect(all[0]?.scope.level).toBe("team");
+    expect(all[0]?.id).toMatch(/^team-/);
   });
 
   it("subjective nature caps enforcement at warn even with high confidence", async () => {

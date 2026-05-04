@@ -88,10 +88,11 @@ async function queryRules(
   globalDbPath: string,
   excludeIds: Set<string>,
 ): Promise<KnowledgeEntry[]> {
-  // project DB 存放用户积累的 personal-scope 规则；global DB 存放跨项目 global-scope 规则。
-  // 必须按 DB 来源传正确的 scope，否则 scope_level 过滤会把所有 personal 规则过滤掉（零命中）。
-  const dbsWithScope: Array<{ path: string; scope: "personal" | "global" }> = [
+  // project DB 存放本项目 personal/team 规则；global DB 存放跨项目 global 规则。
+  // 必须按 DB 来源传正确的 scope，否则 scope_level 过滤会把规则过滤掉（零命中）。
+  const dbsWithScope: Array<{ path: string; scope: "personal" | "team" | "global" }> = [
     { path: projectDbPath, scope: "personal" },
+    { path: projectDbPath, scope: "team" },
     { path: globalDbPath,  scope: "global"   },
   ];
 
