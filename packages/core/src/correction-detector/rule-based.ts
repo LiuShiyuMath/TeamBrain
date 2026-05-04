@@ -53,6 +53,10 @@ function hasMultipleFailures(turn: SessionTurn): boolean {
  * - <system-reminder>...</system-reminder> 包裹的提醒
  * - <local-command-caveat>...</local-command-caveat> 包裹的本地命令输出
  * - <command-name>/<command-message>/<command-args> 标签
+ * - <bash-stdout>...</bash-stdout> 工具输出注入（如 CSV 数据含否定词）
+ * - <bash-input>...</bash-input> shell 命令输出注入
+ * - <teammate-message>...</teammate-message> agent 间通信消息
+ * - "Stop hook feedback:" 前缀的钩子系统反馈消息
  *
  * 这些消息常包含 "not"/"don't"/"never"/"不要"/"不对" 等关键词,会被
  * DENIAL_PATTERNS 命中,导致 analyze --commit 把系统噪声当用户纠正
@@ -64,6 +68,10 @@ function isSystemInjectedMessage(text: string): boolean {
   if (/<system-reminder>/i.test(text)) return true;
   if (/<local-command-caveat>/i.test(text)) return true;
   if (/<command-(name|message|args)>/i.test(text)) return true;
+  if (/<bash-stdout>/i.test(text)) return true;
+  if (/<bash-input>/i.test(text)) return true;
+  if (/<teammate-message\b/i.test(text)) return true;
+  if (/^Stop hook feedback:/i.test(text.trim())) return true;
   return false;
 }
 
@@ -139,6 +147,16 @@ export const ruleBasedCorrectionDetector: CorrectionDetector = {
         out.push(buildMoment(turn, prevTurn, "code_edit", 0.8));
       }
 
+      // Signal F: implicit_redirect — user steers to a different approach without
+      // an explicit denial keyword. Patterns: "actually use/we use X", "try X instead",
+      // "X is the team standard", "we use X for this".
+      if (prevTurn && !out.find((m) => m.turnIndex === i)) {
+        const redirect = detectImplicitRedirect(prevTurn.assistantText, turn.userMessage);
+        if (redirect) {
+          out.push(buildMoment(turn, prevTurn, "suggestion_override", 0.75));
+        }
+      }
+
       // Signal E: error_in_context — user pastes an error trace/message and the
       // previous turn had AI tool calls (i.e., AI caused the error or was involved).
       // This catches the common pattern: AI does something → error → user pastes error.
@@ -148,6 +166,22 @@ export const ruleBasedCorrectionDetector: CorrectionDetector = {
         if (hasError && prevHadToolUse) {
           out.push(buildMoment(turn, prevTurn, "multi_failure", 0.8));
         }
+      }
+    }
+
+    // Signal B tail: if the last turn itself has failures and no subsequent turn
+    // captured a multi_failure signal for it, emit one on the last turn.
+    // This covers the case where the user is silent (empty message) after an
+    // AI failure — the session parser drops empty user turns, so no turn i+1
+    // exists to trigger Signal B in the loop above.
+    const lastTurn = session.turns[session.turns.length - 1];
+    if (lastTurn && hasMultipleFailures(lastTurn)) {
+      const alreadyCovered = out.find((m) => m.turnIndex === lastTurn.turnIndex);
+      if (!alreadyCovered) {
+        const prevTurn = session.turns.length >= 2
+          ? session.turns[session.turns.length - 2]
+          : undefined;
+        out.push(buildMoment(lastTurn, prevTurn, "multi_failure", 0.70));
       }
     }
 
@@ -208,6 +242,40 @@ function detectOverride(assistantText: string, userText: string): boolean {
     if (!assistantLower.includes(tool.toLowerCase())) return true;
   }
   return false;
+}
+
+/**
+ * Signal F: implicit redirect — user steers toward a different approach without
+ * an explicit denial keyword. Catches patterns like:
+ * - "actually just use async/await" (team standard redirect)
+ * - "we actually use pino for this project" (project convention assertion)
+ * - "try using Redis instead" (approach redirect with "instead")
+ *
+ * Requires prevTurn assistantText to have offered something concrete (proposed
+ * an approach, lib, or tool) to avoid firing on pure info exchanges.
+ */
+function detectImplicitRedirect(assistantText: string, userText: string): boolean {
+  if (!userText.trim()) return false;
+
+  // Must reference an alternative approach/tool (not just generic statements)
+  const toolName = "[@A-Za-z0-9][\\w@./-]{1,}";
+
+  // Pattern: "actually [just] use X" / "we actually use X" / "we use X for this"
+  const actuallyRedirect =
+    /\bactually\s+(just\s+)?(use|we use|try)\s+/i.test(userText) ||
+    /\bwe\s+(actually\s+)?use\s+[A-Za-z][\w@./-]{1,}/i.test(userText) ||
+    new RegExp(`\\btry\\s+using?\\s+${toolName}\\s+instead\\b`, "i").test(userText);
+
+  if (!actuallyRedirect) return false;
+
+  // Confirm assistant had proposed something (not just answered a question)
+  const assistantProposed =
+    /\b(use|using|I'?ll use|install|I recommend|set up|implement|configure)\s+[A-Za-z]/i.test(
+      assistantText,
+    ) ||
+    /推荐|建议|我用|我来用|使用/.test(assistantText);
+
+  return assistantProposed;
 }
 
 const ERROR_PATTERNS: RegExp[] = [
