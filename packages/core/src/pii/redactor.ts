@@ -4,11 +4,31 @@ export type SensitiveFindingKind =
   | "uuid"
   | "private-ip"
   | "internal-host"
-  | "private-path";
+  | "private-path"
+  | "aws-key"
+  | "jwt"
+  | "phone"
+  | "credit-card";
 
 export interface SensitiveFinding {
   kind: SensitiveFindingKind;
   match: string;
+}
+
+// Returns true if the digit string passes the Luhn algorithm.
+function luhnCheck(digits: string): boolean {
+  let sum = 0;
+  let alternate = false;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let n = parseInt(digits[i], 10);
+    if (alternate) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+    alternate = !alternate;
+  }
+  return sum % 10 === 0;
 }
 
 const PATTERNS: Array<{ kind: SensitiveFindingKind; pattern: RegExp }> = [
@@ -33,7 +53,36 @@ const PATTERNS: Array<{ kind: SensitiveFindingKind; pattern: RegExp }> = [
     kind: "private-path",
     pattern: /(?:\/Users\/[^\s"'`]+|\/home\/[^\s"'`]+|[A-Za-z]:\\Users\\[^\s"'`]+)/g,
   },
+  {
+    // AWS access key IDs: AKIA/ASIA/ABIA followed by 16 uppercase alphanumeric chars
+    kind: "aws-key",
+    pattern: /\b(?:AKIA|ASIA|ABIA)[0-9A-Z]{16}\b/g,
+  },
+  {
+    // JWT: three base64url segments separated by dots, first two starting with eyJ
+    kind: "jwt",
+    pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
+  },
+  {
+    // Phone: +CC-AAA-PPP-NNNN, (AAA) PPP-NNNN, +CC AAA PPP NNNN
+    // Requires country code or area code context to avoid over-matching plain digits
+    kind: "phone",
+    pattern: /(?:\+\d{1,3}[-\s]\d{3}[-\s]\d{3}[-\s]\d{4}|\(\d{3}\)\s?\d{3}-\d{4})/g,
+  },
 ];
+
+const REDACT_MAP: Record<SensitiveFindingKind, string> = {
+  "email": "[redacted]",
+  "secret": "[redacted]",
+  "uuid": "[redacted]",
+  "private-ip": "[redacted]",
+  "internal-host": "[redacted]",
+  "private-path": "[redacted]",
+  "aws-key": "[redacted]",
+  "jwt": "[redacted]",
+  "phone": "[redacted]",
+  "credit-card": "[redacted]",
+};
 
 export function detectSensitiveText(text: string): SensitiveFinding[] {
   const findings: SensitiveFinding[] = [];
@@ -43,14 +92,32 @@ export function detectSensitiveText(text: string): SensitiveFinding[] {
       if (match[0]) findings.push({ kind, match: match[0] });
     }
   }
+  // Credit card detection with Luhn check (separate from regex-only patterns)
+  const ccPattern = /\b(\d[ -]?){13,19}\b/g;
+  ccPattern.lastIndex = 0;
+  for (const match of text.matchAll(ccPattern)) {
+    const digits = match[0].replace(/[ -]/g, "");
+    if (digits.length >= 13 && digits.length <= 19 && luhnCheck(digits)) {
+      findings.push({ kind: "credit-card", match: match[0] });
+    }
+  }
   return findings;
 }
 
 export function redactSensitiveText(text: string): string {
   let redacted = text;
-  for (const { pattern } of PATTERNS) {
+  for (const { kind, pattern } of PATTERNS) {
     pattern.lastIndex = 0;
-    redacted = redacted.replace(pattern, "[redacted]");
+    redacted = redacted.replace(pattern, REDACT_MAP[kind]);
   }
+  // Credit card redaction with Luhn check
+  const ccPattern = /\b(\d[ -]?){13,19}\b/g;
+  redacted = redacted.replace(ccPattern, (match) => {
+    const digits = match.replace(/[ -]/g, "");
+    if (digits.length >= 13 && digits.length <= 19 && luhnCheck(digits)) {
+      return REDACT_MAP["credit-card"];
+    }
+    return match;
+  });
   return redacted;
 }
