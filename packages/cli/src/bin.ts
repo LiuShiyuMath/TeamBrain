@@ -556,7 +556,7 @@ async function main(): Promise<void> {
     }
     case "doctor": {
       const opts = parseDoctorArgs(rest);
-      const result = await executeDoctor({ ...opts, cwd: process.cwd() });
+      const result = await executeDoctor({ ...opts, cwd: opts.cwd ?? process.cwd() });
       if (opts.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       } else if (!opts.postinstall || !result.allPassed) {

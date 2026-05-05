@@ -12,8 +12,14 @@ import {
   checkClaudeCode,
   checkTeamSharingStatus,
   pathContainsNodeModulesBin,
+  checkSettingsJsonScope,
+  checkPluginSync,
+  checkCodexBin,
+  checkMcpReachability,
   type ClaudeProbe,
   type ClaudeProbeResult,
+  type CodexProbe,
+  type McpProbe,
   type DoctorCheckResult,
   type DoctorResult,
 } from "../commands/doctor.js";
@@ -315,5 +321,169 @@ describe("checkClaudeCode", () => {
     expect(result.status).toBe("fail");
     expect(result.detail).toBe("未找到 claude 命令");
     expect(result.fix).toBe("npm install -g @anthropic-ai/claude-code");
+  });
+});
+
+describe("checkSettingsJsonScope", () => {
+  function makeTmpDir(): { dir: string; cleanup: () => void } {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "doctor-scope-"));
+    return { dir, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
+  }
+
+  function writeHookSettings(filePath: string): void {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify({
+      hooks: {
+        PreToolUse: [{ _teamagentTag: "teamagent-pre-tool-use", hooks: [] }],
+      },
+    }));
+  }
+
+  it("pass when project-level settings.local.json has hook", () => {
+    const { dir, cleanup } = makeTmpDir();
+    try {
+      const projectSettings = path.join(dir, ".claude", "settings.local.json");
+      writeHookSettings(projectSettings);
+      const result = checkSettingsJsonScope(projectSettings, path.join(dir, "user", ".claude", "settings.json"));
+      expect(result.status).toBe("pass");
+      expect(result.detail).toContain("项目级");
+    } finally { cleanup(); }
+  });
+
+  it("pass when only user-level settings.json has hook", () => {
+    const { dir, cleanup } = makeTmpDir();
+    try {
+      const userSettings = path.join(dir, ".claude", "settings.json");
+      writeHookSettings(userSettings);
+      const result = checkSettingsJsonScope(
+        path.join(dir, "project", ".claude", "settings.local.json"),
+        userSettings,
+      );
+      expect(result.status).toBe("pass");
+      expect(result.detail).toContain("用户级");
+    } finally { cleanup(); }
+  });
+
+  it("fail when neither settings file has a hook", () => {
+    const { dir, cleanup } = makeTmpDir();
+    try {
+      const result = checkSettingsJsonScope(
+        path.join(dir, "no-project", ".claude", "settings.local.json"),
+        path.join(dir, "no-user", ".claude", "settings.json"),
+      );
+      expect(result.status).toBe("fail");
+      expect(result.fix).toContain("install-hook");
+    } finally { cleanup(); }
+  });
+});
+
+describe("checkPluginSync", () => {
+  function makeTmpDir(): { dir: string; cleanup: () => void } {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "doctor-plugins-"));
+    return { dir, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
+  }
+
+  it("pass when project .claude/plugins has at least one plugin dir", () => {
+    const { dir, cleanup } = makeTmpDir();
+    try {
+      const pluginsDir = path.join(dir, ".claude", "plugins", "some-plugin");
+      fs.mkdirSync(pluginsDir, { recursive: true });
+      const result = checkPluginSync(dir, path.join(dir, "home"));
+      expect(result.status).toBe("pass");
+      expect(result.detail).toContain("1");
+    } finally { cleanup(); }
+  });
+
+  it("pass when user .claude/plugins has at least one plugin dir", () => {
+    const { dir, cleanup } = makeTmpDir();
+    try {
+      const pluginsDir = path.join(dir, "home", ".claude", "plugins", "plugin-a");
+      fs.mkdirSync(pluginsDir, { recursive: true });
+      const result = checkPluginSync(path.join(dir, "project"), path.join(dir, "home"));
+      expect(result.status).toBe("pass");
+      expect(result.detail).toContain("用户级");
+    } finally { cleanup(); }
+  });
+
+  it("fail when plugins dir does not exist", () => {
+    const { dir, cleanup } = makeTmpDir();
+    try {
+      const result = checkPluginSync(dir, path.join(dir, "home"));
+      expect(result.status).toBe("fail");
+      expect(result.fix).toContain("install-plugins");
+    } finally { cleanup(); }
+  });
+
+  it("fail when plugins dir is empty", () => {
+    const { dir, cleanup } = makeTmpDir();
+    try {
+      fs.mkdirSync(path.join(dir, ".claude", "plugins"), { recursive: true });
+      const result = checkPluginSync(dir, path.join(dir, "home"));
+      expect(result.status).toBe("fail");
+      expect(result.detail).toContain("空");
+    } finally { cleanup(); }
+  });
+});
+
+describe("checkCodexBin", () => {
+  it("pass when codex probe returns ok", () => {
+    const probe: CodexProbe = () => ({ ok: true, stdout: "0.1.0 codex\n", stderr: "" });
+    const result = checkCodexBin(probe);
+    expect(result.status).toBe("pass");
+    expect(result.detail).toContain("0.1.0");
+  });
+
+  it("fail when codex probe fails", () => {
+    const probe: CodexProbe = () => ({ ok: false, stdout: "", stderr: "command not found" });
+    const result = checkCodexBin(probe);
+    expect(result.status).toBe("fail");
+    expect(result.detail).toContain("codex");
+    expect(result.fix).toBeDefined();
+  });
+});
+
+describe("checkMcpReachability", () => {
+  function makeTmpDir(): { dir: string; cleanup: () => void } {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "doctor-mcp-"));
+    return { dir, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
+  }
+
+  it("skip when no mcpServers configured", async () => {
+    const { dir, cleanup } = makeTmpDir();
+    try {
+      const result = await checkMcpReachability(dir);
+      expect(result.status).toBe("skip");
+    } finally { cleanup(); }
+  });
+
+  it("pass when all MCP servers are reachable", async () => {
+    const { dir, cleanup } = makeTmpDir();
+    try {
+      const settingsPath = path.join(dir, ".claude", "settings.local.json");
+      fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+      fs.writeFileSync(settingsPath, JSON.stringify({
+        mcpServers: { my_server: { url: "http://localhost:12345" } },
+      }));
+      const probe: McpProbe = async () => ({ reachable: true, detail: "HTTP 200" });
+      const result = await checkMcpReachability(dir, probe);
+      expect(result.status).toBe("pass");
+      expect(result.detail).toContain("1");
+    } finally { cleanup(); }
+  });
+
+  it("fail when an MCP server is unreachable", async () => {
+    const { dir, cleanup } = makeTmpDir();
+    try {
+      const settingsPath = path.join(dir, ".claude", "settings.local.json");
+      fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+      fs.writeFileSync(settingsPath, JSON.stringify({
+        mcpServers: { bad: { url: "http://localhost:1" } },
+      }));
+      const probe: McpProbe = async () => ({ reachable: false, detail: "ECONNREFUSED" });
+      const result = await checkMcpReachability(dir, probe);
+      expect(result.status).toBe("fail");
+      expect(result.detail).toContain("http://localhost:1");
+      expect(result.fix).toBeDefined();
+    } finally { cleanup(); }
   });
 });
