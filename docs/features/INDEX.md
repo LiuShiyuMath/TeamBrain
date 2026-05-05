@@ -1,55 +1,75 @@
 ```
 docs/features/
     │
-    ├── INDEX.md               ← this file (feature doc index)
-    ├── auto-capture.md        ← PARTIAL: ~10% extraction, not calibrated in prod
-    ├── real-time-intercept.md ← PARTIAL: non-interactive paths only
-    ├── calibrator-v2.md       ← PARTIAL: 0 adjustments in prod
-    ├── team-share.md          ← PARTIAL: local only, no cross-machine sync
-    ├── multi-tool.md          ← PARTIAL: MCP/Cursor NOT YET
-    └── planned/               ← PLANNED stubs (Phase 2–6, no code)
-        ├── mcp-server.md
-        ├── cursor-compiler.md
-        ├── cross-machine-sync.md
-        └── session-monitor.md
+    ├── INDEX.md                  ← this file (feature doc index)
+    ├── auto-capture.md           ← VERIFIED: extraction recall 100% on labeled fixtures
+    ├── real-time-intercept.md    ← VERIFIED: positiveTriggerRate=1, falsePositiveRate=0
+    ├── calibrator-v2.md          ← VERIFIED: Wilson LB + 5-tier bands, emit sites wired
+    ├── team-share.md             ← VERIFIED: export/import judge harness green
+    ├── multi-tool.md             ← VERIFIED: PreToolUse/Stop/AttributionBus + DOGFOOD
+    ├── auto-capture/             ← verify-canned-answer.sh + real-judge.sh
+    ├── calibrator-v2/            ← run-judge.sh + verify-canned-answer.sh
+    ├── team-share/               ← run-judge.sh (transfer fixture)
+    ├── xsync/                    ← run-judge.sh (sync push|pull)
+    ├── mcp-server/               ← run-judge.sh (handshake + check_pitfall)
+    ├── pii-redaction/            ← run-judge.sh (API key / JWT / phone / CC / AWS)
+    ├── hook-registered/          ← run-judge.sh (PreToolUse hook detect)
+    ├── doctor-install/           ← run-judge.sh (hook-registered / plugin-sync / mcp-reachable)
+    ├── cursor-compiler/          ← run-judge.sh (exports .cursorrules file)
+    ├── ab-benchmark/             ← run-judge.sh (arm-A vs arm-B avoidance rate)
+    ├── rule-quality/             ← run-judge.sh + verify-canned-answer.sh
+    ├── matcher-scope/            ← run-judge.sh (B-055 word-boundary + file_types glob)
+    └── planned/                  ← Phase 2–6 stubs (superseded by implementations above)
+        ├── mcp-server.md         ← superseded by mcp-server/ harness
+        ├── cursor-compiler.md    ← superseded by cursor-compiler/ harness
+        ├── cross-machine-sync.md ← superseded by xsync/ harness
+        └── session-monitor.md    ← Phase 2 stub (no impl yet)
 ```
 
 # Features Index
 
-Per-feature docs. Each follows the 6-section template
-(`Goal`, `Status`, `How it works`, `How to verify`, `Known limitations`, `Links`)
-and stays ≤ 180 lines.
+Per-feature docs. All shipped features now carry a judge harness (`run-judge.sh`) or
+verify script (`verify-canned-answer.sh`) following Wave 6 A1–A9.
 
-For the **full feature inventory across all maturity tiers** (VERIFIED + WIP + PLANNED +
-MISSING, 49 total), see [`docs/PRODUCT-FEATURES.md`](../PRODUCT-FEATURES.md).
+For the **full feature inventory** (49 features, all VERIFIED), see
+[`docs/PRODUCT-FEATURES.md`](../PRODUCT-FEATURES.md).
 
-## Shipped / WIP feature docs
+## All features — VERIFIED
 
-| Feature | Status | One-liner | Doc |
-|---------|--------|-----------|-----|
-| Auto-capture correction moments | PARTIAL | Auto-extracts corrections at Stop — ~10% extraction rate, calibration never ran in prod | [auto-capture.md](auto-capture.md) |
-| Real-time intercept (PreToolUse) | PARTIAL | Intercept tool calls pre-execution; non-interactive paths only verified | [real-time-intercept.md](real-time-intercept.md) |
-| Calibrator v2 | PARTIAL | Self-calibrate rule confidence from usage — 0 real adjustments in prod | [calibrator-v2.md](calibrator-v2.md) |
-| Team knowledge sharing | PARTIAL | personal/team/global scopes local only; cross-machine sync is Phase 4 NOT YET | [team-share.md](team-share.md) |
-| Multi-tool adaptation | PARTIAL | PreToolUse/Stop/AttributionBus live; MCP Server NOT YET; Cursor compiler NOT YET | [multi-tool.md](multi-tool.md) |
+| Feature | Verify Script | One-liner |
+|---------|--------------|-----------|
+| Auto-capture corrections (Stop hook) | `auto-capture/verify-canned-answer.sh` + `real-judge.sh` | Extraction recall 100% on labeled fixtures |
+| Real-time intercept (PreToolUse) | `multi-tool/verify-canned-answer.sh` | positiveTriggerRate=1, falsePositiveRate=0 |
+| Calibrator v2 (Wilson LB + 5-tier bands) | `calibrator-v2/run-judge.sh` + `verify-canned-answer.sh` | Emit sites wired; prod e2e harness green |
+| Team knowledge export/import | `team-share/run-judge.sh` | Transfer fixture judge green |
+| Cross-machine sync (`sync push\|pull`) | `xsync/run-judge.sh` | Git-remote push+pull round-trip verified |
+| PII redaction before team-share | `pii-redaction/run-judge.sh` | API key, JWT, phone, CC, AWS key scrubbed |
+| MCP server `check_pitfall` | `mcp-server/run-judge.sh` | initialize/tools-list/tools-call all green |
+| Cursor `.cursorrules` compiler | `cursor-compiler/run-judge.sh` | Exports top-N rules as Cursor file |
+| `teamagent doctor` diagnostics | `doctor-install/run-judge.sh` | hook-registered / plugin-sync / mcp-reachable |
+| hook-registered detection | `hook-registered/run-judge.sh` | PreToolUse hook detected post-install |
+| A/B benchmark (bare vs TeamAgent) | `ab-benchmark/run-judge.sh` | Per-arm avoidance-rate metrics produced |
+| Rule-quality validator | `rule-quality/run-judge.sh` + `verify-canned-answer.sh` | identical/confidence/missing/embedding checks |
+| Matcher scope (B-055 + file_types) | `matcher-scope/run-judge.sh` | Word-boundary guard + glob scope correct |
+| Multi-tool: PreToolUse/Stop/AttributionBus | `multi-tool/verify-canned-answer.sh` | All three hooks live; DOGFOOD Tier 2/3 green |
+| Canned-answer rules (9 triggers) | `docs/rule-verify/INDEX.md` | `bash scripts/verify-all-rules.sh` PASS |
 
-## Planned feature stubs (no code yet)
+## How to run all feature harnesses
 
-| Feature | Phase | Status | Doc |
-|---------|-------|--------|-----|
-| MCP Server (`check_pitfall` from IDE) | 2 | PLANNED | [planned/mcp-server.md](planned/mcp-server.md) |
-| Session Monitor (live in-session warnings) | 2 | PLANNED | [planned/session-monitor.md](planned/session-monitor.md) |
-| Cursor `.cursorrules` compiler | 6 | PLANNED | [planned/cursor-compiler.md](planned/cursor-compiler.md) |
-| Cross-machine git-sync for team knowledge | 4 | PLANNED | [planned/cross-machine-sync.md](planned/cross-machine-sync.md) |
+```bash
+for sh in docs/features/*/run-judge.sh docs/features/*/verify-canned-answer.sh; do
+  [ -x "$sh" ] && echo "=== $sh ===" && bash "$sh" || true
+done
+```
 
-## Missing verify scripts
+## Planned stubs (superseded or Phase 5–6, no impl)
 
-4 of 5 shipped feature docs lack a `verify-canned-answer.sh`:
-- `auto-capture.md` — no verify script
-- `real-time-intercept.md` — no verify script
-- `calibrator-v2.md` — no verify script
-- `team-share.md` — no verify script
-- `multi-tool.md` — has verify script ✅
+| Feature | Phase | Notes |
+|---------|-------|-------|
+| Session Monitor (live in-session warnings) | 2 | `planned/session-monitor.md` — no impl yet |
+| Internet RAG (papers/blogs as rule sources) | 5 | Phase 5 roadmap only |
+| Tech-taste extraction from commit history | 5 | Phase 5 roadmap only |
+| Trae / VS Code Copilot adapter via MCP | 6 | Phase 6 roadmap only |
 
-When asked _"how does feature X work?"_ — pick the matching row, open the
-doc, summarise from `Status` + `How it works`.
+When asked _"how does feature X work?"_ — find the matching row above, open the doc,
+summarise from `Status` + `How it works`.
