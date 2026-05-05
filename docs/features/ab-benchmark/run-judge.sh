@@ -4,8 +4,8 @@
 # Output: docs/features/ab-benchmark/judge.json
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BENCH_DIR="$REPO_ROOT/docs/features/ab-benchmark"
+BENCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$BENCH_DIR/../../.." && pwd)"
 TS="$(date +%Y%m%dT%H%M%S)"
 OUT_DIR="${JUDGE_DIR:-/tmp/.judge/ab/$TS}"
 mkdir -p "$OUT_DIR"
