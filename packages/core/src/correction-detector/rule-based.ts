@@ -40,7 +40,10 @@ const DENIAL_PATTERNS: Array<{ re: RegExp; weight: number }> = [
   // 中文：修复/纠正动词（Wave 3 patch）
   { re: /修复[！!]|^修复\b/, weight: 0.9 },
   // 英文：整词
-  { re: /\b(no|wrong|don't|shouldn't|not|never)\b/i, weight: 0.9 },
+  // "not" alone is too broad — fires on "not tech lead", "not sure", parenthetical phrases.
+  // Only match bare "not" at sentence start (after . ! ?) or in explicit negation constructs.
+  { re: /\b(no|wrong|don't|shouldn't|never)\b/i, weight: 0.9 },
+  { re: /(^|[.!?]\s+)not\b/i, weight: 0.9 },
   { re: /\binstead\b/i, weight: 0.9 },
   { re: /\bthat'?s wrong\b/i, weight: 0.95 },
   { re: /\bnot what I (asked|wanted|meant)\b/i, weight: 0.9 },
@@ -52,9 +55,10 @@ const DENIAL_PATTERNS: Array<{ re: RegExp; weight: number }> = [
   // 只有当 ONLY 出现在句首或前置强调词后，才认为是行为纠正指令
   { re: /\bONLY\s+(do|assign|spawn|use|work|run|create|write|call)\b/i, weight: 0.85 },
   { re: /\bNEVER\s+(do|work|assign|create|modify|edit|write|run|push|commit|use)\b/i, weight: 0.9 },
-  // 英文：语言纠正 "answer in chinese/english/..." （Wave 3 patch）
-  { re: /\banswer\s+(in|using)\s+(chinese|english|中文|英文)\b/i, weight: 0.85 },
-  { re: /\buse\s+(chinese|english|中文|英文)\b/i, weight: 0.8 },
+  // 英文：语言纠正 — 必须有明确否定前缀才算纠正（Wave 3 patch, tightened）
+  // "no, answer in chinese" / "don't answer in english" — but NOT bare "please answer in chinese"
+  { re: /\b(no|don't|not)\b.{0,30}\banswer\s+(in|using)\s+(chinese|english|中文|英文)\b/i, weight: 0.85 },
+  { re: /\bdon'?t\s+use\s+(chinese|english|中文|英文)\b/i, weight: 0.8 },
   // 英文：澄清性重定向 "i mean" / "right should be" （Wave 3 patch）
   // Only fire when "i mean" is followed by actual content (not just "i mean..." trailing)
   { re: /\bi mean[,，]?\s+\S/i, weight: 0.8 },
