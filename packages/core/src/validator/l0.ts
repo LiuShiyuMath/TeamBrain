@@ -2,6 +2,42 @@ import type { ValidateL0Input, ValidationL0Result } from "@teamagent/ports";
 
 const IMPORT_PATH_RE = /^[@a-zA-Z0-9_\-./]+$/;
 
+// ── Jaccard token-overlap helper (embedding-conflict fallback) ──────────────
+
+/**
+ * Tokenise text into a Set of lowercase word tokens (≥2 chars).
+ * Pure function; no IO.
+ */
+export function tokenSet(text: string): Set<string> {
+  const tokens = text
+    .toLowerCase()
+    .split(/\W+/)
+    .filter((t) => t.length >= 2);
+  return new Set(tokens);
+}
+
+/**
+ * Jaccard similarity between two token sets.
+ * Returns 0 when both sets are empty (no conflict in that edge-case).
+ */
+export function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 && b.size === 0) return 0;
+  let intersection = 0;
+  for (const t of a) {
+    if (b.has(t)) intersection++;
+  }
+  const union = a.size + b.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+/**
+ * Core identity + semantic fields that must be non-empty for a rule to be
+ * meaningful. We intentionally keep this set small — Partial<KnowledgeEntry>
+ * entries during extraction legitimately omit numeric/enum fields whose zod
+ * defaults will be applied later. These three are the semantic minimum.
+ */
+const REQUIRED_FIELDS = ["id", "trigger", "correct_pattern"] as const;
+
 /**
  * L0 机械检查——规则入库前的零成本门闸。纯函数，无 IO。
  *
@@ -77,6 +113,54 @@ export function validateLevel0(input: ValidateL0Input): ValidationL0Result {
   }
   if (entry.type === "avoidance" && !entry.wrong_pattern) {
     failed.push("avoidance_must_have_wrong_pattern");
+  }
+
+  // 7. wrong_pattern identical to correct_pattern (patterns conflict with each other)
+  if (
+    entry.wrong_pattern &&
+    entry.correct_pattern &&
+    entry.wrong_pattern.trim() !== "" &&
+    entry.wrong_pattern.trim() === entry.correct_pattern.trim()
+  ) {
+    failed.push("wrong_correct_patterns_identical");
+  }
+
+  // 8. confidence out of [0, 1] range
+  if (typeof entry.confidence === "number") {
+    if (entry.confidence < 0 || entry.confidence > 1) {
+      failed.push("confidence_out_of_range");
+    }
+  }
+
+  // 9. missing required schema fields
+  for (const field of REQUIRED_FIELDS) {
+    const val = (entry as Record<string, unknown>)[field];
+    if (val === undefined || val === null || val === "") {
+      failed.push(`missing_required_field:${field}`);
+    }
+  }
+
+  // 10. embedding conflict: rule body too similar to existing rules (Jaccard ≥ 0.85)
+  //     Uses Jaccard token overlap on trigger + wrong_pattern + correct_pattern as fallback.
+  const JACCARD_CONFLICT_THRESHOLD = 0.85;
+  const entryBody = [
+    entry.trigger ?? "",
+    entry.wrong_pattern ?? "",
+    entry.correct_pattern ?? "",
+  ].join(" ");
+  const entryTokens = tokenSet(entryBody);
+  for (const existing of existingRules) {
+    if (existing.id === entry.id) continue;
+    const existingBody = [
+      existing.trigger ?? "",
+      existing.wrong_pattern ?? "",
+    ].join(" ");
+    const existingTokens = tokenSet(existingBody);
+    const sim = jaccardSimilarity(entryTokens, existingTokens);
+    if (sim >= JACCARD_CONFLICT_THRESHOLD) {
+      failed.push(`embedding_conflict:${existing.id}`);
+      break; // report first conflict only to keep failed_checks clean
+    }
   }
 
   return {
