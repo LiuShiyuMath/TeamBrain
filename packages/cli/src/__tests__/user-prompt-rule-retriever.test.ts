@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatRuleInjection, buildTechStackText, buildTerminalSummary } from "../user-prompt-rule-retriever.js";
+import { formatRuleInjection, buildTechStackText, buildTerminalSummary, passesCoOccurrenceGuard } from "../user-prompt-rule-retriever.js";
 import type { KnowledgeEntry } from "@teamagent/types";
 
 function makeRule(id: string, trigger: string, correct: string, conf = 0.9): KnowledgeEntry {
@@ -107,5 +107,47 @@ describe("buildTechStackText", () => {
     const text = buildTechStackText(process.cwd());
     expect(typeof text).toBe("string");
     expect(text.length).toBeGreaterThan(0);
+  });
+});
+
+describe("passesCoOccurrenceGuard", () => {
+  const threeElementRule = makeRule(
+    "r-ceo",
+    "需要列出产品功能且与技术实现细节分离时",
+    "prompt 中同时包含三要素：(1) 'list product features'，(2) 'not tech features'，(3) 'explain to a chinese cute duck'；这是项目标准沟通模板",
+  );
+
+  it("blocks partial match: 'list all product features' missing 2 of 3 required tokens", () => {
+    expect(passesCoOccurrenceGuard(threeElementRule, "list all product features")).toBe(false);
+  });
+
+  it("allows full match: all 3 tokens present", () => {
+    const msg = "list product features not tech features explain to a chinese cute duck";
+    expect(passesCoOccurrenceGuard(threeElementRule, msg)).toBe(true);
+  });
+
+  it("allows rules with no numbered token pattern in correct_pattern", () => {
+    const simpleRule = makeRule("r-simple", "写代码时", "先写测试");
+    expect(passesCoOccurrenceGuard(simpleRule, "write some code")).toBe(true);
+  });
+
+  it("allows single-element numbered pattern (not a co-occurrence constraint)", () => {
+    const singleRule = makeRule("r-single", "触发时", "(1) 'do the thing' 是最佳做法");
+    expect(passesCoOccurrenceGuard(singleRule, "do something else entirely")).toBe(true);
+  });
+
+  it("allows when only 1 of 2 required tokens present in a two-element rule", () => {
+    const twoRule = makeRule("r-two", "触发时", "需要同时满足 (1) 'alpha' 和 (2) 'beta' 两个条件");
+    expect(passesCoOccurrenceGuard(twoRule, "only alpha here")).toBe(false);
+  });
+
+  it("allows when all 2 required tokens present in a two-element rule", () => {
+    const twoRule = makeRule("r-two", "触发时", "需要同时满足 (1) 'alpha' 和 (2) 'beta' 两个条件");
+    expect(passesCoOccurrenceGuard(twoRule, "alpha and beta are both here")).toBe(true);
+  });
+
+  it("is case-insensitive for token matching", () => {
+    const msg = "LIST PRODUCT FEATURES NOT TECH FEATURES EXPLAIN TO A CHINESE CUTE DUCK";
+    expect(passesCoOccurrenceGuard(threeElementRule, msg)).toBe(true);
   });
 });
