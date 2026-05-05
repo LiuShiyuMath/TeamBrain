@@ -495,6 +495,47 @@ describe("matchRules — channel gate (M4-A)", () => {
   });
 });
 
+describe("matchRules — B-055 wrong_pattern plural extension over-fire", () => {
+  it("'product feature' does NOT fire on 'list all product features'", () => {
+    const rule = makeRule({
+      id: "pf-avoidance",
+      wrong_pattern: "product feature",
+      channel: "tool-action",
+    });
+    const result = matchRules(
+      { toolName: "Write", input: { content: "list all product features including unverified" } },
+      [rule],
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it("'product feature' still fires on exact phrase without extension", () => {
+    const rule = makeRule({
+      id: "pf-avoidance",
+      wrong_pattern: "product feature",
+      channel: "tool-action",
+    });
+    const result = matchRules(
+      { toolName: "Write", input: { content: "this product feature is wrong" } },
+      [rule],
+    );
+    expect(result).toHaveLength(1);
+  });
+
+  it("'product feature' fires when followed by punctuation", () => {
+    const rule = makeRule({
+      id: "pf-avoidance",
+      wrong_pattern: "product feature",
+      channel: "tool-action",
+    });
+    const result = matchRules(
+      { toolName: "Write", input: { content: "the product feature. is incomplete" } },
+      [rule],
+    );
+    expect(result).toHaveLength(1);
+  });
+});
+
 describe("matchRules — B-047 glob scope bypass", () => {
   it("scope.paths 'src/**/*.ts' does NOT match /evil/src/foo.ts (unanchored bypass fixed)", () => {
     const rule = makeRule({

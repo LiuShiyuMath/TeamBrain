@@ -116,7 +116,38 @@ function patternMatches(inputText: string, inputTextLower: string, pattern: stri
     return plainTokenMatches(inputTextLower, token.toLowerCase());
   }
 
-  return inputTextLower.includes(token.toLowerCase());
+  return containsNonExtending(inputTextLower, token.toLowerCase());
+}
+
+/**
+ * Returns true if `textLower` contains `patternLower` without the match being
+ * extended by a letter or digit immediately after it. Only applies when the
+ * last char of the pattern is a letter or digit; patterns ending in punctuation
+ * (`.`, `(`, `-`, `'`) use plain includes() — e.g. "sk-" and ".removeAt(" work.
+ */
+function containsNonExtending(textLower: string, patternLower: string): boolean {
+  const lastChar = patternLower[patternLower.length - 1] ?? "";
+  if (!isLetterOrDigit(lastChar)) {
+    return textLower.includes(patternLower);
+  }
+  let offset = textLower.indexOf(patternLower);
+  while (offset !== -1) {
+    const afterIdx = offset + patternLower.length;
+    const afterChar = afterIdx < textLower.length ? textLower[afterIdx]! : "";
+    if (!isLetterOrDigit(afterChar)) return true;
+    offset = textLower.indexOf(patternLower, offset + 1);
+  }
+  return false;
+}
+
+function isLetterOrDigit(ch: string): boolean {
+  if (!ch) return false;
+  const code = ch.charCodeAt(0);
+  return (
+    (code >= 97 && code <= 122) || // a-z
+    (code >= 65 && code <= 90)  || // A-Z
+    (code >= 48 && code <= 57)     // 0-9
+  );
 }
 
 function plainTokenMatches(inputTextLower: string, tokenLower: string): boolean {

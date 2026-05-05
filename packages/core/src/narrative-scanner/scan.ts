@@ -46,6 +46,52 @@ function splitPatterns(raw: string): string[] {
   return tokens;
 }
 
+/**
+ * Returns true if `text` contains `pattern` such that the match is not extended
+ * by a letter or digit immediately after it. This prevents "product feature"
+ * from firing inside "product features" (extra `s`).
+ *
+ * The extension check is only applied when the last char of `pattern` is a letter
+ * or digit. Patterns ending in punctuation (`.`, `(`, `-`, `'`, etc.) use plain
+ * includes() semantics so patterns like ".removeAt(" or "sk-" still work correctly.
+ */
+function containsNonExtending(textLower: string, patternLower: string): boolean {
+  const lastChar = patternLower[patternLower.length - 1] ?? "";
+  if (!isLetterOrDigit(lastChar)) {
+    return textLower.includes(patternLower);
+  }
+  let offset = textLower.indexOf(patternLower);
+  while (offset !== -1) {
+    const afterIdx = offset + patternLower.length;
+    const afterChar = afterIdx < textLower.length ? textLower[afterIdx]! : "";
+    if (!isLetterOrDigit(afterChar)) return true;
+    offset = textLower.indexOf(patternLower, offset + 1);
+  }
+  return false;
+}
+
+function isLetterOrDigit(ch: string): boolean {
+  if (!ch) return false;
+  const code = ch.charCodeAt(0);
+  return (
+    (code >= 97 && code <= 122) || // a-z
+    (code >= 65 && code <= 90)  || // A-Z
+    (code >= 48 && code <= 57)     // 0-9
+  );
+}
+
+function isWordChar(ch: string): boolean {
+  if (!ch) return false;
+  const code = ch.charCodeAt(0);
+  return (
+    (code >= 97 && code <= 122) ||
+    (code >= 65 && code <= 90)  ||
+    (code >= 48 && code <= 57)  ||
+    ch === "_" ||
+    ch === "-"
+  );
+}
+
 function snippet(haystack: string, needle: string, pad = 20): string {
   const idx = haystack.toLowerCase().indexOf(needle.toLowerCase());
   if (idx < 0) return needle;
@@ -73,7 +119,7 @@ export function scanNarrative(
     const patterns = splitPatterns(rule.wrong_pattern);
     for (const p of patterns) {
       if (p.length === 0) continue;
-      if (lower.includes(p.toLowerCase())) {
+      if (containsNonExtending(lower, p.toLowerCase())) {
         hits.push({
           knowledge_id: rule.id,
           matched_snippet: snippet(text, p),

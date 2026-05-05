@@ -179,6 +179,44 @@ describe("scanNarrative", () => {
   });
 });
 
+describe("B-055: wrong_pattern must not over-fire when followed by a word-extension char", () => {
+  it("'product feature' does NOT match 'list all product features' (plural)", () => {
+    const rule = makeRule({ id: "pf-rule", wrong_pattern: "product feature" });
+    const hits = scanNarrative(
+      "list all product features including unverified",
+      [rule],
+    );
+    expect(hits).toHaveLength(0);
+  });
+
+  it("'product feature' still matches exact phrase without extension", () => {
+    const rule = makeRule({ id: "pf-rule", wrong_pattern: "product feature" });
+    const hits = scanNarrative(
+      "this product feature is incomplete",
+      [rule],
+    );
+    expect(hits).toHaveLength(1);
+  });
+
+  it("'product feature' matches when followed by punctuation (not a word char)", () => {
+    const rule = makeRule({ id: "pf-rule", wrong_pattern: "product feature" });
+    const hits = scanNarrative(
+      "the product feature. is documented",
+      [rule],
+    );
+    expect(hits).toHaveLength(1);
+  });
+
+  it("pipe-OR with 'product feature' also does not over-fire on plural", () => {
+    const rule = makeRule({ id: "pf-rule", wrong_pattern: "bad output|product feature" });
+    const hits = scanNarrative(
+      "list all product features",
+      [rule],
+    );
+    expect(hits).toHaveLength(0);
+  });
+});
+
 describe("B-054: scanNarrative.splitPatterns single-pattern length check", () => {
   it("B-054: single 1-char wrong_pattern 'a' (no pipe) does NOT match", () => {
     const rule = makeRule({ wrong_pattern: "a" });
