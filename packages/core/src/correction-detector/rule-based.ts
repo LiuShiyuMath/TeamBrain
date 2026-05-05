@@ -12,6 +12,15 @@ import type { ParsedSession, SessionTurn, ToolCall } from "@teamagent/types";
  * - 中文：逐字精确匹配。"不对"/"错了"/"别这样"/"不要"/"换个"/"重来"
  * - 英文：整词匹配（用 \b 防止 "know" 命中 "no"）
  * - 故意不收录 "不是"——太宽泛（"我的意思不是..."）
+ *
+ * Real-session gap patches (Wave 3 prod e2e):
+ * - Added "fix" / "修复" as standalone correction verbs
+ * - Added "restart" / "reboot" as strong intent-reset signals
+ * - Added ONLY-constraint patterns: "ONLY do X" / "ONLY assign" style directives
+ * - Added "i mean" / "right should be" redirect clarification patterns
+ * - Added language-correction patterns: "answer in chinese/english"
+ * - Added NEVER directive as a standalone pattern (already covered by /never/ but was in
+ *   sentence position that regex missed due to case-only-word boundary issues)
  */
 const DENIAL_PATTERNS: Array<{ re: RegExp; weight: number }> = [
   // 中文：高置信
@@ -28,12 +37,28 @@ const DENIAL_PATTERNS: Array<{ re: RegExp; weight: number }> = [
   { re: /不该|不应该/, weight: 0.9 },
   { re: /不是(这个|这样|这么|要|让你)|而不是/, weight: 0.85 },
   { re: /应该先|先.+再/, weight: 0.8 },
+  // 中文：修复/纠正动词（Wave 3 patch）
+  { re: /修复[！!]|^修复\b/, weight: 0.9 },
   // 英文：整词
   { re: /\b(no|wrong|don't|shouldn't|not|never)\b/i, weight: 0.9 },
   { re: /\binstead\b/i, weight: 0.9 },
   { re: /\bthat'?s wrong\b/i, weight: 0.95 },
   { re: /\bnot what I (asked|wanted|meant)\b/i, weight: 0.9 },
   { re: /\b(use|try|pick|choose)\s+[@A-Za-z0-9][\w@./-]*\s+(instead of|not)\s+[@A-Za-z0-9][\w@./-]*/i, weight: 0.9 },
+  // 英文：fix/restart/reboot 作为明确纠正动词（Wave 3 patch）
+  { re: /\bfix\b/i, weight: 0.85 },
+  { re: /\brestart\b/i, weight: 0.85 },
+  // 英文：ONLY 约束型纠正 — "ONLY do X" / "ONLY assign" 等（Wave 3 patch）
+  // 只有当 ONLY 出现在句首或前置强调词后，才认为是行为纠正指令
+  { re: /\bONLY\s+(do|assign|spawn|use|work|run|create|write|call)\b/i, weight: 0.85 },
+  { re: /\bNEVER\s+(do|work|assign|create|modify|edit|write|run|push|commit|use)\b/i, weight: 0.9 },
+  // 英文：语言纠正 "answer in chinese/english/..." （Wave 3 patch）
+  { re: /\banswer\s+(in|using)\s+(chinese|english|中文|英文)\b/i, weight: 0.85 },
+  { re: /\buse\s+(chinese|english|中文|英文)\b/i, weight: 0.8 },
+  // 英文：澄清性重定向 "i mean" / "right should be" （Wave 3 patch）
+  // Only fire when "i mean" is followed by actual content (not just "i mean..." trailing)
+  { re: /\bi mean[,，]?\s+\S/i, weight: 0.8 },
+  { re: /\bright should be\b/i, weight: 0.85 },
 ];
 
 /**
@@ -93,6 +118,23 @@ function isPoliteQuery(text: string): boolean {
 }
 
 /**
+ * Signal G: user_interrupt — Claude Code sessions record "[Request interrupted by user]"
+ * (and "[Request interrupted by user for tool use]") when the user presses Escape or
+ * otherwise cancels the AI's ongoing action. These are unambiguous correction moments:
+ * the user actively stopped the AI, which semantically means "what you were doing was wrong."
+ *
+ * Wave 3 real-session analysis: interrupt signals are the single most common correction
+ * pattern in production (11 out of 24 FNs in initial harness run). The labeled-fixture
+ * harness never saw them because hand-crafted fixtures don't include interrupt messages.
+ */
+const INTERRUPT_PATTERN = /^\[Request interrupted by user(\s+for\s+tool\s+use)?\]$/i;
+
+function isInterruptMessage(text: string): boolean {
+  if (!text) return false;
+  return INTERRUPT_PATTERN.test(text.trim());
+}
+
+/**
  * 规则版纠正时刻识别器（纯函数）。
  * 仅用关键词 + 工具调用统计，不依赖 LLM。
  */
@@ -108,6 +150,14 @@ export const ruleBasedCorrectionDetector: CorrectionDetector = {
       // system-injected pseudo-message (skill loader, system-reminder, etc.).
       // These commonly contain DENIAL keywords but are not user corrections.
       if (isSystemInjectedMessage(turn.userMessage)) continue;
+
+      // Signal G: user_interrupt — "[Request interrupted by user]" messages
+      // are unambiguous correction signals from Claude Code's session format.
+      // The user cancelled the AI action, indicating the current approach was wrong.
+      if (isInterruptMessage(turn.userMessage)) {
+        out.push(buildMoment(turn, prevTurn, "explicit_denial", 0.9));
+        continue; // interrupt occupies this turn; skip other signals
+      }
 
       // Signal A: 用户 message 里含显式否定词
       // B-064: polite "能…吗？" queries are requests, not corrections — skip.
@@ -160,10 +210,14 @@ export const ruleBasedCorrectionDetector: CorrectionDetector = {
       // Signal E: error_in_context — user pastes an error trace/message and the
       // previous turn had AI tool calls (i.e., AI caused the error or was involved).
       // This catches the common pattern: AI does something → error → user pastes error.
+      //
+      // Wave 3 patch: also fire when the user explicitly asks "how to fix" after an error,
+      // even if prevHadToolUse=false (covers "echo $HOME still got error .how to fix ?").
       if (prevTurn && !out.find((m) => m.turnIndex === i)) {
         const hasError = detectErrorInMessage(turn.userMessage);
         const prevHadToolUse = prevTurn.toolCalls.length > 0;
-        if (hasError && prevHadToolUse) {
+        const hasHowToFix = /\bhow\s+to\s+fix\b|\bstill\s+(got\s+)?error\b/i.test(turn.userMessage);
+        if (hasError && (prevHadToolUse || hasHowToFix)) {
           out.push(buildMoment(turn, prevTurn, "multi_failure", 0.8));
         }
       }
