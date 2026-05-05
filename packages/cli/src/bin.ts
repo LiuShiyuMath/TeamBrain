@@ -88,6 +88,11 @@ import {
   parseTeamExportArgs,
   parseTeamImportArgs,
 } from "./commands/team-transfer.js";
+import {
+  executeGitSyncPush,
+  executeGitSyncPull,
+  parseGitSyncArgs,
+} from "./commands/git-sync.js";
 import { executePrCycle, parsePrCycleArgs } from "./commands/pr-cycle.js";
 import {
   executePairAccept,
@@ -534,6 +539,24 @@ async function main(): Promise<void> {
       const result = executeTeamImport(parseTeamImportArgs(rest));
       process.stdout.write(result.output);
       if (!result.ok) process.exit(1);
+      return;
+    }
+    case "sync": {
+      let syncArgs;
+      try {
+        syncArgs = parseGitSyncArgs(rest);
+      } catch (err) {
+        process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+        process.exit(1);
+        return;
+      }
+      const syncOpts = { ...syncArgs, cwd: syncArgs.cwd ?? process.cwd() };
+      const syncResult =
+        syncArgs.subcommand === "push"
+          ? executeGitSyncPush(syncOpts)
+          : executeGitSyncPull(syncOpts);
+      process.stdout.write(syncResult.output + "\n");
+      if (!syncResult.ok) process.exit(1);
       return;
     }
     case "pr-cycle": {
