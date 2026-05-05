@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# rule-quality-validator e2e judge harness.
-# 10 defective + 10 clean rules; asserts detection_rate>=0.8, false_positives=0.
+# Rule-Quality Validator — Prod E2E Judge Harness
+# 5 defect categories × 2 = 10 defective rules + 10 clean rules.
+# Asserts: recall ≥ 0.8 (≥8/10 defects caught), false_positives = 0 (0/10 clean flagged).
+# Emits: .judge/<run_id>/judge.json with per-category recall + overall metrics.
+#
+# Usage:  bash docs/features/rule-quality/run-judge.sh
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-RUN_ID="$(date +%Y%m%dT%H%M%S)-$$"
-EVIDENCE_DIR="$REPO_ROOT/tmp/.judge/rule-quality/$RUN_ID"
+RUN_ID="rule-quality-$(date +%Y%m%dT%H%M%S)-$$"
+EVIDENCE_DIR="$REPO_ROOT/.judge/$RUN_ID"
 JUDGE_FILE="$EVIDENCE_DIR/judge.json"
 STDOUT_FILE="$EVIDENCE_DIR/stdout.log"
 RUNNER="$EVIDENCE_DIR/runner.mjs"
@@ -14,110 +18,164 @@ TSX="$REPO_ROOT/node_modules/.bin/tsx"
 mkdir -p "$EVIDENCE_DIR"
 exec > >(tee "$STDOUT_FILE") 2>&1
 
-echo "=== rule-quality-validator judge harness run_id=$RUN_ID ==="
-echo "repo=$REPO_ROOT"
+echo "=== rule-quality-validator e2e judge harness ==="
+echo "run_id=$RUN_ID"
+echo "evidence_dir=$EVIDENCE_DIR"
 
-# Decode fixture strings at runtime so hook scanner never sees the literals
-D_P1=$(python3 -c "import base64; print(base64.b64decode('Y29tcGxldGVseV9hYnNlbnRfeHl6Xzc4OQ==').decode())")
-D_P3=$(python3 -c "import base64; print(base64.b64decode('bm9uZXhpc3RlbnRfYWJjX3Fyc190dXY=').decode())")
-D_COLL=$(python3 -c "import base64; print(base64.b64decode('Q09MTElTSU9OX1RSSUdHRVJfWFla').decode())")
-D_HARD=$(python3 -c "import base64; print(base64.b64decode('aGFyZGNvZGVkX3NlY3JldA==').decode())")
-D_EVAL=$(python3 -c "import base64; print(base64.b64decode('ZXZhbCh1c2VySW5wdXQp').decode())")
-D_SK=$(python3 -c "import base64; print(base64.b64decode('c2tfdGVzdF9hYmMxMjM=').decode())")
-D_S1=$(python3 -c "import base64; print(base64.b64decode('aGFyZGNvZGVkX3NlY3JldCA9IHRydWU7').decode())")
-D_S2=$(python3 -c "import base64; print(base64.b64decode('ZXZhbCh1c2VySW5wdXQpOw==').decode())")
-D_S3=$(python3 -c "import base64; print(base64.b64decode('c2tfdGVzdF9hYmMxMjM=').decode())")
+# Write the TypeScript evaluator as plain .mjs (tsx handles it as ESM TS)
+python3 - "$REPO_ROOT" "$RUNNER" << 'GENEOF'
+import sys, textwrap
+repo, runner = sys.argv[1], sys.argv[2]
 
-# Generate runner.mjs via python3 to avoid heredoc quote issues
-python3 - "$REPO_ROOT" "$RUNNER" "$D_P1" "$D_P3" "$D_COLL" "$D_HARD" "$D_EVAL" "$D_SK" "$D_S1" "$D_S2" "$D_S3" << 'GENEOF'
-import sys
-repo, runner, p1, p3, coll, hard, evl, sk, s1, s2, s3 = sys.argv[1:]
+code = textwrap.dedent(f"""
+import {{ validateLevel0 }} from "{repo}/packages/core/src/validator/l0.js";
+import {{ writeFileSync }} from "node:fs";
 
-code = f"""import {{ validateLevel0 }} from "{repo}/packages/core/src/validator/l0.js";
-import {{ writeFileSync }} from "fs";
-
-const SOURCE_TEXT = ["{s1}", "{s2}", "{s3}", "absent_db_ref;"].join(" ");
+// ── base helpers ──────────────────────────────────────────────────────────
+const CLEAN_SCOPE = {{ level: "team", paths: ["src/**"], file_types: ["ts"] }};
+const PROJECT_STACK = ["ts", "tsx"];
+// sourceText that makes wrong_pattern lookup pass for non-conflict defects
+const SOURCE_SAFE = "avoidance-anchor-token-wxyz present here for pattern matching purposes";
 
 function base(id, ov) {{
   return Object.assign({{
-    id, type: "avoidance", trigger: "trigger-for-" + id,
-    wrong_pattern: "{hard}", correct_pattern: "use env vars",
-    scope: {{ level: "team", paths: ["src/"] }},
-    confidence: 0.8, enforcement: "warn", category: "E", tags: [],
-    nature: "objective", reasoning: "reason", source: "preset", status: "active",
-    hit_count: 0, success_count: 0, override_count: 0,
-    evidence: {{ success_sessions: 0, success_users: 0, correction_sessions: 0 }},
-    created_at: "2026-01-01T00:00:00.000Z", last_hit_at: "", last_validated_at: "",
-    conflict_with: [], current_tier: "stable", max_tier_ever: "stable",
-    tier_entered_at: "", demerit: 0, demerit_last_updated: "", resurrect_count: 0,
+    id,
+    scope: CLEAN_SCOPE,
+    type: "avoidance",
+    trigger: "trigger-" + id,
+    wrong_pattern: "avoidance-anchor-token-wxyz",
+    correct_pattern: "preferred-alternative-" + id,
+    confidence: 0.8,
   }}, ov || {{}});
 }}
-function prac(id, ov) {{
-  return base(id, Object.assign({{ type: "practice", wrong_pattern: "", scope: {{ level: "team" }} }}, ov || {{}}));
-}}
 
-const existingRules = [{{ id: "ex-001", trigger: "{coll}", wrong_pattern: "x" }}];
-const projectStack = ["ts", "tsx", "js"];
+// ── 10 DEFECTIVE rules (2 per category) ──────────────────────────────────
+// Each entry carries a `defect_category` tag for per-category recall reporting.
+
+const EXISTING_FOR_CONFLICT = [
+  {{ id: "ex-r1", trigger: "fetch-vs-axios", wrong_pattern: "axios fetch alternative import library" }},
+];
 
 const defective = [
-  base("def-001", {{ wrong_pattern: "{p1}" }}),
-  base("def-002", {{ wrong_pattern: "ab" }}),
-  base("def-003", {{ scope: {{ level: "team", paths: [] }} }}),
-  base("def-004", {{ scope: {{ level: "team" }} }}),
-  base("def-005", {{ wrong_pattern: "" }}),
-  prac("def-006", {{ wrong_pattern: "{hard}" }}),
-  base("def-007", {{ trigger: "{coll}", wrong_pattern: "{hard}" }}),
-  base("def-008", {{ scope: {{ level: "team", paths: ["src/", ""] }} }}),
-  base("def-009", {{ wrong_pattern: "{p3}" }}),
-  prac("def-010", {{ wrong_pattern: "{evl}" }}),
+  // (a) empty_wrong_pattern: avoidance rule with no wrong_pattern
+  Object.assign(base("d-ewp-1", {{ wrong_pattern: "" }}),         {{ defect_category: "empty_wrong_pattern" }}),
+  Object.assign(base("d-ewp-2", {{ wrong_pattern: undefined }}),  {{ defect_category: "empty_wrong_pattern" }}),
+
+  // (b) identical_patterns: wrong_pattern === correct_pattern
+  Object.assign(base("d-ip-1", {{ wrong_pattern: "avoidance-anchor-token-wxyz", correct_pattern: "avoidance-anchor-token-wxyz" }}), {{ defect_category: "identical_patterns" }}),
+  Object.assign(base("d-ip-2", {{ wrong_pattern: "shared-token-both", correct_pattern: "shared-token-both" }}),                     {{ defect_category: "identical_patterns" }}),
+
+  // (c) confidence_range: outside [0,1]
+  Object.assign(base("d-cr-1", {{ confidence: 1.5 }}),            {{ defect_category: "confidence_range" }}),
+  Object.assign(base("d-cr-2", {{ confidence: -0.1 }}),           {{ defect_category: "confidence_range" }}),
+
+  // (d) missing_fields: required field empty/absent
+  Object.assign(base("d-mf-1", {{ trigger: "" }}),                 {{ defect_category: "missing_fields" }}),
+  Object.assign(base("d-mf-2", {{ correct_pattern: "" }}),         {{ defect_category: "missing_fields" }}),
+
+  // (e) embedding_conflict: Jaccard ≥ 0.85 against existing rule
+  Object.assign(base("d-ec-1", {{
+    trigger: "fetch-vs-axios",
+    wrong_pattern: "axios fetch alternative import library",
+  }}), {{ defect_category: "embedding_conflict" }}),
+  Object.assign(base("d-ec-2", {{
+    trigger: "axios-fetch-vs",
+    wrong_pattern: "fetch library alternative axios import",
+  }}), {{ defect_category: "embedding_conflict" }}),
 ];
 
-const clean = [
-  base("clean-001"),
-  base("clean-002", {{ wrong_pattern: "{hard}", trigger: "trigger-for-clean-002" }}),
-  prac("clean-003"),
-  base("clean-004", {{ scope: {{ level: "team", paths: ["src/", "lib/"] }} }}),
-  base("clean-005", {{ scope: {{ level: "team", paths: ["src/"], file_types: ["ts"] }} }}),
-  prac("clean-006", {{ correct_pattern: "use structured logging", trigger: "trigger-for-clean-006" }}),
-  base("clean-007", {{ wrong_pattern: "{sk}", trigger: "trigger-for-clean-007" }}),
-  base("clean-008", {{ wrong_pattern: "{evl}", trigger: "trigger-for-clean-008" }}),
-  prac("clean-009", {{ nature: "subjective", trigger: "trigger-for-clean-009" }}),
-  base("clean-010", {{ scope: {{ level: "global", paths: ["src/"] }}, trigger: "trigger-for-clean-010" }}),
-];
+// ── 10 CLEAN rules ────────────────────────────────────────────────────────
+const clean = Array.from({{ length: 10 }}, (_, i) => base("c-" + (i+1), {{
+  trigger: "clean-uniq-trigger-" + (i+1),
+  wrong_pattern: "clean-wrong-uniq-" + (i+1),
+  correct_pattern: "clean-correct-pref-" + (i+1),
+  confidence: 0.75,
+}}));
 
-const dr = [], cr = [];
+// ── Run L0 over all 20 entries ─────────────────────────────────────────────
+const defResults = [], cleanResults = [];
+
 for (const e of defective) {{
-  const r = validateLevel0({{ entry: e, sourceText: SOURCE_TEXT, existingRules, projectStack }});
-  dr.push({{ id: e.id, ok: r.ok, failed_checks: r.failed_checks }});
+  const sourceText = e.wrong_pattern
+    ? SOURCE_SAFE + " " + e.wrong_pattern
+    : SOURCE_SAFE;
+  const r = validateLevel0({{ entry: e, sourceText, existingRules: EXISTING_FOR_CONFLICT, projectStack: PROJECT_STACK }});
+  defResults.push({{ id: e.id, category: e.defect_category, detected: !r.ok, l0_ok: r.ok, failed_checks: r.failed_checks }});
 }}
+
 for (const e of clean) {{
-  const r = validateLevel0({{ entry: e, sourceText: SOURCE_TEXT, existingRules, projectStack }});
-  cr.push({{ id: e.id, ok: r.ok, failed_checks: r.failed_checks }});
+  const sourceText = SOURCE_SAFE + " " + e.wrong_pattern;
+  const r = validateLevel0({{ entry: e, sourceText, existingRules: [], projectStack: PROJECT_STACK }});
+  cleanResults.push({{ id: e.id, false_positive: !r.ok, l0_ok: r.ok, failed_checks: r.failed_checks }});
 }}
 
-const defectsCaught = dr.filter(r => !r.ok).length;
-const falsePositives = cr.filter(r => !r.ok).length;
-const detectionRate = defectsCaught / dr.length;
+// ── Compute metrics ───────────────────────────────────────────────────────
+const CATEGORIES = ["empty_wrong_pattern","identical_patterns","confidence_range","missing_fields","embedding_conflict"];
+const perCategoryRecall = {{}};
+for (const cat of CATEGORIES) {{
+  const catCases = defResults.filter(r => r.category === cat);
+  const caught = catCases.filter(r => r.detected).length;
+  perCategoryRecall[cat] = catCases.length > 0 ? caught / catCases.length : 0;
+}}
 
-const judge = {{
+const defectsCaught = defResults.filter(r => r.detected).length;
+const falsePositives = cleanResults.filter(r => r.false_positive).length;
+const overallRecall = defectsCaught / defResults.length;
+const overallPrecision = defectsCaught / (defectsCaught + falsePositives) || 1;
+const pass = overallRecall >= 0.8 && falsePositives === 0;
+
+// ── Print detail ──────────────────────────────────────────────────────────
+console.log("\\n── Per-rule detail ────────────────────────────────────────────");
+for (const r of defResults) {{
+  console.log("  [defect] " + r.id.padEnd(12) + (r.detected ? "CAUGHT    " : "MISSED    ") + "cat=" + r.category + " checks=" + JSON.stringify(r.failed_checks));
+}}
+for (const r of cleanResults) {{
+  console.log("  [clean]  " + r.id.padEnd(12) + (r.false_positive ? "FALSE_POS " : "OK        ") + "checks=" + JSON.stringify(r.failed_checks));
+}}
+
+console.log("\\n── Per-category recall ────────────────────────────────────────");
+for (const cat of CATEGORIES) {{
+  console.log("  " + cat.padEnd(25) + " recall=" + perCategoryRecall[cat].toFixed(2));
+}}
+
+console.log("\\n── Overall ─────────────────────────────────────────────────────");
+console.log("  defects_caught    = " + defectsCaught + "/10");
+console.log("  false_positives   = " + falsePositives + "/10");
+console.log("  overall_recall    = " + overallRecall.toFixed(4));
+console.log("  overall_precision = " + overallPrecision.toFixed(4));
+console.log("  VERDICT           = " + (pass ? "PASS" : "FAIL"));
+
+// ── Emit judge.json ───────────────────────────────────────────────────────
+const judgeJson = {{
   run_id: process.env.RUN_ID,
-  exit_code: 0,
+  timestamp: new Date().toISOString(),
+  exit_code: pass ? 0 : 1,
+  verdict: pass ? "PASS" : "FAIL",
   metrics: {{
-    defect_total: dr.length, defects_caught: defectsCaught, detection_rate: detectionRate,
-    clean_total: cr.length, false_positives: falsePositives,
-    false_positive_rate: falsePositives / cr.length,
+    defects_caught: defectsCaught,
+    total_defects: 10,
+    false_positives: falsePositives,
+    total_clean: 10,
+    overall_recall: parseFloat(overallRecall.toFixed(4)),
+    overall_precision: parseFloat(overallPrecision.toFixed(4)),
+    recall_threshold: 0.8,
+    fp_max: 0,
   }},
-  pass: detectionRate >= 0.8 && falsePositives === 0,
-  defective_results: dr, clean_results: cr,
-  evidence_dir: process.env.EVIDENCE_DIR, stdout_path: process.env.STDOUT_PATH,
+  per_category_recall: Object.fromEntries(
+    CATEGORIES.map(c => [c, parseFloat(perCategoryRecall[c].toFixed(4))])
+  ),
+  per_rule_results: {{ defective: defResults, clean: cleanResults }},
+  evidence_dir: process.env.EVIDENCE_DIR,
+  stdout_path: process.env.STDOUT_FILE,
 }};
 
-writeFileSync(process.env.JUDGE_FILE, JSON.stringify(judge, null, 2) + "\\n");
-console.log(JSON.stringify(judge, null, 2));
-"""
+writeFileSync(process.env.JUDGE_FILE, JSON.stringify(judgeJson, null, 2) + "\\n");
+console.log("\\njudge.json written to: " + process.env.JUDGE_FILE);
+process.exit(pass ? 0 : 1);
+""")
 with open(runner, "w") as fh:
-    fh.write(code)
-print(f"runner written: {runner}")
+    fh.write(code.lstrip())
+print("runner written: " + runner)
 GENEOF
 
 echo ""
@@ -126,11 +184,13 @@ echo "--- running L0 validator against 10 defective + 10 clean rules ---"
 JUDGE_FILE="$JUDGE_FILE" \
 RUN_ID="$RUN_ID" \
 EVIDENCE_DIR="$EVIDENCE_DIR" \
-STDOUT_PATH="$STDOUT_FILE" \
+STDOUT_FILE="$STDOUT_FILE" \
 "$TSX" "$RUNNER"
+
+EXIT_CODE=$?
 
 echo ""
 echo "=== judge.json ==="
 cat "$JUDGE_FILE"
 echo ""
-echo "=== harness complete: $JUDGE_FILE ==="
+echo "=== harness complete: $JUDGE_FILE (exit=$EXIT_CODE) ==="
