@@ -141,25 +141,26 @@ export function validateLevel0(input: ValidateL0Input): ValidationL0Result {
   }
 
   // 10. embedding conflict: rule body too similar to existing rules (Jaccard ≥ 0.85)
-  //     Uses Jaccard token overlap on trigger + wrong_pattern + correct_pattern as fallback.
+  //     Uses Jaccard token overlap on trigger + wrong_pattern (same fields available on
+  //     both entry and existingRules, ensuring symmetric comparison).
+  //     Only runs when entry has a non-empty wrong_pattern: trigger-only overlap
+  //     causes false positives for related-but-distinct practice rules.
   const JACCARD_CONFLICT_THRESHOLD = 0.85;
-  const entryBody = [
-    entry.trigger ?? "",
-    entry.wrong_pattern ?? "",
-    entry.correct_pattern ?? "",
-  ].join(" ");
-  const entryTokens = tokenSet(entryBody);
-  for (const existing of existingRules) {
-    if (existing.id === entry.id) continue;
-    const existingBody = [
-      existing.trigger ?? "",
-      existing.wrong_pattern ?? "",
-    ].join(" ");
-    const existingTokens = tokenSet(existingBody);
-    const sim = jaccardSimilarity(entryTokens, existingTokens);
-    if (sim >= JACCARD_CONFLICT_THRESHOLD) {
-      failed.push(`embedding_conflict:${existing.id}`);
-      break; // report first conflict only to keep failed_checks clean
+  const entryWrongPattern = (entry.wrong_pattern ?? "").trim();
+  if (entryWrongPattern.length > 0) {
+    const entryBody = [entry.trigger ?? "", entryWrongPattern].join(" ");
+    const entryTokens = tokenSet(entryBody);
+    for (const existing of existingRules) {
+      if (existing.id === entry.id) continue;
+      const existingWrongPattern = (existing.wrong_pattern ?? "").trim();
+      if (existingWrongPattern.length === 0) continue; // skip practice rules on other side too
+      const existingBody = [existing.trigger ?? "", existingWrongPattern].join(" ");
+      const existingTokens = tokenSet(existingBody);
+      const sim = jaccardSimilarity(entryTokens, existingTokens);
+      if (sim >= JACCARD_CONFLICT_THRESHOLD) {
+        failed.push(`embedding_conflict:${existing.id}`);
+        break; // report first conflict only to keep failed_checks clean
+      }
     }
   }
 
