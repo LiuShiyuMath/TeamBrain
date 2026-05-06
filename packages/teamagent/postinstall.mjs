@@ -9,6 +9,28 @@ const pkgDir = path.dirname(fileURLToPath(import.meta.url));
 const binPath = path.join(pkgDir, "dist", "bin.js");
 const seedPath = path.join(pkgDir, "dist", "seed", "rules.jsonl");
 
+// B-097: capture diagnostics for any setup-time failure so bug reports have
+// something to work with. Without this every `userHookStatus="failed"` /
+// `warmupStatus="failed"` was a black box. File is rotated implicitly by
+// being overwritten on each install (single source = current install).
+const setupLogPath = path.join(os.homedir(), ".teamagent", "postinstall.log");
+function recordSetupFailure(stage, err) {
+  try {
+    fs.mkdirSync(path.dirname(setupLogPath), { recursive: true });
+    const ts = new Date().toISOString();
+    const stderr = err && err.stderr ? String(err.stderr) : "";
+    const stdout = err && err.stdout ? String(err.stdout) : "";
+    const status = err && (err.status ?? err.code) !== undefined ? `exit=${err.status ?? err.code}` : "";
+    const msg =
+      `[${ts}] stage=${stage} ${status} message=${err && err.message ? String(err.message) : String(err)}\n` +
+      (stderr ? `  stderr (last 500): ${stderr.slice(-500)}\n` : "") +
+      (stdout ? `  stdout (last 500): ${stdout.slice(-500)}\n` : "");
+    fs.appendFileSync(setupLogPath, msg, "utf-8");
+  } catch {
+    // best-effort; never block install
+  }
+}
+
 function seedRuleCount() {
   try {
     if (!fs.existsSync(seedPath)) return 0;
@@ -27,8 +49,14 @@ try {
     stdio: ["ignore", "pipe", "pipe"],
     timeout: 15000,
   });
-} catch {
+} catch (err) {
   doctorFailed = true;
+  // doctor failures during postinstall are usually expected (no knowledge.db
+  // yet), so we only log when stderr is non-empty — that signals a deeper
+  // problem worth surfacing.
+  if (err && err.stderr && String(err.stderr).trim()) {
+    recordSetupFailure("doctor", err);
+  }
 }
 
 // Auto-register user-level SessionStart hook so any future project auto-inits
@@ -40,8 +68,9 @@ try {
     timeout: 10000,
   });
   userHookStatus = "registered";
-} catch {
+} catch (err) {
   userHookStatus = "failed";
+  recordSetupFailure("install-user-hook", err);
 }
 
 // Warmup vector model (skippable via TEAMAGENT_SKIP_WARMUP=1, e.g., during auto-update
@@ -54,8 +83,11 @@ if (process.env.TEAMAGENT_SKIP_WARMUP !== "1") {
       timeout: 300_000,
     });
     warmupStatus = "ok";
-  } catch {
+  } catch (err) {
     warmupStatus = "failed";
+    // warmup uses stdio:"inherit", so err.stdout/err.stderr will be empty —
+    // record what we have (signal/status/message).
+    recordSetupFailure("warmup", err);
   }
 }
 
@@ -92,7 +124,7 @@ const userHookMsg =
   userHookStatus === "registered"
     ? "用户级 SessionStart hook 已注册 (新项目自动 init)"
     : userHookStatus === "failed"
-      ? "用户级 hook 注册失败, 请手动跑 teamagent install-user-hook"
+      ? `用户级 hook 注册失败, 详情: ${setupLogPath}`
       : "用户级 hook 未注册";
 
 process.stdout.write(
