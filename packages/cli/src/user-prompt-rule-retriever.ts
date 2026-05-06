@@ -12,6 +12,37 @@ import type { SemanticMatch } from "@teamagent/core";
 const TOP_K = 3;
 const MIN_SCORE = 0.35;
 
+/**
+ * Co-occurrence guard for semantic injection.
+ *
+ * Some practice rules describe triggers that require multiple tokens to ALL be
+ * present simultaneously (e.g. "prompt must contain (1) X AND (2) Y AND (3) Z").
+ * The BM25/dense retriever can surface such a rule when the user message only
+ * partially overlaps (e.g. contains X but not Y or Z), causing the wrong
+ * canned-answer hint to be injected.
+ *
+ * Detection: if correct_pattern contains the pattern `(N) 'token'` (numbered
+ * single-quoted elements), extract those tokens and require ALL of them to
+ * appear in the user message (case-insensitive substring).
+ *
+ * Returns true  → safe to inject (all required tokens present, or no multi-element pattern detected).
+ * Returns false → skip injection (partial match only).
+ */
+export function passesCoOccurrenceGuard(rule: KnowledgeEntry, userMessage: string): boolean {
+  const pattern = rule.correct_pattern ?? "";
+  // Match patterns like (1) 'token', (2) 'token', ... or with Chinese fullwidth parentheses
+  const tokenRe = /\(\d+\)\s*[''‘’]([^''‘’]+)[''‘’]/g;
+  const required: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = tokenRe.exec(pattern)) !== null) {
+    const tok = m[1]!.trim();
+    if (tok.length >= 3) required.push(tok);
+  }
+  if (required.length < 2) return true; // single-element or no pattern — always allow
+  const msgLower = userMessage.toLowerCase();
+  return required.every((tok) => msgLower.includes(tok.toLowerCase()));
+}
+
 export interface RetrieveRulesArgs {
   userMessage: string;
   cwd: string;
@@ -94,11 +125,13 @@ async function queryRules(
   projectDbPath: string,
   globalDbPath: string,
   excludeIds: Set<string>,
+  userMessage = text,
 ): Promise<KnowledgeEntry[]> {
-  // project DB 存放用户积累的 personal-scope 规则；global DB 存放跨项目 global-scope 规则。
-  // 必须按 DB 来源传正确的 scope，否则 scope_level 过滤会把所有 personal 规则过滤掉（零命中）。
-  const dbsWithScope: Array<{ path: string; scope: "personal" | "global" }> = [
+  // project DB 存放本项目 personal/team 规则；global DB 存放跨项目 global 规则。
+  // 必须按 DB 来源传正确的 scope，否则 scope_level 过滤会把规则过滤掉（零命中）。
+  const dbsWithScope: Array<{ path: string; scope: "personal" | "team" | "global" }> = [
     { path: projectDbPath, scope: "personal" },
+    { path: projectDbPath, scope: "team" },
     { path: globalDbPath,  scope: "global"   },
   ];
 
@@ -132,6 +165,7 @@ async function queryRules(
     if (m.score < MIN_SCORE) continue;
     if (excludeIds.has(m.rule.id)) continue;
     if (seen.has(m.rule.id)) continue;
+    if (!passesCoOccurrenceGuard(m.rule, userMessage)) continue;
     seen.add(m.rule.id);
     result.push(m.rule);
     if (result.length >= TOP_K) break;
@@ -148,7 +182,7 @@ export async function retrieveRulesForPrompt(
   let tier1Rules: KnowledgeEntry[] = [];
   if (args.isFirstPrompt) {
     const techText = buildTechStackText(args.cwd);
-    tier1Rules = await queryRules(techText, embedder, args.projectDbPath, args.globalDbPath, allSeen);
+    tier1Rules = await queryRules(techText, embedder, args.projectDbPath, args.globalDbPath, allSeen, args.userMessage);
     for (const r of tier1Rules) allSeen.add(r.id);
   }
 
@@ -158,6 +192,7 @@ export async function retrieveRulesForPrompt(
     args.projectDbPath,
     args.globalDbPath,
     allSeen,
+    args.userMessage,
   );
 
   const blocks: string[] = [];

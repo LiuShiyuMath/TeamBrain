@@ -29,4 +29,4 @@ pnpm teamagent stats
 ## 注意
 
 - 不做数据总结或二次加工。CLI 输出的文本就是最终答案。
-- 如果用户进一步追问某条具体知识，用 `grep` 或 `Read` 工具查 `~/.teamagent/personal/knowledge.jsonl` 或 `{项目根}/.teamagent/knowledge.jsonl`
+- 如果用户进一步追问某条具体知识，用 SQLite 查询或 CLI explain 查看 `{项目根}/.teamagent/knowledge.db` / `~/.teamagent/global.db`

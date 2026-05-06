@@ -13,10 +13,11 @@ export interface DualLayerStoreConfig {
 
 /**
  * Q1 决策 C —— 混合双层：
- *   <project>/.teamagent/knowledge.db   ← scope.level=personal
+ *   <project>/.teamagent/knowledge.db   ← scope.level=personal/team
  *   ~/.teamagent/global.db              ← scope.level=global
  *
- * 查询时两层合并。team 作用域留到 Phase 4（现在抛错）。
+ * 查询时两层合并。team transport/sync 留到 Phase 4；本地 team scope
+ * 存在 project DB 中，用 scope_level 与 personal 分开。
  */
 export class DualLayerStore {
   private readonly project: SqliteKnowledgeStore;
@@ -30,15 +31,14 @@ export class DualLayerStore {
   add(entry: KnowledgeEntry): void {
     switch (entry.scope.level) {
       case "personal":
+      case "team":
+        // M5: team rules 由 m5-sync 管线写入，按"项目级"路由进 project store
+        // （和 personal 同库）。团队边界 = remote URL hash，存在 scope.project 字段。
         this.project.add(entry);
         return;
       case "global":
         this.global.add(entry);
         return;
-      case "team":
-        // M5: team rules 由 m5-sync 管线写入，按"项目级"路由进 project store。
-        // 团队边界 = remote URL hash，存在 scope.project 字段；查询时与 personal 同库。
-        return this.project.add(entry);
       default:
         throw new Error(`unknown scope level: ${(entry.scope as any).level}`);
     }

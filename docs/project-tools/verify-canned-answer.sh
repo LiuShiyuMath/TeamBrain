@@ -15,12 +15,54 @@ cd "$(git rev-parse --show-toplevel)"
 
 OUT_DIR="docs/project-tools"
 ANSWER_OUT="$OUT_DIR/.last-verify.out"
+ANSWER_STREAM_OUT="$OUT_DIR/.last-verify.stream.jsonl"
 JUDGE_OUT="$OUT_DIR/.last-judge.out"
 JUDGE_JSON="$OUT_DIR/.last-judge.json"
 JUDGE_PROMPT_FILE="$OUT_DIR/.last-judge-prompt.txt"
 
 PROMPT="what project tools we have ?"
 EXPECTED_DOC=$(sed -n '/^## Project tools \/ FASTPROBE$/,/^## Bug report canned answer$/p' CLAUDE.md | sed '$d')
+
+extract_stream_answer() {
+    local input="$1"
+    local output="$2"
+    node -e '
+const fs = require("fs");
+const input = process.argv[1];
+const output = process.argv[2];
+let result = "";
+let text = "";
+for (const line of fs.readFileSync(input, "utf8").split(/\n/)) {
+  if (!line.trim()) continue;
+  try {
+    const event = JSON.parse(line);
+    const delta = event.event?.delta;
+    if (delta?.type === "text_delta" && typeof delta.text === "string") text += delta.text;
+    if (event.type === "result" && typeof event.result === "string") result = event.result;
+  } catch {}
+}
+const answer = text.trim() || result.trim();
+if (!answer) process.exit(1);
+fs.writeFileSync(output, answer);
+' "$input" "$output"
+}
+
+run_answer_claudefast() {
+    local prompt="$1"
+    local stream_output="$2"
+    local answer_output="$3"
+
+    if command -v zsh >/dev/null 2>&1; then
+        PROMPT_FOR_CLAUDEFAST="$prompt" zsh -i -c 'claudefast -p --output-format stream-json --include-partial-messages --verbose --permission-mode acceptEdits "$PROMPT_FOR_CLAUDEFAST"' > "$stream_output" 2>&1
+    elif command -v claudefast >/dev/null 2>&1; then
+        claudefast -p --output-format stream-json --include-partial-messages --verbose --permission-mode acceptEdits "$prompt" > "$stream_output" 2>&1
+    else
+        echo "PROJECT-TOOLS VERIFY: FAIL"
+        echo "neither zsh nor claudefast on PATH"
+        exit 1
+    fi
+    extract_stream_answer "$stream_output" "$answer_output"
+}
 
 run_claudefast() {
     local prompt="$1"
@@ -37,7 +79,7 @@ run_claudefast() {
     fi
 }
 
-run_claudefast "$PROMPT" "$ANSWER_OUT" || {
+run_answer_claudefast "$PROMPT" "$ANSWER_STREAM_OUT" "$ANSWER_OUT" || {
     echo "PROJECT-TOOLS VERIFY: FAIL"
     echo "failed to run answer probe"
     exit 1

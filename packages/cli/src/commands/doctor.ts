@@ -24,6 +24,9 @@ export interface DoctorResult {
   allPassed: boolean;
 }
 
+export type CodexProbe = (env?: NodeJS.ProcessEnv) => ClaudeProbeResult;
+export type McpProbe = (url: string) => Promise<{ reachable: boolean; detail: string }>;
+
 export interface DoctorOptions {
   fix?: boolean;
   json?: boolean;
@@ -31,13 +34,24 @@ export interface DoctorOptions {
   cwd?: string;
   homeDir?: string;
   claudeProbe?: ClaudeProbe;
+  codexProbe?: CodexProbe;
+  mcpProbe?: McpProbe;
 }
 
 export function parseDoctorArgs(argv: string[]): DoctorOptions {
+  let cwd: string | undefined;
+  for (const arg of argv) {
+    if (arg.startsWith("--cwd=")) { cwd = arg.slice("--cwd=".length); break; }
+  }
+  const cwdIdx = argv.indexOf("--cwd");
+  if (cwdIdx !== -1 && argv[cwdIdx + 1] && !argv[cwdIdx + 1]!.startsWith("--")) {
+    cwd = argv[cwdIdx + 1];
+  }
   return {
     fix: argv.includes("--fix"),
     json: argv.includes("--json"),
     postinstall: argv.includes("--postinstall"),
+    cwd,
   };
 }
 
@@ -119,7 +133,8 @@ export async function executeDoctor(opts: DoctorOptions = {}): Promise<DoctorRes
 
   // Check 6: Hook registered
   const settingsPath = path.join(cwd, ".claude", "settings.local.json");
-  const hookCheck = checkHookRegistered(settingsPath);
+  const userSettingsPath = path.join(home, ".claude", "settings.json");
+  const hookCheck = checkHookRegistered(settingsPath, userSettingsPath);
   checks.push(hookCheck);
   if (opts.fix && hookCheck.status === "fail") await autoFix(hookCheck, opts);
   if (hookCheck.status === "fail" && !opts.fix) {
@@ -132,7 +147,19 @@ export async function executeDoctor(opts: DoctorOptions = {}): Promise<DoctorRes
   checks.push(hookScriptCheck);
   if (opts.fix && hookScriptCheck.status === "fail") await autoFix(hookScriptCheck, opts);
 
-  // Check 8: CLAUDE.md is optional human-maintained guidance; generated blocks are deprecated.
+  // Check 8: settings.json scope (project vs user, PreToolUse vs SessionStart)
+  checks.push(checkSettingsJsonScope(settingsPath, path.join(home, ".claude", "settings.json")));
+
+  // Check 9: plugin sync (teamagent plugin files present in .claude/plugins)
+  checks.push(checkPluginSync(cwd, home));
+
+  // Check 10: codex binary presence
+  checks.push(checkCodexBin(opts.codexProbe));
+
+  // Check 11: MCP server reachability
+  checks.push(await checkMcpReachability(cwd, opts.mcpProbe));
+
+  // Check 12: CLAUDE.md is optional human-maintained guidance; generated blocks are deprecated.
   const claudeMdPath = path.join(cwd, "CLAUDE.md");
   const claudeMdCheck = checkClaudeMd(claudeMdPath);
   if (opts.fix && claudeMdCheck.status === "fail") {
@@ -346,7 +373,38 @@ function checkKnowledgeDb(dbPath: string): DoctorCheckResult {
   }
 }
 
-function checkHookRegistered(settingsPath: string): DoctorCheckResult {
+function hasTeamAgentHookInSettings(filePath: string): boolean {
+  if (!fs.existsSync(filePath)) return false;
+  try {
+    const raw = fs.readFileSync(filePath, "utf-8");
+    const settings = JSON.parse(raw) as Record<string, unknown>;
+    const hooks = settings["hooks"] as Record<string, unknown[]> | undefined;
+    if (!hooks) return false;
+    return Object.values(hooks).some(
+      (entries) =>
+        Array.isArray(entries) &&
+        entries.some(
+          (h: unknown) =>
+            typeof h === "object" &&
+            h !== null &&
+            typeof (h as Record<string, unknown>)["_teamagentTag"] === "string" &&
+            ((h as Record<string, unknown>)["_teamagentTag"] as string).startsWith("teamagent-"),
+        ),
+    );
+  } catch {
+    return false;
+  }
+}
+
+function checkHookRegistered(settingsPath: string, userSettingsPath?: string): DoctorCheckResult {
+  // Project-level settings.local.json takes priority
+  if (hasTeamAgentHookInSettings(settingsPath)) {
+    return { name: "hook-registered", status: "pass", detail: "PreToolUse Hook 已注册" };
+  }
+  // Fall back to user-level ~/.claude/settings.json (SessionStart auto-init hook)
+  if (userSettingsPath && hasTeamAgentHookInSettings(userSettingsPath)) {
+    return { name: "hook-registered", status: "pass", detail: "用户级 Hook 已注册 (teamagent install-user-hook)" };
+  }
   if (!fs.existsSync(settingsPath)) {
     return {
       name: "hook-registered",
@@ -356,15 +414,7 @@ function checkHookRegistered(settingsPath: string): DoctorCheckResult {
     };
   }
   try {
-    const raw = fs.readFileSync(settingsPath, "utf-8");
-    const settings = JSON.parse(raw) as Record<string, unknown>;
-    const hooks = settings["hooks"] as Record<string, unknown> | undefined;
-    const pre = hooks?.["PreToolUse"] as unknown[] | undefined;
-    const hasTeamAgent = Array.isArray(pre) &&
-      pre.some((h: unknown) => (h as Record<string, unknown>)["_teamagentTag"] === "teamagent-pre-tool-use");
-    if (hasTeamAgent) {
-      return { name: "hook-registered", status: "pass", detail: "PreToolUse Hook 已注册" };
-    }
+    JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
     return {
       name: "hook-registered",
       status: "fail",
@@ -414,6 +464,203 @@ function checkHookScript(settingsPath: string): DoctorCheckResult {
   }
 }
 
+/**
+ * Probe whether settings.json hook is at project scope (preferred) or user scope.
+ * Reports scope so operators know where the hook fires.
+ */
+export function checkSettingsJsonScope(
+  projectSettingsPath: string,
+  userSettingsPath: string,
+): DoctorCheckResult {
+  const projectHasHook = hasTeamAgentHookInSettings(projectSettingsPath);
+  const userHasHook = hasTeamAgentHookInSettings(userSettingsPath);
+
+  if (projectHasHook) {
+    return {
+      name: "settings-json-scope",
+      status: "pass",
+      detail: `Hook 已注册在项目级 (.claude/settings.local.json)`,
+    };
+  }
+  if (userHasHook) {
+    return {
+      name: "settings-json-scope",
+      status: "pass",
+      detail: `Hook 已注册在用户级 (~/.claude/settings.json)`,
+    };
+  }
+  return {
+    name: "settings-json-scope",
+    status: "fail",
+    detail: "未找到项目级或用户级 settings.json hook",
+    fix: "teamagent install-hook",
+  };
+}
+
+/**
+ * Check that teamagent plugin files are present in .claude/plugins (project level)
+ * or ~/.claude/plugins (user level). A plugin directory exists if install-plugins ran.
+ */
+export function checkPluginSync(cwd: string, home: string): DoctorCheckResult {
+  const projectPluginsDir = path.join(cwd, ".claude", "plugins");
+  const userPluginsDir = path.join(home, ".claude", "plugins");
+
+  const projectExists = fs.existsSync(projectPluginsDir) && fs.statSync(projectPluginsDir).isDirectory();
+  const userExists = fs.existsSync(userPluginsDir) && fs.statSync(userPluginsDir).isDirectory();
+
+  if (!projectExists && !userExists) {
+    return {
+      name: "plugin-sync",
+      status: "fail",
+      detail: ".claude/plugins 目录不存在（项目级和用户级均未找到）",
+      fix: "teamagent install-plugins",
+    };
+  }
+
+  // Count plugin dirs under whichever root was found
+  const pluginsRoot = projectExists ? projectPluginsDir : userPluginsDir;
+  const scope = projectExists ? "项目级" : "用户级";
+  try {
+    const entries = fs.readdirSync(pluginsRoot, { withFileTypes: true });
+    const pluginDirs = entries.filter((e) => e.isDirectory()).length;
+    if (pluginDirs === 0) {
+      return {
+        name: "plugin-sync",
+        status: "fail",
+        detail: `${scope} .claude/plugins 存在但为空`,
+        fix: "teamagent install-plugins",
+      };
+    }
+    return {
+      name: "plugin-sync",
+      status: "pass",
+      detail: `${pluginDirs} 个插件已同步 (${scope}: ${pluginsRoot})`,
+    };
+  } catch {
+    return {
+      name: "plugin-sync",
+      status: "fail",
+      detail: `无法读取 plugins 目录: ${pluginsRoot}`,
+      fix: "teamagent install-plugins",
+    };
+  }
+}
+
+const defaultCodexProbe: CodexProbe = (env) => {
+  try {
+    const stdout = execSync("codex --version", {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+      env: env ?? process.env,
+    });
+    return { ok: true, stdout, stderr: "" };
+  } catch (e) {
+    const err = e as { stderr?: string | Buffer; stdout?: string | Buffer; message?: string };
+    return { ok: false, stdout: String(err.stdout ?? ""), stderr: String(err.stderr ?? err.message ?? "") };
+  }
+};
+
+/**
+ * Check that the `codex` CLI binary is present and executable.
+ */
+export function checkCodexBin(probe: CodexProbe = defaultCodexProbe): DoctorCheckResult {
+  const result = probe();
+  if (result.ok) {
+    return {
+      name: "codex-bin",
+      status: "pass",
+      detail: result.stdout.trim().split("\n")[0] ?? "codex present",
+    };
+  }
+  return {
+    name: "codex-bin",
+    status: "fail",
+    detail: "未找到 codex 命令",
+    fix: "npm install -g @openai/codex  （或确保 codex 在 PATH 中）",
+  };
+}
+
+const defaultMcpProbe: McpProbe = async (url: string) => {
+  try {
+    const { request } = await import("node:https");
+    const { request: httpRequest } = await import("node:http");
+    const reqFn = url.startsWith("https") ? request : httpRequest;
+    return await new Promise<{ reachable: boolean; detail: string }>((resolve) => {
+      const timeout = setTimeout(() => resolve({ reachable: false, detail: `timeout connecting to ${url}` }), 3000);
+      const req = reqFn(url, { method: "HEAD" }, (res) => {
+        clearTimeout(timeout);
+        resolve({ reachable: true, detail: `HTTP ${res.statusCode}` });
+      });
+      req.on("error", (err) => {
+        clearTimeout(timeout);
+        resolve({ reachable: false, detail: err.message });
+      });
+      req.end();
+    });
+  } catch (e) {
+    return { reachable: false, detail: String(e) };
+  }
+};
+
+/**
+ * Read MCP server URLs from .claude/settings.local.json (or user settings),
+ * then HEAD-probe each. Reports pass if all reachable, or lists which failed.
+ * Reports skip when no MCP servers are configured.
+ */
+export async function checkMcpReachability(
+  cwd: string,
+  probe: McpProbe = defaultMcpProbe,
+): Promise<DoctorCheckResult> {
+  const urls = collectMcpUrls(cwd);
+  if (urls.length === 0) {
+    return {
+      name: "mcp-reachability",
+      status: "skip",
+      detail: "未配置 MCP 服务器（跳过）",
+    };
+  }
+
+  const results = await Promise.all(urls.map(async (url) => ({ url, ...(await probe(url)) })));
+  const failed = results.filter((r) => !r.reachable);
+
+  if (failed.length === 0) {
+    return {
+      name: "mcp-reachability",
+      status: "pass",
+      detail: `${urls.length} 个 MCP 服务器均可达`,
+    };
+  }
+  return {
+    name: "mcp-reachability",
+    status: "fail",
+    detail: `${failed.length}/${urls.length} 个 MCP 服务器不可达: ${failed.map((r) => r.url).join(", ")}`,
+    fix: "检查 MCP 服务器是否启动，或移除 .claude/settings.local.json 中失效的 mcpServers 条目",
+  };
+}
+
+function collectMcpUrls(cwd: string): string[] {
+  const urls: string[] = [];
+  for (const settingsPath of [
+    path.join(cwd, ".claude", "settings.local.json"),
+    path.join(cwd, ".claude", "settings.json"),
+  ]) {
+    if (!fs.existsSync(settingsPath)) continue;
+    try {
+      const raw = JSON.parse(fs.readFileSync(settingsPath, "utf-8")) as Record<string, unknown>;
+      const mcpServers = raw["mcpServers"] as Record<string, unknown> | undefined;
+      if (!mcpServers) continue;
+      for (const server of Object.values(mcpServers)) {
+        const s = server as Record<string, unknown>;
+        if (typeof s["url"] === "string") urls.push(s["url"]);
+      }
+    } catch {
+      // malformed — skip
+    }
+  }
+  return urls;
+}
+
 export function checkClaudeMd(claudeMdPath: string): DoctorCheckResult {
   if (!fs.existsSync(claudeMdPath)) {
     return {
@@ -442,7 +689,7 @@ export function checkTeamSharingStatus(): DoctorCheckResult {
   return {
     name: "team-sharing",
     status: "skip",
-    detail: "PARTIAL: Phase 4 team sharing is not complete; git transport, privacy redaction, and review gates are required before scope=team is supported",
+    detail: "PARTIAL: local scope=team write/read and approval privacy gate are supported, but team sharing is not complete; git transport, sync/export redaction, and conflict review gates are still required",
     fix: "Track docs/系统展示/13-delivered-vs-planned.md and docs/superpowers/plans/2026-05-01-phase4-team-memory-plan.md",
   };
 }

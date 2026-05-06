@@ -121,12 +121,12 @@ describe("executeMigrate write-side", () => {
     projectDb.close();
   });
 
-  it("team-scoped Phase 1 entries go to project DB (team 在 Phase 4 再启用)", async () => {
+  it("preserves team-scoped Phase 1 entries in the project DB", async () => {
     await executeMigrate({ homeDir: tmpHome, cwd: tmpCwd, dryRun: false });
     const { openDb } = await import("@teamagent/adapters/storage/sqlite/schema");
     const projectDb = openDb(path.join(tmpCwd, ".teamagent", "knowledge.db"));
     const row = projectDb.prepare("SELECT id, scope_level FROM knowledge WHERE id = 'r-t1'").get() as any;
-    expect(row.scope_level).toBe("personal"); // 降级到 personal
+    expect(row.scope_level).toBe("team");
     projectDb.close();
   });
 });

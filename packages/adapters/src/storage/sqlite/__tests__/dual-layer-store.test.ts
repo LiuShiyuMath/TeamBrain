@@ -21,7 +21,7 @@ afterEach(() => {
   if (tmpDir && fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-function mkEntry(id: string, level: "personal" | "global"): any {
+function mkEntry(id: string, level: "personal" | "team" | "global"): any {
   return {
     id, scope: { level }, category: "E", tags: [],
     type: "avoidance", nature: "subjective",
@@ -64,8 +64,12 @@ describe("DualLayerStore", () => {
     expect(store.getById("nope")).toBeUndefined();
   });
 
-  it("M5: team-scoped entry routes to project store", () => {
-    store.add(mkEntry("t1", "team" as any));
+  it("team → project DB and remains queryable as team scope (M5)", () => {
+    store.add(mkEntry("t1", "team"));
+
+    expect(store.getProjectStore().getById("t1")?.scope.level).toBe("team");
+    expect(store.getGlobalStore().getById("t1")).toBeUndefined();
+    expect(store.findByScopeLevel("team").map((e) => e.id)).toEqual(["t1"]);
     expect(store.getById("t1")?.scope.level).toBe("team");
   });
 });

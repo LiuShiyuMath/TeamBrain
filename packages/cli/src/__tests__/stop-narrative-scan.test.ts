@@ -141,6 +141,57 @@ describe("runStopNarrativeScan", () => {
     expect(events.find((e) => e.kind === "ai.narrative.complied" && e.knowledge_id === "n1")).toBeTruthy();
     expect(events.find((e) => e.kind === "ai.narrative.recurred")).toBeFalsy();
   });
+
+  it("complied but correct_pattern absent → emits validator.failure", () => {
+    const dir = tmpDir();
+    const events: PersistedEvent[] = [];
+    runStopNarrativeScan({
+      aiText: "I will look into this",
+      rules: [makeRule({ id: "n1", wrong_pattern: "claims-victory-phrase", correct_pattern: "cite evidence" })],
+      sessionId: "s1",
+      turnIndex: 3,
+      now: "2026-04-23T10:15:00Z",
+      pendingDir: dir,
+      emit: (e) => events.push(e),
+      lastInjectedKnowledgeIds: ["n1"],
+    });
+    expect(events.find((e) => e.kind === "ai.narrative.complied" && e.knowledge_id === "n1")).toBeTruthy();
+    expect(events.find((e) => e.kind === "validator.failure" && e.knowledge_id === "n1")).toBeTruthy();
+  });
+
+  it("complied and correct_pattern present → no validator.failure", () => {
+    const dir = tmpDir();
+    const events: PersistedEvent[] = [];
+    runStopNarrativeScan({
+      aiText: "Here is my cite evidence for the claim",
+      rules: [makeRule({ id: "n1", wrong_pattern: "claims-victory-phrase", correct_pattern: "cite evidence" })],
+      sessionId: "s1",
+      turnIndex: 3,
+      now: "2026-04-23T10:15:00Z",
+      pendingDir: dir,
+      emit: (e) => events.push(e),
+      lastInjectedKnowledgeIds: ["n1"],
+    });
+    expect(events.find((e) => e.kind === "ai.narrative.complied" && e.knowledge_id === "n1")).toBeTruthy();
+    expect(events.find((e) => e.kind === "validator.failure")).toBeFalsy();
+  });
+
+  it("rule has no correct_pattern → no validator.failure on complied", () => {
+    const dir = tmpDir();
+    const events: PersistedEvent[] = [];
+    runStopNarrativeScan({
+      aiText: "I will look into this",
+      rules: [makeRule({ id: "n1", wrong_pattern: "claims-victory-phrase", correct_pattern: "" })],
+      sessionId: "s1",
+      turnIndex: 3,
+      now: "2026-04-23T10:15:00Z",
+      pendingDir: dir,
+      emit: (e) => events.push(e),
+      lastInjectedKnowledgeIds: ["n1"],
+    });
+    expect(events.find((e) => e.kind === "ai.narrative.complied" && e.knowledge_id === "n1")).toBeTruthy();
+    expect(events.find((e) => e.kind === "validator.failure")).toBeFalsy();
+  });
 });
 
 describe("readLastInjected", () => {

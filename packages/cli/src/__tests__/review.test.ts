@@ -145,6 +145,24 @@ describe("executeReview", () => {
     expect(out).toContain("only-in-global");
   });
 
+  it("honors --scope=team filter without mixing personal entries", () => {
+    const store = openStore(tmp.dir);
+    store.add(makeEntry({ id: "p1", trigger: "only-in-personal", scope: { level: "personal" } }));
+    store.add(makeEntry({ id: "t1", trigger: "only-in-team", scope: { level: "team" } }));
+    store.add(makeEntry({ id: "g1", trigger: "only-in-global", scope: { level: "global" } }));
+    store.close();
+
+    const out = executeReview({
+      homeDir: tmp.dir,
+      cwd: tmp.dir,
+      scope: "team",
+    });
+    expect(out).toContain("only-in-team");
+    expect(out).toContain("team/E/test");
+    expect(out).not.toContain("only-in-personal");
+    expect(out).not.toContain("only-in-global");
+  });
+
   it("renders category/tags/confidence/enforcement", () => {
     const store = openStore(tmp.dir);
     store.add(makeEntry({

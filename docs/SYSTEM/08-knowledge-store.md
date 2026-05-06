@@ -41,14 +41,14 @@ Calibrator V2 用，存储 `(knowledge_id, outcome=success|failure)` 细粒度�
 
 完整 DDL：`packages/adapters/src/storage/sqlite/schema.ts:19`
 
-### personal vs global scope 的路由逻辑
+### personal / team / global scope 的路由逻辑
 
 `DualLayerStore.add(entry)` 根据 `entry.scope.level` 路由：
 - `personal` → `project.add(entry)` → `{project}/.teamagent/knowledge.db`
+- `team` → `project.add(entry)` → `{project}/.teamagent/knowledge.db`（本地 team scope）
 - `global` → `global.add(entry)` → `~/.teamagent/global.db`
-- `team` → 当前抛错（Phase 4 才支持）
 
-查询时 `findActive()` 合并两层结果，`personal` 优先级高于 `global`（匹配时 personal 先返回）。
+查询时 `findActive()` 合并两层结果；按 scope 过滤时 personal/team/global 分别保留。跨机器 team sharing 仍是 Phase 4。
 
 ### confidence 计算
 

@@ -102,6 +102,16 @@ async function main(): Promise<void> {
             timestamp: now,
             schema_version: 1,
           });
+          // Wire calibrator.user_reject: user typed the avoidance rule's wrong_pattern
+          // → negative reinforcement signal consumed by v2 demerit engine.
+          eventLog.append({
+            id: `e-ureject-${sessionId}-${h.knowledge_id}-${stamp()}`,
+            kind: "calibrator.user_reject",
+            knowledge_id: h.knowledge_id,
+            session_id: sessionId,
+            timestamp: now,
+            schema_version: 1,
+          });
         }
         eventLog.close();
       }

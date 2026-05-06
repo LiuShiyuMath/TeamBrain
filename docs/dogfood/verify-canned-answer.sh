@@ -38,20 +38,26 @@ const fs = require("fs");
 const input = process.argv[1];
 const output = process.argv[2];
 let result = "";
+let text = "";
 for (const line of fs.readFileSync(input, "utf8").split(/\n/)) {
   if (!line.trim()) continue;
   try {
     const event = JSON.parse(line);
+    const delta = event.event?.delta;
+    if (delta?.type === "text_delta" && typeof delta.text === "string") {
+      text += delta.text;
+    }
     if (event.type === "result" && typeof event.result === "string") {
       result = event.result;
     }
   } catch {}
 }
-if (!result) {
-  process.stderr.write("No result field found in stream-json output\n");
+const answer = text.trim() || result.trim();
+if (!answer) {
+  process.stderr.write("No answer text found in stream-json output\n");
   process.exit(1);
 }
-fs.writeFileSync(output, result);
+fs.writeFileSync(output, answer);
 ' "$STREAM_OUT" "$OUT" || {
     echo "DOGFOOD VERIFY: FAIL"
     echo "failed to extract result from stream-json"
