@@ -4,6 +4,7 @@ import {
   scanForSecrets,
   classifyScope,
   decideShareAction,
+  mergeLwwBatch,
   type ShareAction,
   type TeamRuleFile,
 } from "@teamagent/core";
@@ -52,9 +53,15 @@ export async function runM5Share(
 
   let written_path: string | undefined;
   if (action.kind === "promote_to_l2") {
+    const store = new FsTeamRuleStore();
+    // 查 lineage：如果该 rule_id 已有 claim，保留首创者作为 author；否则当前用户即首创者
+    const existing = await store.listAll(opts.projectRoot);
+    const merged = mergeLwwBatch(existing);
+    const lineageAuthor =
+      merged.get(ruleId)?.original_author ?? author;
     const file: TeamRuleFile = {
       rule_id: ruleId,
-      author,
+      author: lineageAuthor,
       current: {
         deleted: false,
         content: text,
@@ -64,7 +71,6 @@ export async function runM5Share(
         scope: "team",
       },
     };
-    const store = new FsTeamRuleStore();
     await store.writeRule(opts.projectRoot, author, file);
     written_path = `.teamagent/team/${author}/${ruleId}.json`;
   }

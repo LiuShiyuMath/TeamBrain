@@ -181,6 +181,43 @@ describe("m5-sync command (LWW + tombstone)", () => {
     }
   });
 
+  it("M5-C: 跨 author edit 保留 original_author lineage", async () => {
+    const root = await tmpProject();
+    try {
+      // Alice 首创 R-1
+      await runM5Share({
+        projectRoot: root,
+        text: "PR 后必须 fetch codex review",
+        ruleId: "R-1",
+        scope: "team",
+        author: "alice",
+        now: "2026-05-06T10:00:00Z",
+      });
+      // Bob 改写
+      await runM5Share({
+        projectRoot: root,
+        text: "PR 后必须 fetch codex review — Bob 补充",
+        ruleId: "R-1",
+        scope: "team",
+        author: "bob",
+        now: "2026-05-06T11:00:00Z",
+      });
+      // Bob 写入的文件应该带 author=alice (lineage 保留)
+      const bobFile = await fs.readFile(
+        path.join(root, ".teamagent", "team", "bob", "R-1.json"),
+        "utf8"
+      );
+      expect(bobFile).toContain('"author": "alice"');
+      // sync 也应该把 original_author 报告为 alice
+      const sync = await runM5Sync({ projectRoot: root });
+      const r = sync.merged.find((m) => m.rule_id === "R-1")!;
+      expect(r.original_author).toBe("alice");
+      expect(r.winner_claim_author).toBe("bob");
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("M5-D: m5-status 显示契约 + 团队规则统计", async () => {
     const root = await tmpProject();
     try {
