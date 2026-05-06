@@ -17,11 +17,23 @@ export interface InfectInput {
 }
 
 const PRE_COMMIT_HOOK = `#!/usr/bin/env bash
-# TeamAgent M5 pre-commit anchor (M5-A skeleton; full enforcement in M5-D)
-set -e
-if command -v teamagent >/dev/null 2>&1; then
-  teamagent m5-bootstrap --check || exit 0
+# TeamAgent M5 pre-commit anchor (multi-point enforcement, M5-D 降级模式)
+# 设计：警告而不阻塞——TeamAgent 缺失/失败不能让全队工作瘫
+# Escape: 设 TEAMAGENT_BOOTSTRAP_SKIP=1 跳过
+
+if [ "\${TEAMAGENT_BOOTSTRAP_SKIP:-}" = "1" ]; then
+  exit 0
 fi
+
+if ! command -v teamagent >/dev/null 2>&1; then
+  echo "[teamagent] 警告：本机未安装 TeamAgent CLI" >&2
+  echo "[teamagent] 提示：npm install -g github:libz-renlab-ai/TeamBrain#release" >&2
+  exit 0  # 不阻塞 commit
+fi
+
+# 跑 bootstrap check；输出 diff（exit 2 = 需补齐）但不阻塞 commit
+teamagent m5-bootstrap --check 2>&1 || true
+exit 0
 `;
 
 const SHARED_CLAUDE_MD = `# Shared CLAUDE.md (M5)
