@@ -158,3 +158,15 @@ export {
   type PendingWarning,
   type PendingContext,
 } from "./narrative-scanner/index.js";
+
+export {
+  parseManifest,
+  validateManifest,
+  serializeManifest,
+} from "./m5/manifest.js";
+export {
+  planInfection,
+  type ProjectSnapshot,
+  type InfectInput,
+} from "./m5/infect-planner.js";
+export { computeBootstrapDiff } from "./m5/bootstrap-diff.js";

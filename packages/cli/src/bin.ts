@@ -4,6 +4,16 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runSkeletonDemo } from "./commands/skeleton-demo.js";
 import {
+  runM5Infect,
+  parseM5InfectArgs,
+  renderM5InfectResult,
+} from "./commands/m5-infect.js";
+import {
+  runM5Bootstrap,
+  parseM5BootstrapArgs,
+  renderM5BootstrapResult,
+} from "./commands/m5-bootstrap.js";
+import {
   executePitfall,
   runPitfallInteractive,
   parsePitfallArgs,
@@ -160,6 +170,20 @@ async function main(): Promise<void> {
     case "skeleton-demo": {
       const output = await runSkeletonDemo();
       if (output) process.stdout.write(output + "\n");
+      return;
+    }
+    case "m5-infect": {
+      const opts = parseM5InfectArgs(rest);
+      const result = await runM5Infect(opts);
+      process.stdout.write(renderM5InfectResult(result) + "\n");
+      return;
+    }
+    case "m5-bootstrap": {
+      const opts = parseM5BootstrapArgs(rest);
+      const result = await runM5Bootstrap(opts);
+      const { output, exitCode } = renderM5BootstrapResult(result);
+      process.stdout.write(output + "\n");
+      if (exitCode !== 0) process.exit(exitCode);
       return;
     }
     case "pitfall": {
@@ -648,6 +672,10 @@ async function main(): Promise<void> {
           "",
           "用法:",
           "  teamagent skeleton-demo          M0 Walking Skeleton 演示",
+          "  teamagent m5-infect [--project-root=<path>] [--author=<name>]",
+          "                                   [M5-A] 把 TeamAgent 病毒式契约写入项目（幂等）",
+          "  teamagent m5-bootstrap [--project-root=<path>] [--check]",
+          "                                   [M5-A] 读项目 manifest，报告本机与契约的差异",
           "  teamagent pitfall                手动记录一条踩坑经验 (交互)",
           "  teamagent pitfall --non-interactive --trigger=... --wrong=... --correct=... --reason=...",
           "                                   非交互模式 (可选: --category=C|E|S|K --tags=a,b --level=personal|team|global --nature=objective|subjective)",
