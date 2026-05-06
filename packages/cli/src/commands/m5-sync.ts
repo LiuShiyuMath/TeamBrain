@@ -97,6 +97,7 @@ function computeTeamId(projectRoot: string): string | undefined {
     const url = execSync("git remote get-url origin", {
       cwd: projectRoot,
       encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],  // suppress stderr "No such remote"
     }).trim();
     if (!url) return undefined;
     // normalize：去 .git、去 user/token、统一 host
