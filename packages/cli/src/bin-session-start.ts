@@ -2,6 +2,8 @@
 /**
  * SessionStart Hook entry. NEVER blocks UI. NEVER exits non-zero.
  */
+import os from "node:os";
+import path from "node:path";
 import {
   decideAction,
   spawnAutoInit,
@@ -11,12 +13,19 @@ import {
   maybeShowPendingBanner,
 } from "./session-start-logic.js";
 import { cleanupWikiResidue } from "./wiki-residue-cleanup.js";
+import { cleanupDbBackups } from "./db-backup-cleanup.js";
 
 async function main(): Promise<void> {
   // B-090: best-effort cleanup of orphan ~/.teamagent/wiki-refresh-errors.log
   // left over by the removed wiki subsystem (commit 280e4e8). Silent + cheap;
   // never blocks the hook.
   cleanupWikiResidue();
+
+  // B-094: prune legacy `*.before-*` schema-migration db backups in both
+  // user-global ~/.teamagent and project-local <cwd>/.teamagent so they do
+  // not accumulate forever. Best-effort.
+  const homeTeamagent = path.join(os.homedir(), ".teamagent");
+  cleanupDbBackups(homeTeamagent);
 
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
@@ -29,6 +38,9 @@ async function main(): Promise<void> {
       if (input.cwd) cwd = input.cwd;
     } catch { /* fallback to env/cwd */ }
   }
+
+  // B-094: project-scoped db backup pruning once we know cwd.
+  cleanupDbBackups(path.join(cwd, ".teamagent"));
 
   const action = decideAction(cwd, new Date());
   if (action === "auto-init") {
