@@ -5,6 +5,7 @@ import os from "node:os";
 import { execSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { openDb } from "@teamagent/adapters";
+import { stripLegacyTeamagentBlock } from "@teamagent/core";
 
 const _require = createRequire(import.meta.url);
 
@@ -50,6 +51,25 @@ async function autoFix(check: DoctorCheckResult, opts: DoctorOptions): Promise<v
     } else if (check.name === "hook-registered" || check.name === "hook-script") {
       const { installHook } = await import("./install-hook.js");
       installHook({ cwd });
+    } else if (check.name === "claude-md") {
+      // B-109: strip the legacy TEAMAGENT:START..END managed block left over
+      // from before #63 disabled in-file rule dumps. The new compile path
+      // never re-writes it, so dropping the block makes doctor green again.
+      const claudeMdPath = path.join(cwd, "CLAUDE.md");
+      if (fs.existsSync(claudeMdPath)) {
+        const before = fs.readFileSync(claudeMdPath, "utf-8");
+        const after = stripLegacyTeamagentBlock(before);
+        if (after !== before) {
+          if (after === "") {
+            // The whole file was the block (or block+whitespace). Removing
+            // CLAUDE.md is friendlier than leaving a 0-byte stub that other
+            // tooling may misread.
+            fs.unlinkSync(claudeMdPath);
+          } else {
+            fs.writeFileSync(claudeMdPath, after, "utf-8");
+          }
+        }
+      }
     }
   } catch {
     // best-effort
@@ -115,7 +135,12 @@ export async function executeDoctor(opts: DoctorOptions = {}): Promise<DoctorRes
   // Check 8: CLAUDE.md is optional human-maintained guidance; generated blocks are deprecated.
   const claudeMdPath = path.join(cwd, "CLAUDE.md");
   const claudeMdCheck = checkClaudeMd(claudeMdPath);
-  checks.push(claudeMdCheck);
+  if (opts.fix && claudeMdCheck.status === "fail") {
+    await autoFix(claudeMdCheck, opts);
+    checks.push(checkClaudeMd(claudeMdPath));
+  } else {
+    checks.push(claudeMdCheck);
+  }
 
   return finalize(checks, false);
 }
@@ -402,7 +427,8 @@ export function checkClaudeMd(claudeMdPath: string): DoctorCheckResult {
     return {
       name: "claude-md",
       status: "fail",
-      detail: "仍包含旧 TEAMAGENT:START 生成块；请手动移除并改用 docs/ 索引",
+      detail: "仍包含旧 TEAMAGENT:START 生成块（#63 之后已弃用）",
+      fix: "teamagent doctor --fix  （自动剥离旧块）",
     };
   }
   return {
