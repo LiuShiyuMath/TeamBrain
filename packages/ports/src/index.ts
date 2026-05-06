@@ -56,3 +56,4 @@ export type {
 export type { CandidateQueue, RuleCandidate } from "./candidate-queue.js";
 export type { RuleEmbedder } from "./rule-embedder.js";
 export type { SemanticRetriever, SemanticCandidate } from "./semantic-retriever.js";
+export type { BootstrapPort, ProjectProbe } from "./bootstrap-port.js";

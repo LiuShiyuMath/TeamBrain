@@ -21,7 +21,8 @@
     "./token-counter": "./src/token-counter/index.ts",
     "./skill-compiler": "./src/compiler/skill-compiler.ts",
     "./embedding/xenova-rule-embedder": "./src/embedding/xenova-rule-embedder.ts",
-    "./util/normalize-cwd": "./src/util/normalize-cwd.ts"
+    "./util/normalize-cwd": "./src/util/normalize-cwd.ts",
+    "./m5/fs-bootstrap": "./src/m5/fs-bootstrap.ts"
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",

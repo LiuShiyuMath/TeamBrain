@@ -14,3 +14,4 @@ export { runErrorSignalCollectorContract } from "./__tests__/error-signal-collec
 export { runCandidateQueueContract } from "./__tests__/candidate-queue-contract.js";
 export { ruleEmbedderContractSuite } from "./__tests__/rule-embedder-contract.js";
 export { semanticRetrieverContractSuite } from "./__tests__/semantic-retriever-contract.js";
+export { runBootstrapPortContract } from "./__tests__/bootstrap-port-contract.js";
