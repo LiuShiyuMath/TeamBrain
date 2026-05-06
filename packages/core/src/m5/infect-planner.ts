@@ -31,8 +31,15 @@ if ! command -v teamagent >/dev/null 2>&1; then
   exit 0  # 不阻塞 commit
 fi
 
-# 跑 bootstrap check；输出 diff（exit 2 = 需补齐）但不阻塞 commit
-teamagent m5-bootstrap --check 2>&1 || true
+# 兼容旧版本 teamagent：先检测是否支持 m5-bootstrap，避免输出"未知命令"
+if teamagent --help 2>&1 | grep -q "m5-bootstrap"; then
+  # 显式取 git repo root 传给 --project-root，避免 wrapper / pnpm / nvm 等改变 pwd
+  REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  teamagent m5-bootstrap --project-root "$REPO_ROOT" --check 2>&1 || true
+else
+  echo "[teamagent] 提示：本机 teamagent 版本不支持 m5-bootstrap (M5+)" >&2
+  echo "[teamagent] 升级：npm install -g github:libz-renlab-ai/TeamBrain#release" >&2
+fi
 exit 0
 `;
 
