@@ -222,3 +222,68 @@ B-045 / B-064 / B-065 / B-066 / B-067 一并 fixed；累计 1223/1223 测试绿�
 typecheck 干净。BUGS.md 全部条目（B-001 ~ B-090）状态：fixed (75) /
 withdrawn (8) / wontfix-merged (1) /  open (0)。
 
+---
+
+## Wave 10 — chaos-qa-hunter ship-readiness audit (2026-05-06)
+
+**测试方法**: 端到端"小白用户"视角 + 关键路径白盒 + 日志/状态审计 + release tarball 对比验证。
+**测试版本**: 0.10.1，git HEAD = 502f90d (branch: fix/install-tarball-and-sqlite-vec)。
+**铁律**: 仅记录、不修代码、不建议修复方案。
+**重要更正**: 第一遍写入了 5 条 pipe-artifact 误报（B-105/B-106/B-108）+ 6 条只读代码即写入 open 的理论项（B-091 误判 / B-095/B-096/B-098/B-099/B-100）。advisor 介入后已逐条复测；下表只保留**实际复现**的 bug。
+
+### Wave 10 复现验证后的实测 bug
+
+| id    | sev | area | symptom（含可复现命令） | status |
+|-------|-----|------|---------|--------|
+| B-091 | **P3** (downgraded from P0) | dev workflow: 本地 dev `packages/teamagent/dist/` 与 `packages/cli/dist/` 比 source 落后 8 天，未在 commit 5b15ff8 / 502f90d 之后跑 `pnpm build` | source mtime `2026-05-06`，dist mtime `2026-04-29`，dist 中 `PACKAGE_SPEC` 仍是 `github:${REPO_OWNER}/${REPO_NAME}#${REPO_BRANCH}` 旧 spec。**但 release tarball `https://github.com/libz-renlab-ai/TeamBrain/archive/refs/heads/release.tar.gz` 已是新版** (`PACKAGE_SPEC = https://...archive/refs/heads/${REPO_BRANCH}.tar.gz` ✅；`packages/teamagent/package.json` 包含 `sqlite-vec ^0.1.9` ✅)，新用户走 README 的 `npm install -g <https tarball>` 拿到的是修过的版本。所以本条是 **dev workflow 残留**：合 PR 后没有 prebuild + commit dist。复现：`stat -c "%y" packages/teamagent/src/bin-updater.ts packages/teamagent/dist/bin-updater.cjs; grep PACKAGE_SPEC packages/teamagent/dist/bin-updater.cjs`。 | **open** (P3) |
+| B-092 | **P1** | `.claude/hooks/laziness-self-report.sh` 在 Windows 默认环境（Git Bash 不带 jq）整个 Stop laziness guard 静默失效 | 脚本依赖 `jq` 解析 stdin、构造 decision JSON。Windows 这台 `which jq` 返回 not found。jq 缺失时所有 `jq -n ... '{decision:"block"}'` 输出空，Claude Code 见无 decision JSON 按 approve 放行。整个 laziness guard 在 Windows 默认环境失效，但 PM/CEO 不会察觉。README/docs 没提"必装 jq"。复现：`which jq; echo '{"transcript_path":"x","session_id":"y"}' \| bash .claude/hooks/laziness-self-report.sh; echo exit=$?` (注：jq 不存在时 stdout 为空)。 | **open** |
+| B-093 | **P1** | `~/.teamagent/stop-errors.log` 已堆积 613KB / 3479 行历史污染（B-085 修复前测试遗留），无 rotation 机制 | `bin-stop.ts:logError` 用 `appendFileSync` 单调追加，无大小上限/时间轮转/truncate。当前文件 80%+ 是 vitest 测试 `bin-stop.test.ts:101/115/167/340/341/342/371/372/373` 在 B-085 fix 前写入。剩余 prod 错误线索被噪声埋没。B-085 修了源代码但**没提供"清理历史污染日志"的迁移脚本**。复现：`wc -l ~/.teamagent/stop-errors.log` = 3479；`grep -c "bin-stop.test.ts" ~/.teamagent/stop-errors.log` 占多数。 | **open** |
+| B-094 | **P1** | `~/.teamagent/` 与 `<project>/.teamagent/` 残留 `*.before-no-passive-1777451204` db 备份永不清理 | `events.db.before-no-passive-1777451204`、`global.db.before-no-passive-1777451204`、`.teamagent/knowledge.db.before-no-passive-1777451204` 都在。schema migration 备份了旧 db 但**无生命周期策略**（对比 bin-updater.ts BACKUP_KEEP=3 仅适用于 dist rollback）。每次 schema 升级再叠一份；vec 表大时单文件几十 MB，长期可达 GB。复现：`ls -la ~/.teamagent/*.before-* .teamagent/*.before-*`。 | **open** |
+| B-097 | **P2** | `postinstall.mjs` 顶部多个 execSync 静默吞错误，安装期错误诊断丢失 | line 24-28 `doctor --postinstall` 失败 → `doctorFailed=true` 不记原因；line 35-43 `install-user-hook` 失败 → `userHookStatus="failed"` 不记 stderr；line 49-55 `warmup` 失败 → 同样无原因。用户看到 "用户级 hook 注册失败" 但无 setup-errors.log 可查。修复方向：捕 stderr/exit code 写到 `~/.teamagent/postinstall.log`。 | **open** |
+| B-101 | **P2** | `chaos-verify*.mjs` 4 个根目录脚本被 git 追踪但文档零提及 | 根目录 `chaos-verify{,2,3,-injection}.mjs` 共 35KB（`git ls-files` 显示已 tracked）。README/CLAUDE.md/scripts INDEX 都不提它们用法/归属。`grep -r chaos-verify .` 增加噪声。复现：`git ls-files \| grep "^chaos-verify"`。 | **open** |
+| B-102 | **P3** | `.claude/settings.local.json.bak.1777444062` 残留备份未清理 | install-hook 写出的备份没自动清理；epoch=1777444062 ≈ 2026-04-26。install-hook.ts 无"K 天后清理"或"保留最近 N 份"策略。复现：`ls .claude/settings.local.json.bak.*`。 | **open** |
+| B-103 | **P1** | 项目共享 `.claude/settings.json` 的 Stop 只挂 `laziness-self-report.sh`，**没有 teamagent 学习 hook**（`bin-stop.cjs`） | teamagent 学习闭环（analyze→calibrate→compile）完全依赖 `.claude/settings.local.json`，但 settings.local.json 已 .gitignore（B-084 fix 后），意味着**任何 fresh clone 此仓库的开发者只继承 laziness guard，没继承 teamagent Stop 学习 hook**。READMEpath "5–10 分钟上手"只说 `teamagent init`，没强调"必须先跑 install-hook"。B-086 fix 后 install-user-hook 注册的是 SessionStart 用户级 hook（驱动自动 init），**不**注册 Stop 项目级 hook。复现：fresh clone → `pnpm install` → 跑一次 Claude Code 工作 → 检查 `~/.teamagent/last-harvest.md`：mtime 不更新。 | **open** |
+| B-104 | **P1** (downgraded from P0) | 现存用户的自动更新链路被自己的旧 PACKAGE_SPEC 钉死，无升级路径自愈，无 banner 告警 | 用户的 `~/.teamagent/update-state.json` 显示 `consecutive_install_failures: 1`，`last_install_error` 含 `Connection closed by 198.18.0.18 port 22` SSH 错误（旧 PACKAGE_SPEC=`github:...` 走 SSH 失败）。`pending_banner: null` 表示失败未冒泡到 SessionStart banner。release 分支已发布修复（确认 ✓），但**老用户的 updater 仍调用旧 dist 中的旧 PACKAGE_SPEC**——除非用户手动 `npm install -g https://...release.tar.gz` 触底，否则永远停在旧版。新用户走 README 流程 OK；本条仅影响 5b15ff8 之前装过的用户。修复方向：(a) postinstall 检测 update-state 异常时把 banner 设为非 null；(b) 文档增加"如果你已经在旧版（升级失败）请手动重装一次"的提示；(c) updater 失败 N 次后改 banner 为 `pending_banner: "manual reinstall required"`。复现：`cat ~/.teamagent/update-state.json`。 | **open** |
+| B-107 | **P2** | `teamagent init` warmup 在 newuser-test2 失败时只显示 `(terminated)` 字面量，无诊断 | `commands/warmup.ts:33` `⚠️ TeamAgent: 模型预热失败 (${error})\n`，error 是 `terminated` 字面量。runWarmup 子进程被 SIGKILL/timeout 时具体原因（OOM/网络/ONNX mismatch）丢失。两次测试中第一次失败、第二次成功，无 retry，无 fallback 诊断。修复方向：捕子进程 stderr 末 N 行 + 区分 timeout vs crash。**注**：相比首版我把这条降到 P2，因为它仅影响诊断质量，warmup 失败本身有降级（首次使用时仍按需下载）。 | **open** |
+| B-109 | **P1** | doctor 报告 CLAUDE.md `TEAMAGENT:START 生成块`残留，**但 #63 没附带清理迁移** | `doctor.ts:401` 检测 `TEAMAGENT:START` 字符串报 fail。当前仓库 CLAUDE.md tail 含 `<!-- TEAMAGENT:START -->...<!-- TEAMAGENT:END -->` 区块，内容是某次 compile 写入的"还有 71 条 canonical+ 规则因 token 预算未显示"。init 输出却说"CLAUDE.md 规则块输出已禁用"。**任何升级到 ≥ #63 的存量用户都会永久 doctor 失败**（exit=1），无自动清理路径，无"运行 X 修复"提示。复现：`grep TEAMAGENT:START CLAUDE.md; teamagent doctor`（在 monorepo 内）。 | **open** |
+
+### Wave 10 code-review observations（**未复现**，仅来自代码阅读，需后续验证）
+
+以下五条**仅是阅读源码时记下的可疑点**，没有跑出实际故障。advisor 提示不要把这种条目当成 open bug 收录，统一压成此小节。任何想 ship 前 promote 的，须先写复现脚本：
+
+1. `bin-updater.ts:61-85 acquireLock()` 在 Windows 下 stale-lock 检测使用 `process.kill(pid, 0)`。Windows 下该调用对已退出但 PID 仍在内核表中的进程返回 true，可能造成永久无法 acquire（与 B-104 叠加可能导致 silent deadlock）。— 需要 Windows + 故意残留 stale lock 复现。
+2. `bin-updater.ts:158-162 runNpmInstall` 把 child stderr 全部累计到内存字符串，最后只取 `slice(-500)`。理论上慢网络重试可能产生几十 MB stderr → OOM。— 需要慢网络复现。
+3. `bin-stop.ts:286 catchUpVectorization(...).catch(() => {})` fire-and-forget 完全吞错。如果 sqlite-vec 整体加载失败，vector 表永远 NULL 但无日志。— 可注入故障验证。
+4. `bin-stop.ts:509-515` 子进程 `readFileSync` 抛错时 unlink 不会执行 → tmp file 泄漏。— 需要构造 readFileSync 失败场景验证。
+5. `bin-stop.ts:570-579` async spawn 用 `process.execPath, [argv[1]==.ts, ...]` 在 dev 模式下 child 立即 SyntaxError，但 `detached + stdio:"ignore" + unref()` 不监听 exit，pipeline 静默不跑。— 需要 dev 模式 + stop_mode=async 配置 + 实际 hook 触发验证。
+
+---
+
+### Wave 10 ship-readiness 摘要
+
+**Ship blocker（必修才能上线）**: 0 条新发现。
+- B-104（**P1**）虽影响"已装旧版的存量用户"，但新用户走 README HTTPS tarball 流程 OK；ship 时附"已有用户升级须知"即可不阻塞 ship。
+- B-103（**P1**）影响"克隆仓库做开发"的人——产品用户走 `npm install -g` 不受影响。
+
+**Ship 前应修（强烈建议）**:
+- B-092 (P1, jq 缺失下 laziness guard 静默失效) — 影响 Windows 用户产品体验。最小修：脚本加 `command -v jq >/dev/null 2>&1 \|\| { echo '{"continue":true}'; exit 0; }` 早退；docs 增"必装 jq"。
+- B-093 (P1, stop-errors.log 历史污染未清理) — 一次性 truncate 即可。
+- B-094 (P1, db 备份无生命周期) — 加保留 N 份策略。
+
+**Ship 后再修（不阻塞）**:
+- B-091 (P3, dev dist 落后) — 仅影响开发，不影响产品。
+- B-097 / B-101 / B-102 / B-107 / B-109 (P2/P3) — 体验/卫生类。
+
+**未发现**:
+- 注入/反序列化漏洞
+- 数据丢失风险
+- 关键命令崩溃
+- typecheck 错误（基线 `pnpm typecheck` 已绿，0 errors）
+
+**未充分覆盖**（Wave 10 时间所限）:
+- PreToolUse / PostToolUse / UserPromptSubmit hook payload fuzzing
+- LLM client 失败链路（network/auth/timeout）
+- 多并发会话同时 fire Stop hook 的 race
+- pitfall / scan-errors / calibrate / compile 等 35 个 CLI 子命令的边界值（Wave 8 已覆盖到 100%，本轮未复测）
+- macOS / Linux 平台行为（本轮仅 Windows）
+
