@@ -46,6 +46,8 @@ export function parseM5BootstrapArgs(
     const a = args[i];
     if (a === "--project-root") {
       opts.projectRoot = args[++i] ?? process.cwd();
+    } else if (a.startsWith("--project-root=")) {
+      opts.projectRoot = a.slice("--project-root=".length);
     } else if (a === "--check") {
       opts.checkOnly = true;
     }

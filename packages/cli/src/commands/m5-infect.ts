@@ -86,12 +86,25 @@ export function parseM5InfectArgs(args: readonly string[]): M5InfectOptions {
   const opts: M5InfectOptions = { projectRoot: process.cwd() };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a === "--project-root") {
-      opts.projectRoot = args[++i] ?? process.cwd();
-    } else if (a === "--author") {
-      opts.author = args[++i];
-    } else if (a === "--teamagent-version") {
-      opts.teamagentVersion = args[++i];
+    const take = (flag: string): string | undefined => {
+      if (a === flag) return args[++i];
+      if (a.startsWith(flag + "=")) return a.slice(flag.length + 1);
+      return undefined;
+    };
+    const r = take("--project-root");
+    if (r !== undefined) {
+      opts.projectRoot = r;
+      continue;
+    }
+    const au = take("--author");
+    if (au !== undefined) {
+      opts.author = au;
+      continue;
+    }
+    const tv = take("--teamagent-version");
+    if (tv !== undefined) {
+      opts.teamagentVersion = tv;
+      continue;
     }
   }
   return opts;
