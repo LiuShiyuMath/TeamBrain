@@ -86,6 +86,7 @@ export function parseM5InfectArgs(args: readonly string[]): M5InfectOptions {
   const opts: M5InfectOptions = { projectRoot: process.cwd() };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
+    if (a === undefined) continue;
     const take = (flag: string): string | undefined => {
       if (a === flag) return args[++i];
       if (a.startsWith(flag + "=")) return a.slice(flag.length + 1);
