@@ -170,3 +170,31 @@ export {
   type InfectInput,
 } from "./m5/infect-planner.js";
 export { computeBootstrapDiff } from "./m5/bootstrap-diff.js";
+export {
+  scanForSecrets,
+  createSecretScanner,
+} from "./m5/secret-scanner.js";
+export {
+  classifyScope,
+  createScopeClassifier,
+} from "./m5/scope-classifier.js";
+export {
+  decideShareAction,
+  type ShareAction,
+  type DecideShareInput,
+} from "./m5/auto-share-pipeline.js";
+export {
+  serializeTeamRule,
+  parseTeamRule,
+  validateTeamRule,
+  type TeamRuleFile,
+  type TeamRuleState,
+  type TeamRuleAlive,
+  type TeamRuleTombstone,
+} from "./m5/team-rule.js";
+export {
+  mergeLww,
+  mergeLwwBatch,
+  type ClaimWithSource,
+  type MergeResult,
+} from "./m5/lww-merge.js";

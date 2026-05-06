@@ -43,4 +43,8 @@ export type {
   LocalState,
   InfectionPlan,
   BootstrapDiff,
+  TeamRuleFile,
+  TeamRuleState,
+  TeamRuleAlive,
+  TeamRuleTombstone,
 } from "./m5.js";

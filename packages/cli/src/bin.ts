@@ -14,6 +14,26 @@ import {
   renderM5BootstrapResult,
 } from "./commands/m5-bootstrap.js";
 import {
+  runM5Share,
+  parseM5ShareArgs,
+  renderM5ShareResult,
+} from "./commands/m5-share.js";
+import {
+  runM5Sync,
+  parseM5SyncArgs,
+  renderM5SyncResult,
+} from "./commands/m5-sync.js";
+import {
+  runM5Delete,
+  parseM5DeleteArgs,
+  renderM5DeleteResult,
+} from "./commands/m5-delete.js";
+import {
+  runM5Status,
+  parseM5StatusArgs,
+  renderM5StatusResult,
+} from "./commands/m5-status.js";
+import {
   executePitfall,
   runPitfallInteractive,
   parsePitfallArgs,
@@ -184,6 +204,40 @@ async function main(): Promise<void> {
       const { output, exitCode } = renderM5BootstrapResult(result);
       process.stdout.write(output + "\n");
       if (exitCode !== 0) process.exit(exitCode);
+      return;
+    }
+    case "m5-share": {
+      const opts = parseM5ShareArgs(rest);
+      if (!opts.text) {
+        process.stderr.write(
+          "[m5-share] 必须提供 --text \"<规则文本>\"\n"
+        );
+        process.exit(1);
+      }
+      const result = await runM5Share(opts);
+      process.stdout.write(renderM5ShareResult(result) + "\n");
+      return;
+    }
+    case "m5-sync": {
+      const opts = parseM5SyncArgs(rest);
+      const result = await runM5Sync(opts);
+      process.stdout.write(renderM5SyncResult(result) + "\n");
+      return;
+    }
+    case "m5-delete": {
+      const opts = parseM5DeleteArgs(rest);
+      if (!opts.ruleId) {
+        process.stderr.write("[m5-delete] 必须提供 --rule-id <id>\n");
+        process.exit(1);
+      }
+      const result = await runM5Delete(opts);
+      process.stdout.write(renderM5DeleteResult(result) + "\n");
+      return;
+    }
+    case "m5-status": {
+      const opts = parseM5StatusArgs(rest);
+      const result = await runM5Status(opts);
+      process.stdout.write(renderM5StatusResult(result) + "\n");
       return;
     }
     case "pitfall": {
@@ -676,6 +730,14 @@ async function main(): Promise<void> {
           "                                   [M5-A] 把 TeamAgent 病毒式契约写入项目（幂等）",
           "  teamagent m5-bootstrap [--project-root=<path>] [--check]",
           "                                   [M5-A] 读项目 manifest，报告本机与契约的差异",
+          "  teamagent m5-share --text=\"<规则文本>\" [--rule-id=<id>] [--scope=personal|team] [--author=<n>]",
+          "                                   [M5-B] 跑闸门 1+2 决定规则归宿；shareable 的写到 .teamagent/team/",
+          "  teamagent m5-sync [--project-root=<path>]",
+          "                                   [M5-C] 读 .teamagent/team/ 所有 claim，LWW 合并报告团队规则集",
+          "  teamagent m5-delete --rule-id=<id> [--by=<n>] [--reason=<text>]",
+          "                                   [M5-C] 写 tombstone（任意人删任意规则）",
+          "  teamagent m5-status [--project-root=<path>]",
+          "                                   [M5-D] 综合面板：契约 + 本机 diff + 团队规则集统计",
           "  teamagent pitfall                手动记录一条踩坑经验 (交互)",
           "  teamagent pitfall --non-interactive --trigger=... --wrong=... --correct=... --reason=...",
           "                                   非交互模式 (可选: --category=C|E|S|K --tags=a,b --level=personal|team|global --nature=objective|subjective)",

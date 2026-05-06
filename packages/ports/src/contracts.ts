@@ -15,3 +15,6 @@ export { runCandidateQueueContract } from "./__tests__/candidate-queue-contract.
 export { ruleEmbedderContractSuite } from "./__tests__/rule-embedder-contract.js";
 export { semanticRetrieverContractSuite } from "./__tests__/semantic-retriever-contract.js";
 export { runBootstrapPortContract } from "./__tests__/bootstrap-port-contract.js";
+export { runSecretScanPortContract } from "./__tests__/secret-scan-port-contract.js";
+export { runScopeClassifierPortContract } from "./__tests__/scope-classifier-port-contract.js";
+export { runTeamRuleStorePortContract } from "./__tests__/team-rule-store-port-contract.js";

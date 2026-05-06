@@ -66,3 +66,34 @@ export interface BootstrapDiff {
   /** 需要装的 hook。 */
   install_hooks: HookKind[];
 }
+
+/* ===== M5-B/C 团队共享层数据结构 ===== */
+
+/** L2 团队共享层的规则存盘格式：.teamagent/team/<author>/<rule_id>.json */
+export interface TeamRuleFile {
+  rule_id: string;
+  /** 原作者（lineage；首次创建该 rule_id 的人；改写时不变） */
+  author: string;
+  current: TeamRuleState;
+}
+
+export type TeamRuleState = TeamRuleAlive | TeamRuleTombstone;
+
+export interface TeamRuleAlive {
+  deleted: false;
+  content: string;
+  /** 0..1 置信度 */
+  confidence: number;
+  /** 最后修改者（可能 != author） */
+  modified_by: string;
+  /** ISO 8601 */
+  modified_ts: string;
+  scope: "team";
+}
+
+export interface TeamRuleTombstone {
+  deleted: true;
+  deleted_by: string;
+  deleted_ts: string;
+  reason?: string;
+}
