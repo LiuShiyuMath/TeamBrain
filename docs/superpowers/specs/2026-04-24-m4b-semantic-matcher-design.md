@@ -3,7 +3,7 @@
 > 日期: 2026-04-24
 > 状态: Draft（待用户 review spec → 进入 plan 阶段）
 > 作者: tianhaoxuan + Claude (Opus 4.7 1M)
-> 父路线图: [`2026-04-22-product-roadmap-v3.md`](./2026-04-22-product-roadmap-v3.md)
+> 父路线图: [`2026-04-22-product-roadmap-v3.md`](../../backup/phase2-superseded/2026-04-22-product-roadmap-v3.md) (archived)
 > 上一里程碑: [M4-A 输出层拦截](./2026-04-23-m4a-output-layer-interception-design.md)
 
 ---

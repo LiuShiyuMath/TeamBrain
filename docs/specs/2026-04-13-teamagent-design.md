@@ -2,7 +2,7 @@
 
 > 版本: 5.2 | 日期: 2026-04-14 | 状态: 设计完成，实施中
 >
-> 实施计划见 [`2026-04-14-teamagent-phase1-plan.md`](./2026-04-14-teamagent-phase1-plan.md) (v1.2)
+> 实施计划见 [`2026-04-14-teamagent-phase1-plan.md`](../backup/phase1/specs/2026-04-14-teamagent-phase1-plan.md) (v1.2, archived)
 
 ---
 

@@ -47,8 +47,8 @@ set +e
 "$CLAUDEFAST_BIN" -p --model haiku \
   "${STREAM_JSON_FLAGS[@]}" \
   --permission-mode acceptEdits \
-  --json-schema "$SCHEMA" \
-  "$PROMPT" \
+  --json-schema $(printf '%q' "$SCHEMA") \
+  $(printf '%q' "$PROMPT")" \
   > "$OUT_DIR/claude-stream.jsonl" \
   2> "$OUT_DIR/claude-stream.stderr.log"
 claude_status=$?

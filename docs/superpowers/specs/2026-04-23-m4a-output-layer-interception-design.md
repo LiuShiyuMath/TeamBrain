@@ -3,7 +3,7 @@
 > 日期: 2026-04-23
 > 状态: Draft（待用户 review spec → 进入 plan 阶段）
 > 作者: tianhaoxuan + Claude (Opus 4.7 1M)
-> 父路线图: [`2026-04-22-product-roadmap-v3.md`](./2026-04-22-product-roadmap-v3.md)
+> 父路线图: [`2026-04-22-product-roadmap-v3.md`](../../backup/phase2-superseded/2026-04-22-product-roadmap-v3.md) (archived)
 > 并列里程碑: M4-B (RAG)、M4-C (错误学习放宽)、M4-D (后台整理器)
 
 ---
@@ -479,5 +479,5 @@ M4-A 不预先实现这些，但**数据结构上给 M4-B 留出位置**，避�
 - 当前 matcher 逻辑：`packages/core/src/matcher/keyword-matcher.ts`
 - 当前 PreToolUse handler：`packages/adapters/src/hook/claude-agent-sdk/pre-tool-use-sdk.ts`
 - M3 设计（block 绕行检测）：`docs/superpowers/specs/2026-04-22-m3-block-circumvention.md`
-- Roadmap v3：`docs/superpowers/specs/2026-04-22-product-roadmap-v3.md`
+- Roadmap v3：`docs/backup/phase2-superseded/2026-04-22-product-roadmap-v3.md` (archived)
 - 设计数据库现状：0.9.2 tarball 时点的 knowledge.db（19 block active, 146 total）

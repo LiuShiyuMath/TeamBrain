@@ -1,3 +1,19 @@
+```text
+   ┌──────────────────────────────────────────────────────────────┐
+   │  Knowledge store — physical layout vs scope routing          │
+   │                                                              │
+   │   personal ──→  <cwd>/.teamagent/knowledge.db                │
+   │   global   ──→  ~/.teamagent/global.db                       │
+   │   team     ─×→  THROW (Phase 4 — git-synced .mdc)            │
+   │                                                              │
+   │   write router:  DualLayerStore.add(entry) {                 │
+   │     switch (entry.scope.level) ...                           │
+   │   }                                                          │
+   │   read router:   PreToolUse Promise.all([P, T, G])           │
+   │                  T retriever runs but T DB has 0 rows        │
+   └──────────────────────────────────────────────────────────────┘
+```
+
 # TeamAgent 系统技术文档: 8. 知识库设计
 
 Source index: [SYSTEM.md](../SYSTEM.md)
@@ -13,7 +29,7 @@ Source index: [SYSTEM.md](../SYSTEM.md)
 | 列 | 类型 | 说明 |
 |----|------|------|
 | id | TEXT PK | 唯一标识 |
-| scope_level | TEXT | personal/team/global |
+| scope_level | TEXT | personal/team/global（CHECK 约束） |
 | category | TEXT | C/E/S/K |
 | current_tier | TEXT | experimental/.../enforced/dormant |
 | confidence | REAL | 0.0~1.0 |
@@ -39,7 +55,7 @@ Calibrator V2 用，存储 `(knowledge_id, outcome=success|failure)` 细粒度�
 
 `scan-errors` 命令生成的候选规则，status=pending，等待 `review-candidates` 命令人工审核。
 
-完整 DDL：`packages/adapters/src/storage/sqlite/schema.ts:19`
+完整 DDL：`packages/adapters/src/storage/sqlite/schema.ts:19`，`scope_level CHECK IN ('personal','team','global')` 在 `:24`，`idx_knowledge_scope` 在 `:67`。
 
 ### personal / team / global scope 的路由逻辑
 

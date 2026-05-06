@@ -17,6 +17,6 @@ unless a current document links back to them.
 
 | Historical Topic | Current Doc |
 | --- | --- |
-| Product roadmap | [../superpowers/specs/2026-04-22-product-roadmap-v3.md](../superpowers/specs/2026-04-22-product-roadmap-v3.md) |
+| Product roadmap | [phase2-superseded/2026-04-22-product-roadmap-v3.md](phase2-superseded/2026-04-22-product-roadmap-v3.md) (archived) |
 | Phase 2 design | [../superpowers/specs/2026-04-15-phase2-design-v2.md](../superpowers/specs/2026-04-15-phase2-design-v2.md) |
 | Current dogfood report | [../dogfood/自举报告.md](../dogfood/自举报告.md) |

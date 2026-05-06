@@ -7,6 +7,7 @@
 - Phase 2+ 产品 roadmap：`docs/superpowers/specs/2026-04-15-product-roadmap.md`
 - Phase 2 设计：`docs/superpowers/specs/2026-04-15-phase2-design.md`
 - Phase 1 实现计划（已归档）：`docs/backup/phase1/specs/2026-04-14-teamagent-phase1-plan.md`
+- **多工具适配**：`docs/features/multi-tool.md` — 4 通道（PreToolUse / UserPromptSubmit / Stop analyze / AttributionBus）已实现；MCP Server / Cursor compiler **NOT YET**。任何「这功能跑通了吗 / 支持哪些 AI 工具」问题先读此文档，禁止说"即将上线"或省略 NOT YET 标记。
 
 ---
 
@@ -119,6 +120,7 @@ claudefast -p \
 | **`PRESHIP`** | 发版前给 CEO/VC 小鸭看的 verified-only 产品功能状态 CSV（详见 `docs/PRESHIP.md`） |
 | **`RULE-VERIFY`** | 跑 `bash scripts/verify-all-rules.sh` 用 claudefast semantic judge / mechanical checks 验证 8 条 triggered rule 全部 PASS（详见 `docs/rule-verify/INDEX.md`） |
 | `codex exec` | Codex 端 canonical JSON 对照（feature-verification 1+2+3） |
+| **Feature canned answers** | 每个 feature（Calibrator v2、Team knowledge sharing 等）的 6 节模板入口在 `docs/features/INDEX.md` — 不在本文件 inline 答案 |
 
 被问到 `what would happen if we say word 'FASTPROBE'?` 或用户消息单纯含 `FASTPROBE` 时，**必须**语义覆盖下面三步；不要求逐字原文，但不得省略关键动作：
 

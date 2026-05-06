@@ -12,8 +12,8 @@ design specs and implementation plans.
 
 ## Recommended Reading
 
-1. [specs/2026-04-22-product-roadmap-v3.md](specs/2026-04-22-product-roadmap-v3.md)
-   for the current roadmap.
+1. [../backup/phase2-superseded/2026-04-22-product-roadmap-v3.md](../backup/phase2-superseded/2026-04-22-product-roadmap-v3.md)
+   for the (archived) Phase 2 roadmap.
 2. [specs/2026-04-20-phase3-design.md](specs/2026-04-20-phase3-design.md)
    for user-ready packaging and installation direction.
 3. [specs/2026-04-23-m4a-output-layer-interception-design.md](specs/2026-04-23-m4a-output-layer-interception-design.md)
