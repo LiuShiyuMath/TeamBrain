@@ -11,11 +11,14 @@ import * as path from "node:path";
 import { runM5Infect } from "./commands/m5-infect.js";
 import { runM5Bootstrap } from "./commands/m5-bootstrap.js";
 import { runM5Sync } from "./commands/m5-sync.js";
+import { runM5Publish } from "./commands/m5-publish.js";
 
 export interface M5SessionResult {
   infected: boolean;
   bootstrapped: boolean;
   synced: boolean;
+  published_changes: number;
+  pushed: boolean;
   errors: string[];
 }
 
@@ -47,11 +50,15 @@ export async function runM5Session(input: {
   homeDir: string;
   /** 是否真的"传染"——默认按 userHasTeamAgent 判断 */
   shouldInfect?: boolean;
+  /** 是否在自动 commit 后也自动 push（默认 false） */
+  autoPush?: boolean;
 }): Promise<M5SessionResult> {
   const r: M5SessionResult = {
     infected: false,
     bootstrapped: false,
     synced: false,
+    published_changes: 0,
+    pushed: false,
     errors: [],
   };
 
@@ -99,6 +106,20 @@ export async function runM5Session(input: {
     }
   }
 
+  // 4) publish：auto-commit pending L2 changes（push 仅在 opt-in 时跑）
+  if (isInfected(input.projectRoot)) {
+    try {
+      const pub = await runM5Publish({
+        projectRoot: input.projectRoot,
+        push: input.autoPush ?? false,
+      });
+      r.published_changes = pub.changes_count;
+      r.pushed = pub.pushed;
+    } catch (e) {
+      r.errors.push(`publish: ${(e as Error).message}`);
+    }
+  }
+
   return r;
 }
 
@@ -108,6 +129,10 @@ export function renderM5SessionBanner(r: M5SessionResult): string | null {
   if (r.infected) parts.push("🦠 项目已自动 infect");
   if (r.bootstrapped) parts.push("📦 本机已自动补齐缺失项");
   if (r.synced) parts.push("🔄 已同步团队规则");
+  if (r.published_changes > 0) {
+    const pushNote = r.pushed ? " + push" : "（未 push）";
+    parts.push(`📤 已 commit ${r.published_changes} 处 team 变化${pushNote}`);
+  }
   if (r.errors.length) {
     parts.push(`⚠ M5 部分失败: ${r.errors.join("; ")}`);
   }

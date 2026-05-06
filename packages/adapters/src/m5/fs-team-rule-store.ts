@@ -66,7 +66,7 @@ export class FsTeamRuleStore implements TeamRuleStorePort {
       projectRoot,
       ".teamagent",
       "team",
-      claimAuthor,
+      sanitize(claimAuthor),
       `${sanitize(ruleId)}.json`
     );
     try {
@@ -87,7 +87,7 @@ export class FsTeamRuleStore implements TeamRuleStorePort {
       projectRoot,
       ".teamagent",
       "team",
-      claimAuthor
+      sanitize(claimAuthor)
     );
     await fs.mkdir(dir, { recursive: true });
     const finalPath = path.join(dir, `${sanitize(rule.rule_id)}.json`);
@@ -98,7 +98,12 @@ export class FsTeamRuleStore implements TeamRuleStorePort {
   }
 }
 
-/** 把 rule_id 中可能不安全的字符替换成 _。 */
+/** 把 id / author 中可能不安全的文件系统字符替换成 _。 */
 function sanitize(id: string): string {
   return id.replace(/[^A-Za-z0-9._-]/g, "_");
+}
+
+/** 公开的 author 名 sanitization——CLI 调用层也可用，写 dir 前 normalize。 */
+export function sanitizeAuthor(name: string): string {
+  return sanitize(name);
 }
