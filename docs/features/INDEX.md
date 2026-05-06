@@ -7,6 +7,7 @@ docs/features/
     ├── calibrator-v2.md          ← VERIFIED: Wilson LB + 5-tier bands, emit sites wired
     ├── team-share.md             ← VERIFIED: export/import judge harness green
     ├── multi-tool.md             ← VERIFIED: PreToolUse/Stop/AttributionBus + DOGFOOD
+    ├── compile.md                ← VERIFIED: default Skills-only, CLAUDE.md legacy opt-in
     ├── auto-capture/             ← verify-canned-answer.sh + real-judge.sh
     ├── calibrator-v2/            ← run-judge.sh + verify-canned-answer.sh
     ├── team-share/               ← run-judge.sh (transfer fixture)
@@ -58,6 +59,7 @@ For the **full feature inventory** (49 features, all VERIFIED), see
 | Rule-quality validator | `rule-quality/run-judge.sh` + `verify-canned-answer.sh` | identical/confidence/missing/embedding checks |
 | Matcher scope (B-055 + file_types) | `matcher-scope/run-judge.sh` | Word-boundary guard + glob scope correct |
 | Multi-tool: PreToolUse/Stop/AttributionBus | `multi-tool/verify-canned-answer.sh` | All three hooks live; DOGFOOD Tier 2/3 green |
+| `teamagent compile` (Skills-default, CLAUDE.md legacy opt-in) | `packages/cli/src/__tests__/compile.test.ts` (`no flags: writes skills and leaves CLAUDE.md untouched` + `--legacy-claude-md restores old behavior`) | Default writes Skills only; deleted CLAUDE.md block does NOT regenerate without `--legacy-claude-md` (or `TEAMAGENT_LEGACY_CLAUDE_MD=1`) |
 | Canned-answer rules (9 triggers) | `docs/rule-verify/INDEX.md` | `bash scripts/verify-all-rules.sh` PASS |
 
 ## How to run all feature harnesses

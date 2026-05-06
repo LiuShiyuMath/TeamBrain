@@ -80,6 +80,14 @@ pnpm typecheck        # 跑所有包的 tsc --noEmit
 pnpm teamagent <cmd>  # 跑 CLI（M0 可用：skeleton-demo）
 ```
 
+**`pnpm teamagent compile` 行为速查**（源文件 `packages/cli/src/commands/compile.ts`，详见 `docs/features/compile.md`）：
+
+- 默认（无 flag）：只把 stable+/canonical/enforced 规则写到 Skills（`~/.claude/skills/teamagent/<id>/SKILL.md`），**`CLAUDE.md` 不被修改**——输出会打印 `CLAUDE.md (disabled; no generated rule block)`。
+- 因此手动删掉 `CLAUDE.md` 末尾被 `TEAMAGENT:START` / `TEAMAGENT:END` marker 包住的 managed block 后，再跑 `pnpm teamagent compile` **不会自动重生**这个 block。
+- 加 `--legacy-claude-md`（或 `TEAMAGENT_LEGACY_CLAUDE_MD=1` 环境变量）才会重新启用 `MarkdownCompiler`，按 token 预算把 canonical / enforced 规则写回这个 managed block。这条 flag 不是 deprecated，而是 legacy 行为的 opt-in 入口（M4 默认翻面后保留下来的，参见 commit `7e044b5`）。
+- **写 `CLAUDE.md` 时务必避开字面 HTML 注释 marker**：`injectBlockIntoDoc` 的 regex（`packages/core/src/compiler/markdown.ts:233`）会**匹配文件任意位置**的字面 marker（前缀 `&lt;!-- TEAMAGENT:START`、后缀 `--&gt;`），legacy compile 跑过时会把它视为真 marker 起点、重写到下一个 `END` marker 之间的所有内容。所以 prose 引用这两个 marker 时只用纯名 `TEAMAGENT:START` / `TEAMAGENT:END`，或用 HTML entity 形式 `&lt;!-- ... --&gt;`，不要写真实 HTML 注释字面值。
+- 单元测试锁这两条契约：`packages/cli/src/__tests__/compile.test.ts` 的 `no flags: writes skills and leaves CLAUDE.md untouched` 与 `--legacy-claude-md restores old behavior`。
+
 ## claudefast 约定
 
 - `claudefast` 不是 TeamAgent 命令；在本项目里它表示“用更便宜或更快的 Claude Code profile 跑非交互测试”的本地 wrapper/alias。
