@@ -62,6 +62,11 @@ import {
   renderCompileResult,
 } from "./commands/compile.js";
 import {
+  executeCompileCursor,
+  parseCompileCursorArgs,
+  renderCompileCursorResult,
+} from "./commands/compile-cursor.js";
+import {
   executeDocsPropagate,
   parseDocsPropagateArgs,
   renderDocsPropagationResult,
@@ -447,6 +452,12 @@ async function main(): Promise<void> {
       const opts = parseCompileArgs(rest);
       const result = await executeCompile(opts);
       process.stdout.write(renderCompileResult(result, opts.dryRun));
+      return;
+    }
+    case "compile-cursor": {
+      const opts = parseCompileCursorArgs(rest);
+      const result = await executeCompileCursor(opts);
+      process.stdout.write(renderCompileCursorResult(result));
       return;
     }
     case "docs-propagate": {
