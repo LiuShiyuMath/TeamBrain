@@ -11,6 +11,7 @@ import {
   shouldSpawnUpdater,
   spawnUpdater,
   maybeShowPendingBanner,
+  maybeShowReinstallBanner,
 } from "./session-start-logic.js";
 import { cleanupWikiResidue } from "./wiki-residue-cleanup.js";
 import { cleanupDbBackups } from "./db-backup-cleanup.js";
@@ -64,6 +65,9 @@ async function main(): Promise<void> {
 
   // 自动更新：先显示上次更新完成的 banner，再决定是否后台 spawn updater
   try { maybeShowPendingBanner(); } catch (e) { logError("banner-show-failed", e); }
+  // B-104: 如果自动更新连续失败（旧 SSH PACKAGE_SPEC 卡死），提示用户手动重装。
+  // 24h 节流，避免每次 SessionStart 刷屏。
+  try { maybeShowReinstallBanner(); } catch (e) { logError("reinstall-banner-failed", e); }
   try {
     if (shouldSpawnUpdater()) spawnUpdater();
   } catch (e) {

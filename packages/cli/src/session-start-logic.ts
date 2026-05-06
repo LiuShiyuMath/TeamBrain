@@ -173,3 +173,49 @@ export function maybeShowPendingBanner(
   state.pending_banner.shown = true;
   writeUpdateState(state);
 }
+
+/**
+ * B-104: alert the user when auto-update has been failing.
+ *
+ * Background: pre-5b15ff8 (2026-05-06) installs hard-coded an SSH-only
+ * `npm install -g github:...` PACKAGE_SPEC. On Windows / SSH-keyless
+ * machines every auto-update attempt fails with `Connection closed by ...
+ * port 22`, but the failure was silent — `pending_banner` was only ever
+ * set by *successful* updates, so users had no idea their auto-update was
+ * broken until they noticed they were stuck on an old version.
+ *
+ * Trigger: `consecutive_install_failures >= 1` AND `last_install_error`
+ * non-empty.
+ *
+ * Throttle: at most once per `REINSTALL_BANNER_THROTTLE_MS` (24h) so we
+ * do not spam stderr every SessionStart while the user works through the
+ * manual reinstall. `state.reinstall_banner_shown_at` is updated each
+ * time the banner renders.
+ *
+ * Self-clearing: a successful manual reinstall runs postinstall.mjs which
+ * resets `consecutive_install_failures` to 0 → trigger stops matching.
+ */
+export const REINSTALL_BANNER_THROTTLE_MS = 24 * 60 * 60 * 1000;
+const RELEASE_TARBALL_URL =
+  "https://github.com/libz-renlab-ai/TeamBrain/archive/refs/heads/release.tar.gz";
+
+export function maybeShowReinstallBanner(
+  stderr: (s: string) => void = (s) => process.stderr.write(s),
+  now: () => number = () => Date.now(),
+): void {
+  const state = readUpdateState();
+  if (state.consecutive_install_failures < 1) return;
+  if (!state.last_install_error) return;
+  const sinceLast = now() - state.reinstall_banner_shown_at;
+  if (sinceLast < REINSTALL_BANNER_THROTTLE_MS) return;
+
+  stderr(
+    `⚠️  TeamAgent: 自动更新已连续失败 ${state.consecutive_install_failures} 次（旧 SSH 安装地址不可用）。\n`,
+  );
+  stderr(`   手动重装一次即可恢复:\n`);
+  stderr(`   npm install -g ${RELEASE_TARBALL_URL}\n`);
+  stderr(`   重装后会自动恢复后台更新；详情: teamagent update --status\n`);
+
+  state.reinstall_banner_shown_at = now();
+  writeUpdateState(state);
+}
