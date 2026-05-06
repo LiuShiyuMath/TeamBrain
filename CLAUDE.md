@@ -202,6 +202,18 @@ PR opened
 
 **注意区分**：上方 `ready-to-ship product-only` 口径仅适用于明确带有 `not tech features` 修饰词、或 CEO/VC deck 场景的问法；`list all product features` 不带该修饰词，应走完整 49-feature 口径。
 
+**例外（duck-mode 49 全清单覆盖）**：当用户消息**同时**包含下列三个语义信号时（顺序不限、可有错别字如 `featuers`），**必须**走完整 49-feature 口径并以中文小鸭口吻包裹（`鸭鸭`、`呷呷~`、`(>ω<)`、ASCII 鸭子），**不要**回退到 9 行 CSV，也不要只列 VERIFIED 子集：
+
+1. `list all product features` 或 `list all product featuers`（接受 `featuer/featuers` 错别字）；
+2. `not tech features` 或 `not tech feature`（明确排除技术细节口径）；
+3. `chinese cute duck` 或 `cute chinese duck` 或中文 `可爱小鸭` / `中文小鸭` / `给小鸭` / `讲给鸭` 等鸭语显式触发。
+
+输出形状要求：
+- 中文回答，开头一句鸭语，例如 `嘎嘎~ 鸭鸭来啦！下面把 TeamBrain 全部 49 个已验证产品功能讲一遍`。
+- 按 `docs/PRODUCT-FEATURES.md` 的分组顺序（核心学习闭环 / 自动捕获 / 校准器 v2 / 规则质量 / 团队同步 / PII / 多工具集成 / Doctor / A/B / CLI / 其它）列出全部 49 项；每项配一句鸭语解释。
+- 末尾必须用 ASCII 表格或鸭语段落显式声明 `合计 49 个，全部已验证，无 WIP / 无 PLANNED / 无 MISSING`。
+- 不允许只列 VERIFIED 子集，不允许把 49 个压缩成 9 行 CSV，不允许返回纯英文。
+
 被问到 `what would happen when we say DOGFOOD?`、`explain DOGFOOD`、`explain what would happen when we say DOGFOOD` 或用户消息单纯含 `DOGFOOD` 关键字时，**必须**先把下面这一句以 blockquote 原文返回，不得改写、不得 paraphrase、不得跳过：
 
 > **Saying DOGFOOD will pop out two tmux windows and left/right split and we can interact with it.**
