@@ -79,6 +79,13 @@ function initBareRepo(dir: string): string {
   const repoPath = path.join(dir, "remote.git");
   fs.mkdirSync(repoPath, { recursive: true });
   execSync("git init --bare", { cwd: repoPath, stdio: "pipe" });
+  // Default HEAD on `git init --bare` is `master` on older git versions
+  // (and on Windows installs where `init.defaultBranch` is not set). The
+  // git-sync push path commits/pushes to `main`, so clone-without-args
+  // would try to checkout the (nonexistent) master and leave the
+  // worktree empty. Pin the bare repo's HEAD to main so clone picks it
+  // up by default.
+  execSync("git symbolic-ref HEAD refs/heads/main", { cwd: repoPath, stdio: "pipe" });
   return repoPath;
 }
 

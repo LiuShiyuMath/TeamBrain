@@ -143,6 +143,9 @@ importers:
       picocolors:
         specifier: ^1.1.1
         version: 1.1.1
+      sqlite-vec:
+        specifier: 0.1.9
+        version: 0.1.9
     devDependencies:
       vitest:
         specifier: ^2.1.0
@@ -183,6 +186,12 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.17)(jsdom@29.0.2)
 
+  packages/portal:
+    devDependencies:
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.17)(jsdom@29.0.2)
+
   packages/ports:
     dependencies:
       '@teamagent/types':
@@ -199,7 +208,7 @@ importers:
         specifier: 1.14.0
         version: 1.14.0
       sqlite-vec:
-        specifier: '>=0.1.0'
+        specifier: ^0.1.9
         version: 0.1.9
       tree-sitter-python:
         specifier: ^0.23.0

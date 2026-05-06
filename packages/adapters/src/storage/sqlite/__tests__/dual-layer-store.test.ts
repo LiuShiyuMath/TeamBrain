@@ -64,12 +64,13 @@ describe("DualLayerStore", () => {
     expect(store.getById("nope")).toBeUndefined();
   });
 
-  it("team → project DB and remains queryable as team scope", () => {
+  it("team → project DB and remains queryable as team scope (M5)", () => {
     store.add(mkEntry("t1", "team"));
 
     expect(store.getProjectStore().getById("t1")?.scope.level).toBe("team");
     expect(store.getGlobalStore().getById("t1")).toBeUndefined();
     expect(store.findByScopeLevel("team").map((e) => e.id)).toEqual(["t1"]);
+    expect(store.getById("t1")?.scope.level).toBe("team");
   });
 });
 

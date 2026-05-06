@@ -54,7 +54,21 @@ describe("UpdateState", () => {
       consecutive_install_failures: 2,
       last_install_error: "boom",
       pending_banner: { from: "a", to: "b", at: 789, shown: false },
+      reinstall_banner_shown_at: 999,
     };
     expect(parseUpdateState(serializeUpdateState(s))).toEqual(s);
+  });
+
+  // B-104: backwards compat — pre-B-104 state files have no
+  // reinstall_banner_shown_at field; parser must default to 0 so old users
+  // get the banner on first SessionStart after the upgrade.
+  it("parseUpdateState 兼容旧版没有 reinstall_banner_shown_at 的 state 文件", () => {
+    const legacy = JSON.stringify({
+      consecutive_install_failures: 3,
+      last_install_error: "ssh fail",
+    });
+    const s = parseUpdateState(legacy);
+    expect(s.reinstall_banner_shown_at).toBe(0);
+    expect(s.consecutive_install_failures).toBe(3);
   });
 });

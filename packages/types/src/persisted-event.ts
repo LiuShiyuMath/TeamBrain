@@ -37,7 +37,10 @@ export interface PersistedEvent {
     | "ai.narrative.injected"       // UserPromptSubmit injected pending warning into next turn
     | "ai.narrative.recurred"       // Same rule hit again after injection (education failed)
     | "ai.narrative.complied"       // Previously-injected rule no longer hit (education succeeded)
-    | "ai.user_input.flagged";      // user-input channel rule matched the incoming user prompt
+    | "ai.user_input.flagged"       // user-input channel rule matched the incoming user prompt
+    // From PR #74 (commit 654f0b9): wire calibrator-v2 negative-reinforcement signals
+    | "validator.failure"           // Rule was injected as hint; AI complied (no wrong_pattern) but didn't use correct_pattern
+    | "calibrator.user_reject";     // User typed a wrong_pattern → negative reinforcement to v2 demerit engine
   /** Claude Code 会话 id（从 hook input 拿到） */
   session_id?: string;
   /** 涉及的知识条目 id（如 hook 命中某条规则） */

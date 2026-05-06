@@ -16,5 +16,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "exclude": ["node_modules", "dist", "scripts/out"]
+  "exclude": ["node_modules", "dist", "scripts/out", "docs/features"]
 }

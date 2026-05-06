@@ -40,7 +40,7 @@ function loadDbRules(dbPath: string): RuleRecord[] {
     .prepare(
       "SELECT id, trigger, wrong_pattern, correct_pattern, reasoning, category, tags, confidence FROM knowledge WHERE status != 'archived'",
     )
-    .all() as RuleRecord[];
+    .all() as unknown as RuleRecord[];
   db.close();
   return rows.map((r) => ({
     ...r,

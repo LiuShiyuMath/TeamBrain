@@ -6,8 +6,10 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SERVER_TS = path.resolve(__dirname, "../pitfall-server.ts");
 const FIXTURE_JSON = path.resolve(__dirname, "fixture-rules.json");
-// tsx lives at the workspace root; process.cwd() is the repo root when run via pnpm vitest
-const TSX_BIN = path.join(process.cwd(), "node_modules/.bin/tsx");
+// tsx lives at the workspace root. On Windows the .bin/tsx shim is a shell
+// script that node can't spawn directly (ENOENT), so target the underlying
+// cli.mjs and run it through node — works cross-platform.
+const TSX_CLI = path.join(process.cwd(), "node_modules/tsx/dist/cli.mjs");
 
 interface JsonRpcResponse {
   jsonrpc: "2.0";
@@ -25,7 +27,7 @@ function stubMcpClient(
   env: NodeJS.ProcessEnv = {},
 ): Promise<JsonRpcResponse[]> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(TSX_BIN, [SERVER_TS], {
+    const proc = spawn(process.execPath, [TSX_CLI, SERVER_TS], {
       env: { ...process.env, ...env },
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -98,7 +100,7 @@ describe("pitfall MCP server — check_pitfall tool", () => {
     expect(res!.error).toBeUndefined();
 
     const content = (res!.result as any).content as Array<{ type: string; text: string }>;
-    const payload = JSON.parse(content[0].text) as { hit_count: number; hits: unknown[] };
+    const payload = JSON.parse(content[0]!.text) as { hit_count: number; hits: unknown[] };
     expect(payload.hit_count).toBeGreaterThan(0);
     expect(payload.hits[0]).toMatchObject({ id: "rule-001", wrong_pattern: "moment" });
   }, 15_000);
@@ -119,7 +121,7 @@ describe("pitfall MCP server — check_pitfall tool", () => {
     const res = responses.find((r) => r.id === 2);
     expect(res).toBeDefined();
     const content = (res!.result as any).content as Array<{ type: string; text: string }>;
-    const payload = JSON.parse(content[0].text) as { hit_count: number };
+    const payload = JSON.parse(content[0]!.text) as { hit_count: number };
     expect(payload.hit_count).toBe(0);
   }, 15_000);
 
@@ -139,7 +141,7 @@ describe("pitfall MCP server — check_pitfall tool", () => {
     const res = responses.find((r) => r.id === 3);
     expect(res).toBeDefined();
     const content = (res!.result as any).content as Array<{ type: string; text: string }>;
-    const payload = JSON.parse(content[0].text) as { hit_count: number; hits: Array<{ id: string }> };
+    const payload = JSON.parse(content[0]!.text) as { hit_count: number; hits: Array<{ id: string }> };
     expect(payload.hit_count).toBeGreaterThan(0);
     expect(payload.hits.map((h) => h.id)).toContain("rule-002");
   }, 15_000);

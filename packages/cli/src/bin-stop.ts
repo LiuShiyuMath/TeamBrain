@@ -38,6 +38,7 @@ import { readCursor, writeCursorAndSeen, clearCursor, readSeen } from "./scan-cu
 import { appendHarvest } from "./harvest-writer.js";
 import { makeFallbackLLMClient } from "./llm-with-fallback.js";
 import { runStopNarrativeScan, readLastInjected, lastInjectedFilePath } from "./stop-narrative-scan.js";
+import { rotateIfTooLarge } from "./log-rotate.js";
 
 // ---- Lazy singleton for semantic embedder (shared across Stop calls in same process) ----
 let _stopEmbedder: XenovaRuleEmbedder | null = null;
@@ -458,6 +459,10 @@ function logError(cwd: string, step: string, err: unknown): void {
     const teamagentDir = path.join(teamagentHomeDir(), ".teamagent");
     mkdirSync(teamagentDir, { recursive: true });
     const logPath = path.join(teamagentDir, "stop-errors.log");
+    // B-093: rotate before append so the file does not grow unbounded. The
+    // existing 613KB / 3479-line pollution from B-085-era tests will rotate
+    // out on the first new append.
+    rotateIfTooLarge(logPath);
     const stack = err instanceof Error && err.stack ? `\n  stack: ${err.stack.split("\n").slice(1, 3).join(" | ")}` : "";
     const msg = `[${new Date().toISOString()}] step=${step} cwd=${cwd} err=${String(err)}${stack}\n`;
     appendFileSync(logPath, msg, "utf-8");
@@ -606,6 +611,8 @@ if (path.basename(process.argv[1] ?? "").startsWith("bin-stop")) {
     try {
       // B-085: honor TEAMAGENT_HOME (matches logError/teamagentHomeDir).
       const logPath = path.join(teamagentHomeDir(), ".teamagent", "stop-errors.log");
+      // B-093: same rotation policy as logError above.
+      rotateIfTooLarge(logPath);
       appendFileSync(
         logPath,
         `[${new Date().toISOString()}] main-crash err=${String(e)}\n`,

@@ -38,7 +38,7 @@ export function createPortalServer(port = 0): Promise<PortalServer> {
   const events = new EventEmitter();
 
   return new Promise((resolve, reject) => {
-    const sockets = new Set<import("node:net").Socket>();
+    const sockets = new Set<import("node:stream").Duplex>();
 
     const server = http.createServer((req, res) => {
       if (req.url === "/" || req.url === "") {
@@ -81,7 +81,7 @@ export function createPortalServer(port = 0): Promise<PortalServer> {
       socket.once("error", () => sockets.delete(socket));
 
       // Send WS text frame helper
-      function sendWsFrame(sock: import("node:net").Socket, text: string) {
+      function sendWsFrame(sock: import("node:stream").Duplex, text: string) {
         const payload = Buffer.from(text, "utf-8");
         const len = payload.length;
         let header: Buffer;

@@ -80,9 +80,9 @@ describe("Live Knowledge Portal", () => {
       function parseFrames(buf: Buffer) {
         if (buf.length < 2) return;
         // Simple single-frame parser (no masking from server)
-        const opcode = buf[0] & 0x0f;
+        const opcode = (buf[0] ?? 0) & 0x0f;
         if (opcode !== 1) return; // not text frame
-        const payloadLen = buf[1] & 0x7f;
+        const payloadLen = (buf[1] ?? 0) & 0x7f;
         const payload = buf.slice(2, 2 + payloadLen).toString("utf-8");
         if (payload.includes("heartbeat")) {
           sock.destroy();

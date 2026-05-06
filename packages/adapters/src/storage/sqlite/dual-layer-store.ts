@@ -1,10 +1,14 @@
 import { openDb } from "./schema.js";
 import { SqliteKnowledgeStore } from "./sqlite-knowledge-store.js";
 import type { KnowledgeEntry } from "@teamagent/types";
+import type { RuleEmbedder } from "@teamagent/ports";
 
 export interface DualLayerStoreConfig {
   projectDbPath: string;
   userGlobalDbPath: string;
+  /** Optional rule embedder; when set, addWithEmbedding/updateWithEmbedding
+   *  auto-populate vec0 tables for both layers. */
+  embedder?: RuleEmbedder;
 }
 
 /**
@@ -20,14 +24,16 @@ export class DualLayerStore {
   private readonly global: SqliteKnowledgeStore;
 
   constructor(cfg: DualLayerStoreConfig) {
-    this.project = new SqliteKnowledgeStore(openDb(cfg.projectDbPath));
-    this.global = new SqliteKnowledgeStore(openDb(cfg.userGlobalDbPath));
+    this.project = new SqliteKnowledgeStore(openDb(cfg.projectDbPath), { embedder: cfg.embedder });
+    this.global = new SqliteKnowledgeStore(openDb(cfg.userGlobalDbPath), { embedder: cfg.embedder });
   }
 
   add(entry: KnowledgeEntry): void {
     switch (entry.scope.level) {
       case "personal":
       case "team":
+        // M5: team rules 由 m5-sync 管线写入，按"项目级"路由进 project store
+        // （和 personal 同库）。团队边界 = remote URL hash，存在 scope.project 字段。
         this.project.add(entry);
         return;
       case "global":
@@ -35,6 +41,37 @@ export class DualLayerStore {
         return;
       default:
         throw new Error(`unknown scope level: ${(entry.scope as any).level}`);
+    }
+  }
+
+  /** Same routing as add() but uses the embedder-aware path on the underlying store. */
+  async addWithEmbedding(entry: KnowledgeEntry): Promise<void> {
+    switch (entry.scope.level) {
+      case "personal":
+        await this.project.addWithEmbedding(entry);
+        return;
+      case "global":
+        await this.global.addWithEmbedding(entry);
+        return;
+      case "team":
+        // M5: team rules 由 m5-sync 管线写入，按"项目级"路由进 project store。
+        await this.project.addWithEmbedding(entry);
+        return;
+      default:
+        throw new Error(`unknown scope level: ${(entry.scope as any).level}`);
+    }
+  }
+
+  async updateWithEmbedding(
+    id: string,
+    patch: Partial<KnowledgeEntry> & Record<string, unknown>,
+  ): Promise<void> {
+    if (this.project.getById(id) !== undefined) {
+      await this.project.updateWithEmbedding(id, patch);
+    } else if (this.global.getById(id) !== undefined) {
+      await this.global.updateWithEmbedding(id, patch);
+    } else {
+      throw new Error(`Knowledge entry not found in any layer: ${id}`);
     }
   }
 

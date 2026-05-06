@@ -25,6 +25,15 @@ const FIXTURE_RULE: KnowledgeEntry = {
   evidence: { success_sessions: 0, success_users: 0, correction_sessions: 0 },
   created_at: "2026-01-01T00:00:00Z",
   last_hit_at: "",
+  last_validated_at: "",
+  source: "team-shared",
+  conflict_with: [],
+  current_tier: "experimental",
+  max_tier_ever: "experimental",
+  tier_entered_at: "",
+  demerit: 0,
+  demerit_last_updated: "",
+  resurrect_count: 0,
 };
 
 describe("MCP server handshake sequence", () => {

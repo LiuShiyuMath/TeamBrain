@@ -16,8 +16,8 @@ describe('rankSources', () => {
     ];
     const ranked = rankSources(sources, 'attention mechanism', NOW);
     // "Attention mechanism guide" matches 2 tokens → should be #1 or #2 over "Attention Is All You Need" (1 token)
-    expect(ranked[0].title).toBe('Attention mechanism guide');
-    expect(ranked[ranked.length - 1].title).toBe('Random unrelated post');
+    expect(ranked[0]?.title).toBe('Attention mechanism guide');
+    expect(ranked[ranked.length - 1]?.title).toBe('Random unrelated post');
   });
 
   it('uses domain tier as tie-breaker (paper > docs > blog)', () => {
@@ -27,8 +27,8 @@ describe('rankSources', () => {
       { url: 'https://arxiv.org/z', title: 'gradient descent overview', domain: 'paper' },
     ];
     const ranked = rankSources(sources, 'gradient descent overview', NOW);
-    expect(ranked[0].domain).toBe('paper');
-    expect(ranked[1].domain).toBe('docs');
-    expect(ranked[2].domain).toBe('blog');
+    expect(ranked[0]?.domain).toBe('paper');
+    expect(ranked[1]?.domain).toBe('docs');
+    expect(ranked[2]?.domain).toBe('blog');
   });
 });

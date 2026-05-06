@@ -2,10 +2,58 @@ import { describe, it, expect } from "vitest";
 import {
   compileMarkdownBlock,
   injectBlockIntoDoc,
+  stripLegacyTeamagentBlock,
   BLOCK_START,
   BLOCK_END,
 } from "../markdown.js";
 import type { KnowledgeEntry } from "@teamagent/types";
+
+describe("stripLegacyTeamagentBlock", () => {
+  it("returns input unchanged when no markers present", () => {
+    const doc = "# Project\n\nSome content.\n";
+    expect(stripLegacyTeamagentBlock(doc)).toBe(doc);
+  });
+
+  it("returns input unchanged when only START is present (malformed)", () => {
+    const doc = `# Project\n\n${BLOCK_START}\nrules but no end\n`;
+    expect(stripLegacyTeamagentBlock(doc)).toBe(doc);
+  });
+
+  it("strips a well-formed block and surrounding blank lines", () => {
+    const doc =
+      "# Project\n" +
+      "\n" +
+      "Pre block.\n" +
+      "\n" +
+      `${BLOCK_START}\n` +
+      "## TeamAgent 经验\n" +
+      "- rule 1\n" +
+      `${BLOCK_END}\n` +
+      "\n" +
+      "Post block.\n";
+    const out = stripLegacyTeamagentBlock(doc);
+    expect(out).not.toContain("TEAMAGENT:START");
+    expect(out).not.toContain("TEAMAGENT:END");
+    expect(out).toContain("Pre block.");
+    expect(out).toContain("Post block.");
+    expect(out).not.toMatch(/\n\n\n/); // no triple-blank gap
+  });
+
+  it("collapses to empty string when file is just the block", () => {
+    const doc = `${BLOCK_START}\n## rules\n${BLOCK_END}\n`;
+    expect(stripLegacyTeamagentBlock(doc)).toBe("");
+  });
+
+  it("removes multiple blocks defensively", () => {
+    const doc =
+      `${BLOCK_START}\nfirst\n${BLOCK_END}\n` +
+      "middle\n" +
+      `${BLOCK_START}\nsecond\n${BLOCK_END}\n`;
+    const out = stripLegacyTeamagentBlock(doc);
+    expect(out).not.toContain("TEAMAGENT:START");
+    expect(out).toContain("middle");
+  });
+});
 
 function makeEntry(overrides: Partial<KnowledgeEntry> = {}): KnowledgeEntry {
   return {
