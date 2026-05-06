@@ -36,7 +36,9 @@ export class DualLayerStore {
         this.global.add(entry);
         return;
       case "team":
-        throw new Error("team-scoped entries are not supported until Phase 4");
+        // M5: team rules 由 m5-sync 管线写入，按"项目级"路由进 project store。
+        // 团队边界 = remote URL hash，存在 scope.project 字段；查询时与 personal 同库。
+        return this.project.add(entry);
       default:
         throw new Error(`unknown scope level: ${(entry.scope as any).level}`);
     }
@@ -52,7 +54,9 @@ export class DualLayerStore {
         await this.global.addWithEmbedding(entry);
         return;
       case "team":
-        throw new Error("team-scoped entries are not supported until Phase 4");
+        // M5: team rules 由 m5-sync 管线写入，按"项目级"路由进 project store。
+        await this.project.addWithEmbedding(entry);
+        return;
       default:
         throw new Error(`unknown scope level: ${(entry.scope as any).level}`);
     }

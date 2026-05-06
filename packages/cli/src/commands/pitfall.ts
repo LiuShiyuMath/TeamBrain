@@ -19,6 +19,7 @@ import {
 } from "@teamagent/types";
 import { buildFallbackDescriptions } from "./migrate-v6.js";
 import { scheduleDocsPropagation } from "./docs-propagate.js";
+import { runM5Share, type M5ShareResult } from "./m5-share.js";
 
 /** pitfall 的非 IO 参数——便于测试 */
 export interface PitfallInput {
@@ -147,6 +148,25 @@ export async function executePitfall(
 
   const entry = buildEntry(input, now);
   store.add(entry);
+
+  // M5 自动管线（best-effort，不阻塞）：每条新规则跑闸门 1+2，
+  // 如判定 shareable 则自动 promote 到 .teamagent/team/<author>/
+  // 关闭：env TEAMAGENT_M5_AUTOSHARE=0
+  let m5Share: M5ShareResult | undefined;
+  if (env.TEAMAGENT_M5_AUTOSHARE !== "0") {
+    try {
+      const cwd = opts.cwd ?? process.cwd();
+      const summary = entry.reasoning || entry.correct_pattern || entry.trigger;
+      m5Share = await runM5Share({
+        projectRoot: cwd,
+        text: summary,
+        ruleId: entry.id,
+        now,
+      });
+    } catch {
+      /* M5 失败不影响 pitfall 写入 */
+    }
+  }
 
   // 重新编译 skills —— 合并所有 scope 的活跃条目。CLAUDE.md 规则块输出已禁用。
   await runCompile({
