@@ -8,6 +8,7 @@ export interface ProjectSnapshot {
   has_shared_claude_md: boolean;
   has_githooks_dir: boolean;
   has_pre_commit_hook: boolean;
+  has_post_merge_hook: boolean;
 }
 
 export interface InfectInput {
@@ -50,6 +51,25 @@ This file is auto-merged into the project's CLAUDE.md when team members run
 the team via git.
 `;
 
+const POST_MERGE_HOOK = `#!/usr/bin/env bash
+# TeamAgent M5 post-merge：拉取后自动同步团队规则进本地 KB
+# 设计：警告而不阻塞——sync 失败不能让 git pull 失败
+
+if [ "\${TEAMAGENT_BOOTSTRAP_SKIP:-}" = "1" ]; then
+  exit 0
+fi
+
+if ! command -v teamagent >/dev/null 2>&1; then
+  exit 0
+fi
+
+if teamagent --help 2>&1 | grep -q "m5-sync"; then
+  REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  teamagent m5-sync --project-root "$REPO_ROOT" --apply 2>&1 || true
+fi
+exit 0
+`;
+
 /**
  * 根据当前项目快照决定要往项目里写哪些文件、建哪些目录。
  * 纯函数；不动 IO。
@@ -81,6 +101,9 @@ export function planInfection(
   if (!snap.has_githooks_dir) dirs.push(".githooks");
   if (!snap.has_pre_commit_hook) {
     files[".githooks/pre-commit"] = PRE_COMMIT_HOOK;
+  }
+  if (!snap.has_post_merge_hook) {
+    files[".githooks/post-merge"] = POST_MERGE_HOOK;
   }
 
   const required = Object.keys(files).length > 0 || dirs.length > 0;

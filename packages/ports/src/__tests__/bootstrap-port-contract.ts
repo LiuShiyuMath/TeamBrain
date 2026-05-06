@@ -41,6 +41,7 @@ export function runBootstrapPortContract(
         has_shared_claude_md: false,
         has_githooks_dir: false,
         has_pre_commit_hook: false,
+        has_post_merge_hook: false,
       });
     });
 

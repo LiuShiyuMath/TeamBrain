@@ -2,6 +2,7 @@
 /**
  * SessionStart Hook entry. NEVER blocks UI. NEVER exits non-zero.
  */
+import * as os from "node:os";
 import {
   decideAction,
   spawnAutoInit,
@@ -11,6 +12,7 @@ import {
   maybeShowPendingBanner,
 } from "./session-start-logic.js";
 import { cleanupWikiResidue } from "./wiki-residue-cleanup.js";
+import { runM5Session, renderM5SessionBanner } from "./m5-session-hook.js";
 
 async function main(): Promise<void> {
   // B-090: best-effort cleanup of orphan ~/.teamagent/wiki-refresh-errors.log
@@ -56,6 +58,18 @@ async function main(): Promise<void> {
     if (shouldSpawnUpdater()) spawnUpdater();
   } catch (e) {
     logError("updater-spawn-failed", e);
+  }
+
+  // M5 自动管线：infect + bootstrap apply + sync apply（全部降级，不阻塞）
+  // 默认禁用：设 TEAMAGENT_M5_AUTOSESSION=1 启用（让用户先 opt-in 再扩散）
+  if (process.env["TEAMAGENT_M5_AUTOSESSION"] === "1") {
+    try {
+      const r = await runM5Session({ projectRoot: cwd, homeDir: os.homedir() });
+      const banner = renderM5SessionBanner(r);
+      if (banner) process.stderr.write(banner + "\n");
+    } catch (e) {
+      logError("m5-session-failed", e);
+    }
   }
 }
 

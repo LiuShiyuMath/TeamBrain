@@ -64,8 +64,9 @@ describe("DualLayerStore", () => {
     expect(store.getById("nope")).toBeUndefined();
   });
 
-  it("throws when team-scoped entry added (Phase 4 only)", () => {
-    expect(() => store.add(mkEntry("t1", "team" as any))).toThrow(/team.*phase 4|not supported/i);
+  it("M5: team-scoped entry routes to project store", () => {
+    store.add(mkEntry("t1", "team" as any));
+    expect(store.getById("t1")?.scope.level).toBe("team");
   });
 });
 

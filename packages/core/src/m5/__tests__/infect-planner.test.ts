@@ -9,6 +9,7 @@ function snapshot(overrides: Partial<ProjectSnapshot> = {}): ProjectSnapshot {
     has_shared_claude_md: false,
     has_githooks_dir: false,
     has_pre_commit_hook: false,
+    has_post_merge_hook: false,
     ...overrides,
   };
 }
@@ -28,6 +29,7 @@ describe("planInfection", () => {
       ".teamagent/shared-claude.md"
     );
     expect(Object.keys(plan.files_to_create)).toContain(".githooks/pre-commit");
+    expect(Object.keys(plan.files_to_create)).toContain(".githooks/post-merge");
     expect(plan.dirs_to_create).toContain(".teamagent/team");
     expect(plan.dirs_to_create).toContain(".teamagent/shared-skills");
     expect(plan.dirs_to_create).toContain(".githooks");
@@ -42,6 +44,7 @@ describe("planInfection", () => {
         has_shared_claude_md: true,
         has_githooks_dir: true,
         has_pre_commit_hook: true,
+        has_post_merge_hook: true,
       }),
       {
         author: "alice",

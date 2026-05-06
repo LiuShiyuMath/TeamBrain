@@ -34,6 +34,11 @@ import {
   renderM5StatusResult,
 } from "./commands/m5-status.js";
 import {
+  runM5Publish,
+  parseM5PublishArgs,
+  renderM5PublishResult,
+} from "./commands/m5-publish.js";
+import {
   executePitfall,
   runPitfallInteractive,
   parsePitfallArgs,
@@ -238,6 +243,12 @@ async function main(): Promise<void> {
       const opts = parseM5StatusArgs(rest);
       const result = await runM5Status(opts);
       process.stdout.write(renderM5StatusResult(result) + "\n");
+      return;
+    }
+    case "m5-publish": {
+      const opts = parseM5PublishArgs(rest);
+      const result = await runM5Publish(opts);
+      process.stdout.write(renderM5PublishResult(result) + "\n");
       return;
     }
     case "pitfall": {
@@ -738,6 +749,8 @@ async function main(): Promise<void> {
           "                                   [M5-C] 写 tombstone（任意人删任意规则）",
           "  teamagent m5-status [--project-root=<path>]",
           "                                   [M5-D] 综合面板：契约 + 本机 diff + 团队规则集统计",
+          "  teamagent m5-publish [--project-root=<path>] [--push]",
+          "                                   [M5-E] 自动 commit .teamagent/team/ 待变化（--push 同时推 origin）",
           "  teamagent pitfall                手动记录一条踩坑经验 (交互)",
           "  teamagent pitfall --non-interactive --trigger=... --wrong=... --correct=... --reason=...",
           "                                   非交互模式 (可选: --category=C|E|S|K --tags=a,b --level=personal|team|global --nature=objective|subjective)",

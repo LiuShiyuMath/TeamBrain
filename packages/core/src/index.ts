@@ -198,3 +198,4 @@ export {
   type ClaimWithSource,
   type MergeResult,
 } from "./m5/lww-merge.js";
+export { teamRuleToKnowledgeEntry } from "./m5/team-rule-projection.js";

@@ -1,16 +1,24 @@
 import { parseManifest, computeBootstrapDiff } from "@teamagent/core";
 import { FsBootstrap } from "@teamagent/adapters/m5/fs-bootstrap";
 import type { BootstrapDiff } from "@teamagent/types";
+import { executeInstallPlugins, type InstallPluginsResult } from "./install-plugins.js";
 
 export interface M5BootstrapOptions {
   projectRoot: string;
-  /** 仅检查、不执行安装动作（M5-A 默认行为）。 */
+  /** 仅检查、不执行安装动作（默认 true）。--apply 翻成 false 实际跑安装。 */
   checkOnly?: boolean;
 }
 
 export interface M5BootstrapResult {
   diff: BootstrapDiff | null;
   reason?: string;
+  /** --apply 模式下，实际执行的安装动作 */
+  applied?: {
+    plugins?: InstallPluginsResult;
+    teamagent_install_command?: string;
+    skills_pending?: string[];
+    hooks_pending?: string[];
+  };
 }
 
 export async function runM5Bootstrap(
@@ -31,8 +39,53 @@ export async function runM5Bootstrap(
   const localState = await port.getLocalState();
   const diff = computeBootstrapDiff(manifest, localState);
 
-  // M5-A 不做实际安装；只输出 diff（实际安装行为留给 M5-A2 / M5-D）
-  return { diff };
+  // --check 模式：只报 diff
+  if (opts.checkOnly !== false) {
+    return { diff };
+  }
+
+  // --apply 模式：跑实际安装动作（降级模式：失败不阻塞）
+  const applied: NonNullable<M5BootstrapResult["applied"]> = {};
+
+  if (diff.install_plugins.length > 0) {
+    try {
+      applied.plugins = await executeInstallPlugins({
+        only: diff.install_plugins,
+      });
+    } catch (e) {
+      // 安装失败也不抛——降级为空报告
+      applied.plugins = {
+        ok: false,
+        dryRun: false,
+        marketplaces: [],
+        plugins: diff.install_plugins.map((name) => ({
+          name,
+          status: "failed" as const,
+          detail: `install threw: ${(e as Error).message}`,
+        })),
+        summary: {
+          added: 0,
+          alreadyPresent: 0,
+          failed: diff.install_plugins.length,
+          wouldDo: 0,
+        },
+      };
+    }
+  }
+
+  if (diff.install_teamagent_version) {
+    applied.teamagent_install_command =
+      `npm install -g github:libz-renlab-ai/TeamBrain#release  # 升级到 ${diff.install_teamagent_version}+`;
+  }
+
+  if (diff.install_project_skills.length > 0) {
+    applied.skills_pending = diff.install_project_skills;
+  }
+  if (diff.install_hooks.length > 0) {
+    applied.hooks_pending = diff.install_hooks;
+  }
+
+  return { diff, applied };
 }
 
 export function parseM5BootstrapArgs(
@@ -51,6 +104,8 @@ export function parseM5BootstrapArgs(
       opts.projectRoot = a.slice("--project-root=".length);
     } else if (a === "--check") {
       opts.checkOnly = true;
+    } else if (a === "--apply") {
+      opts.checkOnly = false;
     }
   }
   return opts;
@@ -69,9 +124,31 @@ export function renderM5BootstrapResult(r: M5BootstrapResult): {
   if (!r.diff.needs_bootstrap) {
     return { output: "[m5-bootstrap] OK，无需动作。", exitCode: 0 };
   }
+  if (r.applied) {
+    const lines: string[] = ["[m5-bootstrap] 自动安装完成（apply 模式）："];
+    if (r.applied.plugins) {
+      const s = r.applied.plugins.summary;
+      lines.push(
+        `  插件：added=${s.added} already=${s.alreadyPresent} failed=${s.failed}`
+      );
+      for (const p of r.applied.plugins.plugins) {
+        lines.push(`    [${p.status}] ${p.name} — ${p.detail}`);
+      }
+    }
+    if (r.applied.teamagent_install_command) {
+      lines.push(`  CLI 升级（手动跑）：${r.applied.teamagent_install_command}`);
+    }
+    if (r.applied.skills_pending && r.applied.skills_pending.length) {
+      lines.push(`  Skill 待补：${r.applied.skills_pending.join(", ")}（M5-D2 自动）`);
+    }
+    if (r.applied.hooks_pending && r.applied.hooks_pending.length) {
+      lines.push(`  Hook 待补：${r.applied.hooks_pending.join(", ")}（teamagent install-user-hook）`);
+    }
+    // apply 模式即使有失败也 exit 0（降级原则）
+    return { output: lines.join("\n"), exitCode: 0 };
+  }
   return {
-    output:
-      "[m5-bootstrap] 需要补齐：\n" + JSON.stringify(r.diff, null, 2),
+    output: "[m5-bootstrap] 需要补齐：\n" + JSON.stringify(r.diff, null, 2),
     exitCode: 2,
   };
 }

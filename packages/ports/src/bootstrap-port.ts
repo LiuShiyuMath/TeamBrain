@@ -34,4 +34,5 @@ export interface ProjectProbe {
   has_shared_claude_md: boolean;
   has_githooks_dir: boolean;
   has_pre_commit_hook: boolean;
+  has_post_merge_hook: boolean;
 }

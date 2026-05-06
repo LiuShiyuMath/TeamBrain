@@ -1,8 +1,22 @@
-import { mergeLwwBatch, type MergeResult } from "@teamagent/core";
+import * as path from "node:path";
+import * as os from "node:os";
+import * as fs from "node:fs";
+import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import {
+  mergeLwwBatch,
+  teamRuleToKnowledgeEntry,
+  type MergeResult,
+} from "@teamagent/core";
 import { FsTeamRuleStore } from "@teamagent/adapters/m5/fs-team-rule-store";
+import { DualLayerStore } from "@teamagent/adapters";
 
 export interface M5SyncOptions {
   projectRoot: string;
+  /** --apply 模式：把 LWW 结果写入本地 KnowledgeStore */
+  apply?: boolean;
+  /** 自定义 KB store；测试可注入 */
+  kbStore?: { add: (e: any) => void; update: (id: string, patch: any) => void; delete: (id: string) => boolean; getById: (id: string) => any };
 }
 
 export interface M5SyncResult {
@@ -16,11 +30,17 @@ export interface M5SyncResult {
     /** alive 时 content 摘要（前 60 字符） */
     summary?: string;
   }>;
+  /** --apply 模式下实际写入的 KB 动作 */
+  applied?: {
+    upserted: string[];
+    deleted: string[];
+    skipped: Array<{ rule_id: string; reason: string }>;
+  };
 }
 
 export async function runM5Sync(opts: M5SyncOptions): Promise<M5SyncResult> {
-  const store = new FsTeamRuleStore();
-  const claims = await store.listAll(opts.projectRoot);
+  const fsStore = new FsTeamRuleStore();
+  const claims = await fsStore.listAll(opts.projectRoot);
   const merged = mergeLwwBatch(claims);
 
   const out: M5SyncResult["merged"] = [];
@@ -29,7 +49,76 @@ export async function runM5Sync(opts: M5SyncOptions): Promise<M5SyncResult> {
   }
   out.sort((a, b) => a.rule_id.localeCompare(b.rule_id));
 
-  return { total_claims: claims.length, merged: out };
+  const result: M5SyncResult = { total_claims: claims.length, merged: out };
+
+  if (opts.apply) {
+    const teamId = computeTeamId(opts.projectRoot);
+    const kb = opts.kbStore ?? openProjectKb(opts.projectRoot);
+    const applied: NonNullable<M5SyncResult["applied"]> = {
+      upserted: [],
+      deleted: [],
+      skipped: [],
+    };
+    for (const [ruleId, mr] of merged) {
+      if (!mr.winner) continue;
+      try {
+        if (mr.winner.deleted) {
+          const wasThere = kb.delete(ruleId);
+          if (wasThere) applied.deleted.push(ruleId);
+        } else {
+          const entry = teamRuleToKnowledgeEntry(
+            ruleId,
+            mr.winner,
+            mr.original_author ?? "unknown",
+            teamId
+          );
+          if (kb.getById(ruleId)) {
+            kb.update(ruleId, entry);
+          } else {
+            kb.add(entry);
+          }
+          applied.upserted.push(ruleId);
+        }
+      } catch (e) {
+        applied.skipped.push({
+          rule_id: ruleId,
+          reason: (e as Error).message,
+        });
+      }
+    }
+    result.applied = applied;
+  }
+
+  return result;
+}
+
+function computeTeamId(projectRoot: string): string | undefined {
+  try {
+    const url = execSync("git remote get-url origin", {
+      cwd: projectRoot,
+      encoding: "utf8",
+    }).trim();
+    if (!url) return undefined;
+    // normalize：去 .git、去 user/token、统一 host
+    const normalized = url
+      .replace(/\.git$/, "")
+      .replace(/^https?:\/\/[^@\/]+@/, "https://")
+      .toLowerCase();
+    return createHash("sha256")
+      .update(normalized)
+      .digest("hex")
+      .slice(0, 16);
+  } catch {
+    return undefined;
+  }
+}
+
+function openProjectKb(projectRoot: string): DualLayerStore {
+  const projectDbPath = path.join(projectRoot, ".teamagent", "knowledge.db");
+  const userGlobalDbPath = path.join(os.homedir(), ".teamagent", "global.db");
+  fs.mkdirSync(path.dirname(projectDbPath), { recursive: true });
+  fs.mkdirSync(path.dirname(userGlobalDbPath), { recursive: true });
+  return new DualLayerStore({ projectDbPath, userGlobalDbPath });
 }
 
 function formatMerged(
@@ -71,6 +160,8 @@ export function parseM5SyncArgs(args: readonly string[]): M5SyncOptions {
       opts.projectRoot = args[++i] ?? process.cwd();
     } else if (a.startsWith("--project-root=")) {
       opts.projectRoot = a.slice("--project-root=".length);
+    } else if (a === "--apply") {
+      opts.apply = true;
     }
   }
   return opts;
@@ -90,6 +181,14 @@ export function renderM5SyncResult(r: M5SyncResult): string {
       lines.push(
         `  ✗ ${m.rule_id} (tombstone by ${m.winner_claim_author}, original=${m.original_author})`
       );
+    }
+  }
+  if (r.applied) {
+    lines.push(
+      `[apply] upserted=${r.applied.upserted.length} deleted=${r.applied.deleted.length} skipped=${r.applied.skipped.length}`
+    );
+    for (const s of r.applied.skipped) {
+      lines.push(`  ! skip ${s.rule_id}: ${s.reason}`);
     }
   }
   return lines.join("\n");

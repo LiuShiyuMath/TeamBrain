@@ -43,6 +43,7 @@ export class FsBootstrap implements BootstrapPort {
       has_shared_claude_md: await exists(".teamagent/shared-claude.md"),
       has_githooks_dir: await exists(".githooks"),
       has_pre_commit_hook: await exists(".githooks/pre-commit"),
+      has_post_merge_hook: await exists(".githooks/post-merge"),
     };
   }
 
@@ -65,7 +66,11 @@ export class FsBootstrap implements BootstrapPort {
         // 已存在跳过
         continue;
       }
-      if (rel.endsWith("pre-commit") || rel.endsWith(".sh")) {
+      if (
+        rel.endsWith("pre-commit") ||
+        rel.endsWith("post-merge") ||
+        rel.endsWith(".sh")
+      ) {
         try {
           await fs.chmod(p, 0o755);
         } catch {
