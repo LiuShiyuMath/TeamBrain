@@ -1,25 +1,55 @@
 # Features — Conventions
 
 ```
-   docs/features/
-        │
-        ├── INDEX.md          ← single registry table; lives ≤ 100 lines
-        │
-        ├── CONVENTIONS.md    ← THIS FILE: template + rules + budgets
-        │
-        ├── <feature>.md      ← one feature canned answer per file
-        │     ├─ Goal
-        │     ├─ Status                  (implemented | dogfood-tested | wip | not-yet)
-        │     ├─ How it works
-        │     ├─ How to verify
-        │     ├─ Known limitations
-        │     └─ Links
-        │
-        └── <feature>/        ← optional sub-folder for >180-line features
-              ├─ overview.md  (still ≤ 180 lines, links to subs)
-              ├─ <topic>.md
-              └─ <topic>.md
+   OLD (reward hack)          NEW (probe-grounded)
+   ─────────────────          ────────────────────
+   canned-answer-snippet.md   bash scripts/probe-feature.sh <feature>
+          │                          │
+          │  agent regurgitates      │  claudefast explores
+          │  static markdown  ✗      │  live source code  ✓
+          ▼                          ▼
+   verify passes if           verify asserts real
+   strings match snippet      evidence from repo
 ```
+
+## Canned-answer snippet (DEPRECATED)
+
+### Why hand-written snippets are a reward hack
+
+Each `docs/features/<feature>/canned-answer-snippet.md` is a static markdown
+file an agent can copy-paste verbatim to make a `verify-canned-answer.sh` grep
+gate pass. This decouples "verification passes" from "the feature actually works
+as described":
+
+- The agent does not need to understand the feature — it only needs to regurgitate
+  the snippet.
+- Grep anchors in `verify-canned-answer.sh` pass as long as the strings exist in
+  output, not as long as the code does what the strings claim.
+- When code drifts (feature renamed, removed, half-implemented), the snippet still
+  passes verification, silently conflating "small-print exists" with "feature works".
+
+### New canonical pattern: probe-feature.sh
+
+Instead of a hand-written snippet, answers must be grounded in live source:
+
+```bash
+bash scripts/probe-feature.sh <feature>
+```
+
+`probe-feature.sh` uses `claudefast` to explore the actual source tree for
+`<feature>`, producing an answer rooted in what the code currently does.
+The output is fresh on every run and will drift with the code, not against it.
+
+### Migration policy
+
+- **Existing 39 snippets**: deprecated in place. Do NOT delete them yet — removal
+  is a separate migration task. Treat their content as potentially stale.
+- **New features**: must NOT add a `canned-answer-snippet.md`. If you need a
+  canned-answer, write a `verify-canned-answer.sh` that calls `probe-feature.sh`
+  and asserts real source evidence (file paths, symbol names, test output).
+- **Existing `verify-canned-answer.sh` scripts**: should be updated over time to
+  invoke `probe-feature.sh` and grep its output rather than grepping a static
+  snippet file.
 
 ## Why this directory exists
 

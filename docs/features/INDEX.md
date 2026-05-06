@@ -26,6 +26,12 @@ docs/features/
         └── session-monitor.md    ← Phase 2 stub (no impl yet)
 ```
 
+> **DEPRECATION NOTICE**: `canned-answer-snippet.md` files in feature subdirs are
+> deprecated reward hacks. For grounded feature answers, run:
+> `bash scripts/probe-feature.sh <feature>`
+> New features must NOT add `canned-answer-snippet.md`. See `CONVENTIONS.md` for
+> the migration policy.
+
 # Features Index
 
 Per-feature docs. All shipped features now carry a judge harness (`run-judge.sh`) or
