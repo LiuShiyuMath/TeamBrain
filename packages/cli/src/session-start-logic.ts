@@ -12,6 +12,7 @@ import {
   shouldCheckUpdate,
   type UpdateState,
 } from "@teamagent/core";
+import { rotateIfTooLarge } from "./log-rotate.js";
 
 export const DEFAULT_DEBOUNCE_HOURS = 24;
 
@@ -100,6 +101,8 @@ export function spawnAutoInit(cwd: string): void {
 export function logError(kind: string, err: unknown): void {
   try {
     const logPath = join(os.homedir(), ".teamagent", "session-start-errors.log");
+    // B-093: bound the log so it does not grow unbounded across sessions.
+    rotateIfTooLarge(logPath);
     appendFileSync(logPath, `[${new Date().toISOString()}] session-start:${kind} ${String(err)}\n`, "utf-8");
   } catch { /* silent */ }
 }
