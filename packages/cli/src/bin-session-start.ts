@@ -2,7 +2,8 @@
 /**
  * SessionStart Hook entry. NEVER blocks UI. NEVER exits non-zero.
  */
-import * as os from "node:os";
+import os from "node:os";
+import path from "node:path";
 import {
   decideAction,
   spawnAutoInit,
@@ -10,8 +11,10 @@ import {
   shouldSpawnUpdater,
   spawnUpdater,
   maybeShowPendingBanner,
+  maybeShowReinstallBanner,
 } from "./session-start-logic.js";
 import { cleanupWikiResidue } from "./wiki-residue-cleanup.js";
+import { cleanupDbBackups } from "./db-backup-cleanup.js";
 import { runM5Session, renderM5SessionBanner } from "./m5-session-hook.js";
 
 async function main(): Promise<void> {
@@ -19,6 +22,12 @@ async function main(): Promise<void> {
   // left over by the removed wiki subsystem (commit 280e4e8). Silent + cheap;
   // never blocks the hook.
   cleanupWikiResidue();
+
+  // B-094: prune legacy `*.before-*` schema-migration db backups in both
+  // user-global ~/.teamagent and project-local <cwd>/.teamagent so they do
+  // not accumulate forever. Best-effort.
+  const homeTeamagent = path.join(os.homedir(), ".teamagent");
+  cleanupDbBackups(homeTeamagent);
 
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
@@ -31,6 +40,9 @@ async function main(): Promise<void> {
       if (input.cwd) cwd = input.cwd;
     } catch { /* fallback to env/cwd */ }
   }
+
+  // B-094: project-scoped db backup pruning once we know cwd.
+  cleanupDbBackups(path.join(cwd, ".teamagent"));
 
   const action = decideAction(cwd, new Date());
   if (action === "auto-init") {
@@ -54,6 +66,9 @@ async function main(): Promise<void> {
 
   // 自动更新：先显示上次更新完成的 banner，再决定是否后台 spawn updater
   try { maybeShowPendingBanner(); } catch (e) { logError("banner-show-failed", e); }
+  // B-104: 如果自动更新连续失败（旧 SSH PACKAGE_SPEC 卡死），提示用户手动重装。
+  // 24h 节流，避免每次 SessionStart 刷屏。
+  try { maybeShowReinstallBanner(); } catch (e) { logError("reinstall-banner-failed", e); }
   try {
     if (shouldSpawnUpdater()) spawnUpdater();
   } catch (e) {

@@ -256,3 +256,51 @@ export function injectBlockIntoDoc(existing: string, block: string): string {
   const trimmed = existing.replace(/\n+$/, "");
   return trimmed + "\n\n" + block + "\n";
 }
+
+/**
+ * B-109: strip the legacy TEAMAGENT:START..END managed block from a doc.
+ *
+ * Background: PR #63 (2026-04-29) replaced the in-file CLAUDE.md rule dump
+ * with skills/docs propagation. The new compile path no longer writes the
+ * block, but any project that ran `compile` before #63 still has the block
+ * sitting in CLAUDE.md, and `teamagent doctor` flags it. There was no
+ * migration to remove it. This helper does that.
+ *
+ * Behavior:
+ * - If no TEAMAGENT:START/END markers are present → returns input unchanged.
+ * - If a well-formed block is present → removes the block and surrounding
+ *   blank-line padding so the doc reads cleanly afterwards.
+ * - Multiple blocks are removed (defensive — should not occur in practice).
+ */
+export function stripLegacyTeamagentBlock(existing: string): string {
+  const startTagRegex = /<!--\s*TEAMAGENT:START[^>]*-->/;
+  const endTagRegex = /<!--\s*TEAMAGENT:END[^>]*-->/;
+
+  let out = existing;
+  // Loop in case there is more than one block (legacy bug).
+  // Bound iterations to avoid pathological loops.
+  for (let i = 0; i < 8; i++) {
+    const startMatch = out.match(startTagRegex);
+    const endMatch = out.match(endTagRegex);
+    if (
+      !startMatch ||
+      !endMatch ||
+      startMatch.index === undefined ||
+      endMatch.index === undefined ||
+      endMatch.index <= startMatch.index
+    ) {
+      break;
+    }
+    let before = out.slice(0, startMatch.index);
+    let after = out.slice(endMatch.index + endMatch[0].length);
+    // Trim trailing blank lines on `before` and leading blank lines on
+    // `after` so removal does not leave a double-blank gap.
+    before = before.replace(/\n{2,}$/, "\n");
+    after = after.replace(/^\n{2,}/, "\n");
+    out = before + after;
+  }
+  // If the file is entirely the block (or block + trailing whitespace),
+  // collapse to empty string rather than leaving stray newlines.
+  if (out.trim() === "") return "";
+  return out;
+}

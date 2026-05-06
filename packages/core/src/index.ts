@@ -2,6 +2,7 @@ export { scoreEntry } from "./scorer.js";
 export {
   compileMarkdownBlock,
   injectBlockIntoDoc,
+  stripLegacyTeamagentBlock,
   BLOCK_START,
   BLOCK_END,
   type CompileMarkdownOptions,

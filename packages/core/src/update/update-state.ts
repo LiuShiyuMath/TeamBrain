@@ -14,6 +14,14 @@ export interface UpdateState {
   consecutive_install_failures: number;
   last_install_error: string | null;
   pending_banner: PendingBanner | null;
+  /**
+   * B-104: epoch ms when the "auto-update has been failing — please reinstall
+   * manually" banner was last shown to the user. 0 = never shown. Used by
+   * `maybeShowReinstallBanner` to throttle the banner so it does not spam the
+   * user every SessionStart while still surfacing within 24h. Optional in
+   * persisted JSON for backwards compat with pre-B-104 state files.
+   */
+  reinstall_banner_shown_at: number;
 }
 
 export function defaultUpdateState(): UpdateState {
@@ -26,6 +34,7 @@ export function defaultUpdateState(): UpdateState {
     consecutive_install_failures: 0,
     last_install_error: null,
     pending_banner: null,
+    reinstall_banner_shown_at: 0,
   };
 }
 
@@ -43,6 +52,8 @@ export function parseUpdateState(raw: string): UpdateState {
       consecutive_install_failures: typeof obj.consecutive_install_failures === "number" ? obj.consecutive_install_failures : def.consecutive_install_failures,
       last_install_error: typeof obj.last_install_error === "string" ? obj.last_install_error : null,
       pending_banner: isPendingBanner(obj.pending_banner) ? obj.pending_banner : null,
+      reinstall_banner_shown_at:
+        typeof obj.reinstall_banner_shown_at === "number" ? obj.reinstall_banner_shown_at : def.reinstall_banner_shown_at,
     };
   } catch {
     return def;

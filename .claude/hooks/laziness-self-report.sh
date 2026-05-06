@@ -12,6 +12,18 @@
 
 set -uo pipefail
 
+# B-092: jq is a hard dependency for parsing the hook payload and emitting a
+# decision JSON. On Windows (Git Bash) jq is not in PATH by default, which
+# would otherwise make every jq pipe silently produce empty output and let
+# Claude Code see "no decision" → approve. That makes the entire laziness
+# guard a silent no-op without anyone noticing. Detect the missing tool up
+# front, log one warning to stderr, and approve the turn safely.
+if ! command -v jq >/dev/null 2>&1; then
+  printf 'laziness-self-report: jq not found on PATH; laziness guard disabled (install jq to enable)\n' >&2
+  printf '{"continue": true, "suppressOutput": true}\n'
+  exit 0
+fi
+
 # Read hook input from stdin (Claude Code feeds JSON here)
 input=$(cat)
 

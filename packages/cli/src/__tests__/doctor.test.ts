@@ -116,7 +116,7 @@ describe("doctor CLAUDE.md checks", () => {
     }
   });
 
-  it("flags old generated TEAMAGENT blocks without using compile as a fix", () => {
+  it("flags old generated TEAMAGENT blocks and points users at --fix (B-109)", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "doctor-cli-"));
     try {
       fs.writeFileSync(
@@ -126,7 +126,11 @@ describe("doctor CLAUDE.md checks", () => {
       const claudeMd = checkClaudeMd(path.join(root, "CLAUDE.md"));
       expect(claudeMd?.status).toBe("fail");
       expect(claudeMd?.detail).toContain("旧 TEAMAGENT:START");
-      expect(claudeMd?.fix).toBeUndefined();
+      // The fix suggestion must NOT call `compile` (which would re-write the
+      // block); it must point at `doctor --fix` which strips the block.
+      expect(claudeMd?.fix).toBeDefined();
+      expect(claudeMd?.fix).toContain("doctor --fix");
+      expect(claudeMd?.fix).not.toMatch(/\bcompile\b/);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -198,6 +202,54 @@ describe("executeDoctor team-sharing boundary", () => {
         status: "skip",
         detail: expect.stringContaining("PARTIAL"),
       });
+    } finally {
+      workspace.cleanup();
+    }
+  });
+
+  // B-109: doctor --fix should strip the legacy TEAMAGENT block from CLAUDE.md
+  it("--fix strips legacy TEAMAGENT:START block and re-checks pass (B-109)", async () => {
+    const workspace = makeTempWorkspace();
+    try {
+      createKnowledgeDb(workspace.cwd);
+      const claudeMdPath = path.join(workspace.cwd, "CLAUDE.md");
+      fs.writeFileSync(
+        claudeMdPath,
+        "# Project\n\nManual notes here.\n\n<!-- TEAMAGENT:START - old -->\n- generated rule\n<!-- TEAMAGENT:END -->\n\nFooter.\n",
+      );
+      const result = await executeDoctor({
+        cwd: workspace.cwd,
+        homeDir: workspace.homeDir,
+        claudeProbe: passingClaudeProbe,
+        fix: true,
+      });
+      const claudeMd = result.checks.find((c) => c.name === "claude-md");
+      expect(claudeMd?.status).toBe("pass");
+      const after = fs.readFileSync(claudeMdPath, "utf-8");
+      expect(after).not.toContain("TEAMAGENT:START");
+      expect(after).toContain("Manual notes here.");
+      expect(after).toContain("Footer.");
+    } finally {
+      workspace.cleanup();
+    }
+  });
+
+  it("--fix removes CLAUDE.md when the file was only the legacy block (B-109)", async () => {
+    const workspace = makeTempWorkspace();
+    try {
+      createKnowledgeDb(workspace.cwd);
+      const claudeMdPath = path.join(workspace.cwd, "CLAUDE.md");
+      fs.writeFileSync(
+        claudeMdPath,
+        "<!-- TEAMAGENT:START - old -->\n- only rule\n<!-- TEAMAGENT:END -->\n",
+      );
+      await executeDoctor({
+        cwd: workspace.cwd,
+        homeDir: workspace.homeDir,
+        claudeProbe: passingClaudeProbe,
+        fix: true,
+      });
+      expect(fs.existsSync(claudeMdPath)).toBe(false);
     } finally {
       workspace.cleanup();
     }
