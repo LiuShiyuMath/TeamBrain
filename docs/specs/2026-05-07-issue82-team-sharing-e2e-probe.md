@@ -191,11 +191,7 @@ issue #82 整体 acceptance：**两个 run_id 各自的 judge.json 都 `pass==tr
 | 4 | claudefast / git / pnpm 系统级失败 |
 | 5 | branch_protection=on 但 push 居然成功（M5 spec 假设破裂，需新 issue） |
 
-## 8. 不在本 spec 范围内（明确划界）
+## 8. 不在本 spec 范围内
 
-- C3-strict（真 REPL 自由敲）的 metric 通道 — 见 `2026-05-07-issue82-m5-gaps-delta.md`
-- 跨项目 / 跨 org 的规则共享 — M5 spec §1 显式排除
-- cryptographic 签名 / 防恶意绕开 — M5 spec §1 显式排除
-- LWW + tombstone 的并发正确性 — 由 `xsync/run-judge.sh` + 单元测试覆盖
-- 闸门 1 / 闸门 2 的 PII 准确率 — 由 `pii-redaction/run-judge.sh` 覆盖
-- issue #81（3 人 personal-use eval）— 正交，本 probe 不替代
+- C3-strict 真 REPL 自由敲 metric 通道；跨项目 / 跨 org 共享；cryptographic 签名 — 见 gaps delta
+- LWW + tombstone 并发；闸门 1/2 PII 准确率；issue #81 — 由其它 judge harness / issue 覆盖
