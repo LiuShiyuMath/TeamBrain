@@ -162,7 +162,7 @@ claudefast -p "你是验收 judge。只读 .judge/<run>/judge.json 和 evidence/
 - **Judge OVERALL**: PASS（J1 typecheck 0、J2 vitest 6/6、J3 postinstall 6/6 anchors + 18 lines、**J4 wizard-first 4/5 anchors + tty_branch=true + state_created=true**、J5 wizard-second 1/1 anchor + completedSteps=1、J6 help-unchanged diff_bytes=0）
 - **LLM judge OVERALL**: PASS（claudefast 只读 `judge.json` + evidence/，每条 check 单独 PASS）
 - **PR URL**: https://github.com/libz-renlab-ai/TeamBrain/pull/99
-- **Atomic commits**: 9 个总数 — 6 初始（W1/W2/W3-bin/W3-docs/W4/spec）+ 1 spec report + 2 follow-up（W1 defaultSpawn fix、W4 J4 PTY 升级）
+- **Atomic commits**: 11 个总数 — 6 初始（W1/W2/W3-bin/W3-docs/W4/spec）+ 1 spec report + 2 follow-up（W1 defaultSpawn fix、W4 J4 PTY 升级）+ 1 spec final + 1 merge commit (resolve PRODUCT-FEATURES.md 冲突，与 main 的 M5 50-58 entries 共存：原 49 + M5 50-58 + 首次运行向导 → 59)
 - **Feature verification 1+2+3**:
   - (1) claudefast canonical JSON of `teamagent --help` → `.judge/2026-05-07T03-32-17Z/v1-claudefast.json`，commands 数 ≈ 47
   - (2) codex canonical JSON — **本机 codex CLI 401 unauthorized**（OpenAI key 失效），无法对照 hard-match。已记录原始 stderr 到 `.judge/2026-05-07T03-32-17Z/v2-codex.raw`；属环境限制，不属本 PR 缺陷
@@ -173,6 +173,7 @@ claudefast -p "你是验收 judge。只读 .judge/<run>/judge.json 和 evidence/
 - **Outstanding issues (P1/P2/P3)**:
   - **P1（已修）**：`first-run.ts:148` defaultSpawn ENOENT — 通过 commit `d513727 fix(m4): wire defaultSpawn to teamagent <choice> in PATH` 解决；W1 完成两轮迭代修复
   - **harness uplift**：commit `4ea3dc3 test(m4): J4 wizard via expect PTY + tty_branch field` — J4 从 pipe stdin 升级为 expect-driven PTY，新增 `tty_branch_entered` 字段杜绝 false positive
+  - **merge conflict (resolved)**：main 在 PR 期间 merge 了 M5-aggressive-defaults，与 first-run wizard 同时编号 50。conflict 局限在 `docs/PRODUCT-FEATURES.md`（counts/numbered list/table row 各 4 处）。解决：renumber 我方 50→59，把 first-run wizard 行放到 M5 viral-spread block 之后。`pnpm typecheck` 0 error / 6/6 vitest pass / judge harness OVERALL=PASS post-merge (run id `2026-05-07T04-05-04Z`)
   - 待 Codex round 2 review 反馈后追加
 
 ---
