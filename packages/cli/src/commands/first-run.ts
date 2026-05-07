@@ -50,8 +50,10 @@ function nextStep(completedSteps: string[]): string {
 }
 
 function defaultSpawn(cmd: string, args: string[]): Promise<number> {
+  // Wizard only triggers when the user runs `teamagent` (no args), so `teamagent`
+  // is guaranteed to be in PATH. Spawn it directly as the entry binary.
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { stdio: "inherit" });
+    const child = spawn("teamagent", [cmd, ...args], { stdio: "inherit" });
     child.on("close", (code) => resolve(code ?? 0));
     child.on("error", () => resolve(1));
   });
