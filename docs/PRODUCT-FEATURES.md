@@ -214,3 +214,4 @@ user-visible VERIFIED rows; this doc covers everything.
 
 See `docs/features/INDEX.md` for per-feature detail docs.
 See `docs/superpowers/specs/2026-04-15-product-roadmap.md` for Phase 2–6 roadmap.
+See `docs/specs/2026-05-07-landing-copy-actually-needed.md` for **the subset of features actually needed by the 30-second landing copy** — identifies which existing features to surface + 6 new features N1–N6 to build, with 11 grill decisions sealed and ADRs 0001–0003 cross-referenced. (Spec was written when this inventory had 49 features; the substance — which 8 to surface and which 6 to build — is unchanged by the m5 additions.)
