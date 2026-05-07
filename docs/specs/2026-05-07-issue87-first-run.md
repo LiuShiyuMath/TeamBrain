@@ -157,24 +157,52 @@ claudefast -p "你是验收 judge。只读 .judge/<run>/judge.json 和 evidence/
 
 ## 4. report (R 填，工人完工后)
 
-- **Final Run ID**: `2026-05-07T03-49-44Z`（修完 defaultSpawn + J4 PTY 后的最终 judge run）
-- **Workers status**: W1 / W2 / W3 / W4 全部 completed
-- **Judge OVERALL**: PASS（J1 typecheck 0、J2 vitest 6/6、J3 postinstall 6/6 anchors + 18 lines、**J4 wizard-first 4/5 anchors + tty_branch=true + state_created=true**、J5 wizard-second 1/1 anchor + completedSteps=1、J6 help-unchanged diff_bytes=0）
-- **LLM judge OVERALL**: PASS（claudefast 只读 `judge.json` + evidence/，每条 check 单独 PASS）
+### Final state — task #5 hand-off to team-lead
+
 - **PR URL**: https://github.com/libz-renlab-ai/TeamBrain/pull/99
-- **Atomic commits**: 11 个总数 — 6 初始（W1/W2/W3-bin/W3-docs/W4/spec）+ 1 spec report + 2 follow-up（W1 defaultSpawn fix、W4 J4 PTY 升级）+ 1 spec final + 1 merge commit (resolve PRODUCT-FEATURES.md 冲突，与 main 的 M5 50-58 entries 共存：原 49 + M5 50-58 + 首次运行向导 → 59)
+- **PR HEAD**: `ab28d34` (15th commit on `worktree-issues87`; CI checks green on this commit)
+- **mergeable / mergeStateStatus**: `MERGEABLE` / `CLEAN`
+- **Workers status**: W1 / W2 / W3 / W4 全部 completed (task #1-#4)
+- **Final Judge run ID**: `2026-05-07T04-11-20Z`（J4 strict pass condition with W1 fix in tree）
+- **Judge OVERALL**: PASS — all 6 checks PASS：
+  - J1 typecheck exit 0
+  - J2 vitest 6/6 pass
+  - J3 postinstall 6/6 anchors + 18 lines (≤30 limit)
+  - J4 wizard-noargs-first **anchors=4/5 + tty_branch=true + exit_code=0 + state_file_created=true**（4-condition strict）
+  - J5 wizard-noargs-second 上次你跑了 anchor + completedSteps=1
+  - J6 help-unchanged diff_bytes=0
+- **LLM judge OVERALL**: PASS（`claudefast` 只读 judge.json + evidence/，per-check PASS confirmed）
+- **CI status**: 3 workflows defined (`.github/workflows/ci.yml`, `nightly-llm-smoke.yml`, `release-branch.yml`); PR #99 status checks both **SUCCESS**（ubuntu + windows runners on Node 22 with pnpm typecheck + test + verify）
 - **Feature verification 1+2+3**:
-  - (1) claudefast canonical JSON of `teamagent --help` → `.judge/2026-05-07T03-32-17Z/v1-claudefast.json`，commands 数 ≈ 47
-  - (2) codex canonical JSON — **本机 codex CLI 401 unauthorized**（OpenAI key 失效），无法对照 hard-match。已记录原始 stderr 到 `.judge/2026-05-07T03-32-17Z/v2-codex.raw`；属环境限制，不属本 PR 缺陷
-  - (3) PTY-driven wizard via `expect`：选 "3" → 真实写入 `~/.teamagent/first-run-state.json` `{"completedSteps":["--help"]}`，证明 `defaultSpawn` 已正确 wire 到 PATH 上的 `teamagent <choice>`
+  - (1) claudefast canonical JSON of `teamagent --help` → `.judge/2026-05-07T03-32-17Z/v1-claudefast.json`（commands 数 ≈ 47 + `TEAMAGENT_VISIBILITY` env var）
+  - (2) codex canonical JSON — **本机 codex CLI 401 unauthorized**（OpenAI key 失效），无法对照 hard-match。原始 stderr 在 `.judge/2026-05-07T03-32-17Z/v2-codex.raw`；属环境限制，不属本 PR 缺陷
+  - (3) PTY-driven wizard via `expect`：选 "3" → 真实写入 `~/.teamagent/first-run-state.json` `{"completedSteps":["--help"]}`，证明 `defaultSpawn` 走 `process.argv[1]` 在 dev (tsx) + prod (compiled) 都 work
+- **Atomic commits (15 total on PR branch)**:
+  1. `6095e35 feat(m4): add first-run wizard module + tests` (W1)
+  2. `8b5a640 feat(m4): extend postinstall welcome with 3-actions block` (W2)
+  3. `ceeece9 feat(m4): wire teamagent no-args to first-run wizard` (W3 bin.ts)
+  4. `44cdd3c docs(m4): record first-run feature` (W3 docs)
+  5. `6d706a3 test(m4): add issue-87 judge harness + help baseline` (W4)
+  6. `a8402f8 docs(m4): add issue-87 spec` (R)
+  7. `8687040 docs(m4): record issue-87 spec report section` (R)
+  8. `d513727 fix(m4): wire defaultSpawn to teamagent <choice> in PATH` (W1 round 1 fix for Codex P1)
+  9. `4ea3dc3 test(m4): J4 wizard via expect PTY + tty_branch field` (W4 round 1 harness uplift)
+  10. `7f9676d docs(m4): update issue-87 spec report with fixes` (R)
+  11. `bb00932 Merge remote-tracking branch 'origin/main'` (R conflict resolution)
+  12. `1b541d4 docs(m4): record main merge + conflict resolution in spec` (R)
+  13. `8aa8bc1 fix(m4): spawn current CLI entrypoint via process.argv[1]` (W1 round 2 fix for Codex P1 round 2)
+  14. `ab28d34 test(m4): J4 pass requires exit_code=0 + state_file_created` (W4 round 2 fix for Codex P2)
+  15. _next commit_ `docs(m4): finalize issue-87 spec report` (R)
 - **Codex review iteration**:
-  - **Round 1（初始 PR）**：Codex P1 inline comment on `first-run.ts:148` "Spawn CLI entrypoint instead of subcommand literal" — 与 R 通过 PTY 验证发现的同一 bug 完全吻合
-  - **Round 2（follow-up commits）**：等 Codex 重新 review；用 `@codex review` 触发
-- **Outstanding issues (P1/P2/P3)**:
-  - **P1（已修）**：`first-run.ts:148` defaultSpawn ENOENT — 通过 commit `d513727 fix(m4): wire defaultSpawn to teamagent <choice> in PATH` 解决；W1 完成两轮迭代修复
-  - **harness uplift**：commit `4ea3dc3 test(m4): J4 wizard via expect PTY + tty_branch field` — J4 从 pipe stdin 升级为 expect-driven PTY，新增 `tty_branch_entered` 字段杜绝 false positive
-  - **merge conflict (resolved)**：main 在 PR 期间 merge 了 M5-aggressive-defaults，与 first-run wizard 同时编号 50。conflict 局限在 `docs/PRODUCT-FEATURES.md`（counts/numbered list/table row 各 4 处）。解决：renumber 我方 50→59，把 first-run wizard 行放到 M5 viral-spread block 之后。`pnpm typecheck` 0 error / 6/6 vitest pass / judge harness OVERALL=PASS post-merge (run id `2026-05-07T04-05-04Z`)
-  - 待 Codex round 2 review 反馈后追加
+  - **Round 1**：1 P1 inline on `first-run.ts:148` "Spawn CLI entrypoint instead of subcommand literal" — fixed in `d513727`
+  - **Round 2**：2 new findings — P1 "Spawn current CLI entrypoint instead of hardcoding teamagent" → fixed in `8aa8bc1`；P2 "Fail J4 when wizard action exits non-zero" → fixed in `ab28d34`
+  - **Round 3**：repost of round-1/round-2 findings against earlier commits（GitHub UI reposts inline comments per review）。Reporter posted PR comment confirming the addressed-by commits with explicit references
+  - **Round 4**：requested via `@codex review HEAD ab28d34`，**Codex hit usage limit and did not respond**
+- **Codex stop-condition assessment**: All 3 distinct findings (round-1 + round-2 P1 + round-2 P2) are **fixed in code on HEAD**, with judge harness OVERALL=PASS, real PTY e2e write proof, and CI green. Codex's silence on round-4 is "limit-throttled"，not "approved"，which is **not the same as silent or 👍** under the strict POSTPR rule. Reporter recommends **option (b)** — accept code-level evidence as equivalent to silent for now，since (1) every Codex finding is concretely addressed, (2) judge harness has a strict 4-condition J4 catching the original spawn bug, (3) CI is green on both ubuntu + windows runners. User can override with option (a) "wait for limit refresh" or option (c) "claudefast adversarial review" if higher confidence is required before merge.
+- **Outstanding for user**:
+  - **P0 / merge gate**: nothing technical blocks merge. CI green, conflicts resolved, judge PASS, all Codex findings fixed.
+  - **P3 / nice-to-have**: feature verification (2) codex hard-match deferred until codex CLI auth restored (env limit, not code defect)
+  - **Decision**: user owns the merge button. Reporter does not merge per spec rule.
 
 ---
 
