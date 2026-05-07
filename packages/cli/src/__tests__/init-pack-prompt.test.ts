@@ -122,6 +122,64 @@ describe("init pack prompt + --pack flag", () => {
       expect(step?.status).toBe("ok");
       expect(step?.detail).toMatch(/2 个 pack/);
     });
+
+    // Regression — Codex review on PR #110 (P2): summary.totalActiveEntries
+    // must include pack-added rules. Phase C now runs BEFORE the totalActive
+    // computation, so the count reflects the global store post-pack-add.
+    it("summary.totalActiveEntries counts pack-added rules", async () => {
+      const baseline = await executeInit({
+        cwd: dirs.cwd,
+        homeDir: dirs.home,
+        skipImport: true,
+        skipHook: true,
+        skipWarmup: true,
+        skipSeed: true,
+        packsDir: dirs.packsDir,
+      });
+      // Fresh home for the second run so packs actually get added.
+      const home2 = path.join(path.dirname(dirs.home), "home2");
+      fs.mkdirSync(home2, { recursive: true });
+      const withPack = await executeInit({
+        cwd: dirs.cwd,
+        homeDir: home2,
+        skipImport: true,
+        skipHook: true,
+        skipWarmup: true,
+        skipSeed: true,
+        packsDir: dirs.packsDir,
+        pack: "all",
+      });
+      expect(withPack.summary.totalActiveEntries).toBeGreaterThan(
+        baseline.summary.totalActiveEntries,
+      );
+    });
+
+    // Regression — Codex review on PR #110 (P2): install log must include
+    // the new load-pack / pack-prompt steps. Phase C now appends to steps[]
+    // BEFORE appendInstallLog runs.
+    it("install log records load-pack step", async () => {
+      const result = await executeInit({
+        cwd: dirs.cwd,
+        homeDir: dirs.home,
+        skipImport: true,
+        skipHook: true,
+        skipWarmup: true,
+        skipSeed: true,
+        packsDir: dirs.packsDir,
+        pack: "all",
+      });
+      expect(result.ok).toBe(true);
+      const logPath = path.join(dirs.home, ".teamagent", ".install-log");
+      expect(fs.existsSync(logPath)).toBe(true);
+      const last = fs
+        .readFileSync(logPath, "utf-8")
+        .trim()
+        .split(/\r?\n/)
+        .pop()!;
+      const payload = JSON.parse(last) as { steps: Array<{ step: string }> };
+      const stepNames = payload.steps.map((s) => s.step);
+      expect(stepNames).toContain("load-pack");
+    });
   });
 
   describe("--pack <names> bypass", () => {

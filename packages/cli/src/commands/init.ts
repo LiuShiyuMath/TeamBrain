@@ -233,47 +233,19 @@ export async function executeInit(opts: InitOptions = {}): Promise<InitResult> {
     steps.push({ step: "warmup", status: "skipped", detail: "skipWarmup / dryRun / test env" });
   }
 
-  if (!dryRun) {
-    try {
-      appendInstallLog(paths.installLogPath, steps, now);
-    } catch {
-      // ignore
-    }
-  }
-
-  let totalActive = 0;
-  if (dryRun) {
-    totalActive = presetStep.wouldAddCount + seedStep.wouldAddCount + importStep.wouldImport;
-  } else {
-    try {
-      fs.mkdirSync(path.dirname(paths.projectDbPath), { recursive: true });
-      fs.mkdirSync(path.dirname(paths.userGlobalDbPath), { recursive: true });
-      const store = new DualLayerStore({
-        projectDbPath: paths.projectDbPath,
-        userGlobalDbPath: paths.userGlobalDbPath,
-      });
-      totalActive = store.findActive().length;
-      store.close();
-    } catch {
-      // ignore
-    }
-  }
-
-  const summary = {
-    stack: stackSummary,
-    presetAdded: presetStep.addedCount,
-    seedAdded: seedStep.addedCount,
-    importedRules: importStep.importedCount,
-    totalActiveEntries: totalActive,
-  };
-
   // ---------- Phase C: Pack management (ADR 0002) ----------
+  // Run BEFORE appendInstallLog and totalActive computation so that:
+  //   1. load-pack / pack-prompt steps land in ~/.teamagent/.install-log
+  //      (audit trail covers pack failures too — Codex review #110 P2).
+  //   2. summary.totalActiveEntries reflects pack-added rules (otherwise
+  //      callers see a stale count — Codex review #110 P2).
   // When --pack <names> is given, install packs as a normal init step.
   // Otherwise, render the versioned markdown prompt for the coding agent.
   let packPrompt = "";
   const packsDir = resolvePacksDir(opts.packsDir);
   const observed = collectObservedFiles(paths.cwd);
   const available = packsDir ? readPackRegistry(packsDir) : [];
+  let packAddedRules = 0;
 
   if (opts.pack && opts.pack.trim().length > 0) {
     const requested = opts.pack
@@ -295,8 +267,8 @@ export async function executeInit(opts: InitOptions = {}): Promise<InitResult> {
         });
         const parts: string[] = [];
         if (result.added.length > 0) {
-          const total = result.added.reduce((s, a) => s + a.rules, 0);
-          parts.push(`安装 ${result.added.length} 个 pack（${total} 条规则）`);
+          packAddedRules = result.added.reduce((s, a) => s + a.rules, 0);
+          parts.push(`安装 ${result.added.length} 个 pack（${packAddedRules} 条规则）`);
         }
         if (result.alreadyInstalled.length > 0) {
           parts.push(`已存在: ${result.alreadyInstalled.join(", ")}`);
@@ -346,6 +318,45 @@ export async function executeInit(opts: InitOptions = {}): Promise<InitResult> {
       ),
     );
   }
+
+  // Install log + totalActive must run AFTER Phase C so they observe pack steps + rules.
+  if (!dryRun) {
+    try {
+      appendInstallLog(paths.installLogPath, steps, now);
+    } catch {
+      // ignore
+    }
+  }
+
+  let totalActive = 0;
+  if (dryRun) {
+    totalActive =
+      presetStep.wouldAddCount +
+      seedStep.wouldAddCount +
+      importStep.wouldImport +
+      packAddedRules;
+  } else {
+    try {
+      fs.mkdirSync(path.dirname(paths.projectDbPath), { recursive: true });
+      fs.mkdirSync(path.dirname(paths.userGlobalDbPath), { recursive: true });
+      const store = new DualLayerStore({
+        projectDbPath: paths.projectDbPath,
+        userGlobalDbPath: paths.userGlobalDbPath,
+      });
+      totalActive = store.findActive().length;
+      store.close();
+    } catch {
+      // ignore
+    }
+  }
+
+  const summary = {
+    stack: stackSummary,
+    presetAdded: presetStep.addedCount,
+    seedAdded: seedStep.addedCount,
+    importedRules: importStep.importedCount,
+    totalActiveEntries: totalActive,
+  };
 
   const ok = !steps.some((s) => s.status === "failed");
   return finalize(ok, dryRun, steps, summary, packPrompt);
