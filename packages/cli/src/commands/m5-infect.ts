@@ -32,7 +32,10 @@ export async function runM5Infect(
   });
 
   const snap = await port.probeProject(opts.projectRoot);
-  const author = opts.author ?? gitUserName() ?? "unknown";
+  // 优先项目级 git config（cwd=projectRoot 让 SessionStart hook 跑时也能拿到
+  // 项目里设置的 user.name）；fallback 全局 git config；再 fallback "unknown"
+  const author =
+    opts.author ?? gitUserName(opts.projectRoot) ?? gitUserName() ?? "unknown";
   const teamagent_version =
     opts.teamagentVersion ?? (await readSelfVersion()) ?? "0.0.0";
   const now = opts.now ?? new Date().toISOString();
@@ -74,9 +77,12 @@ async function readSelfVersion(): Promise<string | null> {
   }
 }
 
-function gitUserName(): string | null {
+function gitUserName(cwd?: string): string | null {
   try {
-    return execSync("git config user.name", { encoding: "utf8" }).trim() || null;
+    return execSync("git config user.name", {
+      encoding: "utf8",
+      ...(cwd ? { cwd } : {}),
+    }).trim() || null;
   } catch {
     return null;
   }
