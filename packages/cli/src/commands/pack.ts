@@ -108,9 +108,20 @@ export function readPackRegistry(packsDir: string): PackMeta[] {
   return metas;
 }
 
+/**
+ * Read rules from `<packsDir>/<name>.jsonl`. Throws when the file is missing
+ * — Codex review on PR #110 (P2): silently treating a missing rule file as
+ * an empty rule set lets `pack add` report success while installing nothing,
+ * masking packaging / registry mismatches. Callers translate the throw into
+ * a `failed` entry so the caller can see exactly which pack was broken.
+ */
 function readPackRules(packsDir: string, name: string): KnowledgeEntry[] {
   const file = path.join(packsDir, `${name}.jsonl`);
-  if (!fs.existsSync(file)) return [];
+  if (!fs.existsSync(file)) {
+    throw new Error(
+      `pack rule file missing: ${file} (registry meta is present but the jsonl is not — packaging / registry mismatch)`,
+    );
+  }
   const text = fs.readFileSync(file, "utf-8");
   return text
     .split(/\r?\n/)
@@ -118,18 +129,35 @@ function readPackRules(packsDir: string, name: string): KnowledgeEntry[] {
     .map((l) => JSON.parse(l) as KnowledgeEntry);
 }
 
-function findInstalledPackNames(
+/**
+ * Discover installed pack names from store tags directly — Codex review on
+ * PR #110 (P2): iterating only over `available` metadata makes any
+ * already-installed pack invisible if its meta file was renamed or removed
+ * after the install. Scanning store tags catches those orphan installs so
+ * `pack list` reports them honestly (with synthesized metadata).
+ */
+function findInstalledPackNamesFromStore(
   store: SqliteKnowledgeStore,
-  available: PackMeta[],
 ): string[] {
   const all = store.getAll();
   const names = new Set<string>();
-  for (const meta of available) {
-    if (all.some((e) => entryHasPackTag(e, meta.name))) {
-      names.add(meta.name);
+  for (const e of all) {
+    for (const t of e.tags ?? []) {
+      if (t.startsWith("pack:")) names.add(t.slice("pack:".length));
     }
   }
   return [...names].sort();
+}
+
+function orphanMetaStub(name: string): PackMeta {
+  return {
+    name,
+    description:
+      "(metadata unavailable — pack rules are installed but the registry has no matching meta.json)",
+    tags: [],
+    file_hints: [],
+    prompt_version: 1,
+  };
 }
 
 export function executePackList(opts: PackCommonOptions = {}): PackListResult {
@@ -141,8 +169,11 @@ export function executePackList(opts: PackCommonOptions = {}): PackListResult {
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
     const store = new SqliteKnowledgeStore(openDb(dbPath));
     try {
-      const names = findInstalledPackNames(store, available);
-      installed = available.filter((m) => names.includes(m.name));
+      const names = findInstalledPackNamesFromStore(store);
+      installed = names.map((name) => {
+        const meta = available.find((m) => m.name === name);
+        return meta ?? orphanMetaStub(name);
+      });
     } finally {
       store.close();
     }
@@ -162,7 +193,7 @@ export function executePackAdd(
   const added: PackAddResult["added"] = [];
   const failed: PackAddResult["failed"] = [];
   try {
-    const installedNames = findInstalledPackNames(store, available);
+    const installedNames = findInstalledPackNamesFromStore(store);
     const diff = diffPackRequest({
       requested: names,
       available: available.map((m) => m.name),
@@ -170,7 +201,12 @@ export function executePackAdd(
     });
     for (const name of diff.toAdd) {
       try {
-        const rules = packsDir ? readPackRules(packsDir, name) : [];
+        if (!packsDir) {
+          throw new Error(
+            "no packs registry resolved (set TEAMAGENT_PACKS_DIR or ensure seed/packs/ exists)",
+          );
+        }
+        const rules = readPackRules(packsDir, name);
         let inserted = 0;
         for (const r of rules) {
           if (store.getById(r.id)) continue;

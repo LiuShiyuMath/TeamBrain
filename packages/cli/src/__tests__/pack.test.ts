@@ -150,6 +150,44 @@ describe("pack CLI", () => {
       expect(r.notInstalled).toEqual(["frontend-js"]);
     });
   });
+
+  // Regression — Codex review on PR #110 (P2): packaging mismatches must fail loud.
+  describe("registry / packaging mismatches (Codex P2 fixes)", () => {
+    it("pack add fails when meta exists but rule jsonl is missing", () => {
+      // Remove the rule file but keep the meta — simulates a packaging mismatch.
+      fs.unlinkSync(path.join(dirs.packsDir, "frontend-js.jsonl"));
+      const r = executePackAdd(["frontend-js"], {
+        packsDir: dirs.packsDir,
+        homeDir: dirs.home,
+      });
+      expect(r.added).toEqual([]);
+      expect(r.failed.map((f) => f.name)).toEqual(["frontend-js"]);
+      expect(r.failed[0]!.error).toMatch(/rule file missing/);
+      expect(packAddExitCode(r)).toBe(1);
+    });
+
+    it("pack list shows orphan pack (rules in store but meta missing)", () => {
+      // Install both, then delete one's meta to make it orphan.
+      executePackAdd(["frontend-js", "ops-safety"], {
+        packsDir: dirs.packsDir,
+        homeDir: dirs.home,
+      });
+      fs.unlinkSync(path.join(dirs.packsDir, "ops-safety.meta.json"));
+      fs.unlinkSync(path.join(dirs.packsDir, "ops-safety.jsonl"));
+
+      const r = executePackList({
+        packsDir: dirs.packsDir,
+        homeDir: dirs.home,
+      });
+      const installedNames = r.installed.map((m) => m.name).sort();
+      // Both should still surface as installed — orphan must NOT vanish.
+      expect(installedNames).toEqual(["frontend-js", "ops-safety"]);
+      const orphan = r.installed.find((m) => m.name === "ops-safety")!;
+      expect(orphan.description).toMatch(/metadata unavailable/);
+      // The available list (from registry) only shows packs whose meta still exists.
+      expect(r.available.map((m) => m.name)).toEqual(["frontend-js"]);
+    });
+  });
 });
 
 describe("parsePackArgs", () => {
