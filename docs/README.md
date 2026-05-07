@@ -14,6 +14,7 @@ the indexes below to choose what to read first.
 | Launch the real-time dashboard | Run `pnpm teamagent dashboard --watch --open` |
 | Plan a PR — what to write, what to ship, how to verify, which probes to run | [HOWTO-PLAN-PR.md](HOWTO-PLAN-PR.md) |
 | Verify or test a feature/fix, including PR review gates | [feature-verification.md](feature-verification.md) |
+| Run the autonomous verification loop on a product feature (#1–64) | [verify/RUN-VERIFY-LOOP.md](verify/RUN-VERIFY-LOOP.md) |
 | Prepare a verified-only CEO/VC ship-status CSV | [PRESHIP.md](PRESHIP.md) |
 | Live-preview / dogfood agent edits in two tmux panes | [DOGFOOD.md](DOGFOOD.md) |
 | Report a bug — system info + repro + raw logs to GitHub | [BUGREPORT.md](BUGREPORT.md) |
@@ -52,6 +53,12 @@ the indexes below to choose what to read first.
    `/export`, PR review gate, and commit/PR evidence.
 2. [pr-14-status.md](pr-14-status.md) for the current PR #14 local status
    index when GitHub access is blocked.
+3. [verify/RUN-VERIFY-LOOP.md](verify/RUN-VERIFY-LOOP.md) for the
+   autonomous loop the main agent runs per product feature — composes
+   GOAL.md from 5 sources, calls JUDGE, then `--bare` META-JUDGE decides
+   STILL_MOVING / STUCK_REPEATING / STUCK_DESIGN_FLAW. See also
+   [verify/GOAL-COMPOSER.md](verify/GOAL-COMPOSER.md) and
+   [verify/META-JUDGE.md](verify/META-JUDGE.md).
 
 ### Milestone Work
 
@@ -70,6 +77,7 @@ the indexes below to choose what to read first.
 | `gstack/` | Approved `/office-hours` design docs that downstream gstack review skills can discover automatically. |
 | `notes/` | Small decision records. |
 | `feature-verification.md` | Feature/fix verification gate and evidence requirements. |
+| `verify/` | Autonomous verification loop playbook for product features (RUN-VERIFY-LOOP, GOAL-COMPOSER, META-JUDGE). |
 | `features/` | Short per-feature canned answer docs and conventions. |
 | `knowledge/` | Project knowledge index and docs propagation notes. |
 | `pr-14-status.md` | PR #14 local status index for restricted verification sessions. |
