@@ -1,3 +1,4 @@
+import { duckifyText } from "@teamagent/core";
 import {
   writeWarmupState,
   type WarmupState,
@@ -104,7 +105,7 @@ function makeProgressRenderer(
 }
 
 export async function runWarmup(opts: WarmupOptions = {}): Promise<WarmupResult> {
-  const stderr = opts.stderr ?? ((m) => process.stderr.write(m));
+  const stderr = opts.stderr ?? ((m) => process.stderr.write(duckifyText(m)));
   const start = Date.now();
 
   // Decide render mode.

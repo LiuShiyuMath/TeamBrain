@@ -1,3 +1,4 @@
+import { duckifyText } from "@teamagent/core";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -1204,7 +1205,7 @@ export function renderInitResult(result: InitResult): string {
     lines.push(result.packPrompt);
   }
 
-  return lines.join("\n") + "\n";
+  return duckifyText(lines.join("\n") + "\n");
 }
 
 function stepLabel(step: string): string {
