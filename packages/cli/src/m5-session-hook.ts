@@ -106,12 +106,13 @@ export async function runM5Session(input: {
     }
   }
 
-  // 4) publish：auto-commit pending L2 changes（push 仅在 opt-in 时跑）
+  // 4) publish：auto-commit pending L2 changes 并 push（spec §7 激进模式默认 push）
+  // push 失败时降级为 push_error，不抛——commit 已留在本地，下次 SessionStart 再推
   if (isInfected(input.projectRoot)) {
     try {
       const pub = await runM5Publish({
         projectRoot: input.projectRoot,
-        push: input.autoPush ?? false,
+        push: input.autoPush ?? true,
       });
       r.published_changes = pub.changes_count;
       r.pushed = pub.pushed;

@@ -59,9 +59,12 @@ A–E, merged to `main` via PR #71). Concretely:
   `teamagent m5-sync --apply`, which runs LWW + tombstone merge into the local
   KB. Verify: `bash scripts/m5-auto-demo.sh` (Step 7 confirms recipient KB
   contains the sender's rule).
-- **SessionStart auto-pull**: enabled via `TEAMAGENT_M5_AUTOSESSION=1`
-  (opt-in today; PR-2 will flip the default). Runs the full chain
-  `infect → bootstrap apply → sync apply → publish`.
+- **SessionStart auto-pull**: **on by default** (spec §7 激进模式). Runs the
+  full chain `infect → bootstrap apply → sync apply → publish (incl. push)`
+  on every Claude Code SessionStart in a git project where the user already
+  has TeamAgent (`~/.teamagent/global.db` exists). Disable with
+  `TEAMAGENT_M5_AUTOSESSION=0`; disable just auto-push with
+  `TEAMAGENT_M5_AUTOPUSH=0`. Failures are non-blocking (banner shows ⚠).
 - **Conflict resolution**: LWW + tombstone (`packages/core/src/m5/lww-merge.ts`),
   pure function with unit-test coverage; tombstones survive in JSON for audit.
 - **Team boundary**: `team_id = SHA256(normalize(git remote))[:16]` in
@@ -122,9 +125,12 @@ bash scripts/m5-auto-demo.sh   # 7 steps: infect → pitfall auto-share → m5-p
 
 - Tombstone JSON files in `.teamagent/team/<author>/` are never garbage-collected;
   long-lived projects will accumulate them (spec §13 R3).
-- Auto-push (SessionStart auto-publish followed by `git push`) is opt-in via
-  `TEAMAGENT_M5_AUTOPUSH=1`; commit is automatic, push waits for the user (PR-2
-  will flip the default once Codex review confirms the safety story).
+- Auto-push runs on every SessionStart (spec §7 激进模式). The previous opt-in
+  was flipped in PR-2; secret-scanner + scope-classifier gates remain
+  uncloseable, and push failure does not block the user (banner shows ⚠ and
+  the commit stays local for the next attempt). Set `TEAMAGENT_M5_AUTOPUSH=0`
+  to keep auto-commit but skip auto-push, or `TEAMAGENT_M5_AUTOSESSION=0` to
+  disable the full auto chain.
 - `teamagent doctor --json` may still report `team-sharing` as `PARTIAL` until
   the doctor probe is updated to look for M5 manifest + post-merge hook.
 

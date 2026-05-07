@@ -66,8 +66,8 @@ ls "$ALICE/.teamagent/team/alice/" 2>&1 || true
 
 # ============ Step 3: Alice m5-publish 自动 commit ============
 echo
-echo "===== Step 3: Alice m5-publish 自动 commit team 文件 ====="
-( cd "$ALICE" && pnpm --silent --dir "$REPO" teamagent m5-publish --project-root "$ALICE" 2>&1 | grep -v "Experimental" )
+echo "===== Step 3: Alice m5-publish 自动 commit team 文件（demo 阶段没 origin，--no-push 跳过 push）====="
+( cd "$ALICE" && pnpm --silent --dir "$REPO" teamagent m5-publish --project-root "$ALICE" --no-push 2>&1 | grep -v "Experimental" )
 
 echo
 echo "===== Alice git log ====="

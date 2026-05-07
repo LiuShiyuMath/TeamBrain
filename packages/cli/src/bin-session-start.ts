@@ -76,14 +76,15 @@ async function main(): Promise<void> {
   }
 
   // M5 自动管线：infect + bootstrap apply + sync apply + auto-publish（全部降级，不阻塞）
-  // 默认禁用：设 TEAMAGENT_M5_AUTOSESSION=1 启用（让用户先 opt-in 再扩散）
-  // auto-push 进一步 opt-in：TEAMAGENT_M5_AUTOPUSH=1
-  if (process.env["TEAMAGENT_M5_AUTOSESSION"] === "1") {
+  // 默认开启（spec §7"激进模式"）：设 TEAMAGENT_M5_AUTOSESSION=0 显式关闭
+  // auto-push 也默认开启：设 TEAMAGENT_M5_AUTOPUSH=0 显式关闭
+  // 闸门 1 (secret scanner) + 闸门 2 (scope classifier) 兜底，规则离不开本机前都已过两道闸
+  if (process.env["TEAMAGENT_M5_AUTOSESSION"] !== "0") {
     try {
       const r = await runM5Session({
         projectRoot: cwd,
         homeDir: os.homedir(),
-        autoPush: process.env["TEAMAGENT_M5_AUTOPUSH"] === "1",
+        autoPush: process.env["TEAMAGENT_M5_AUTOPUSH"] !== "0",
       });
       const banner = renderM5SessionBanner(r);
       if (banner) process.stderr.write(banner + "\n");
