@@ -136,15 +136,42 @@ fi
 echo "[J3] exit=${J3_EXIT} anchors=${J3_HIT_COUNT}/6 lines=${J3_LINE_COUNT} → ${J3_PASS}"
 
 # ── J4: wizard first run ─────────────────────────────────────────────────────
+# Use `expect` to drive a real PTY so process.stdin.isTTY is true in the wizard.
+# The wizard takes the TTY branch → shows prompt "选择 1 / 2 / 3".
+# State file write requires the spawned subcommand (skeleton-demo/stats/--help)
+# to exit 0. defaultSpawn(choice, []) spawns the bare string as an executable
+# which fails ("stats" is not a PATH binary). This is tracked as a W1 bug;
+# state_file_created reflects actual runtime. J4 passes on TTY branch + anchors;
+# state write is fully covered by J2 vitest (spawnImpl injected, exits 0).
 echo ""
-echo "[J4] wizard first run (clean state) ..."
+echo "[J4] wizard first run via PTY (expect) ..."
 J4_LOG="${EVIDENCE_DIR}/wizard-1.stdout"
+J4_TTY_BRANCH="false"
 rm -f "$STATE_FILE"
 
 set +e
-printf '1\n' | pnpm teamagent > "$J4_LOG" 2>&1
-J4_EXIT=$?
+if command -v expect >/dev/null 2>&1; then
+  expect -c "
+    log_file ${J4_LOG}
+    spawn pnpm teamagent
+    expect {
+      \"选择\" { send \"2\\r\"; set tty 1 }
+      timeout  { set tty 0 }
+    }
+    expect eof
+    catch wait result
+  " > /dev/null 2>&1
+  J4_EXIT=$?
+else
+  # expect not available: fallback to non-TTY pipe
+  printf '1\n' | pnpm teamagent > "$J4_LOG" 2>&1
+  J4_EXIT=$?
+fi
 set -e
+
+# Detect whether the TTY branch was entered (prompt appeared)
+grep -q "选择" "$J4_LOG" 2>/dev/null && J4_TTY_BRANCH="true"
+[ -f "$STATE_FILE" ] && J4_STATE_CREATED="true"
 
 r="$(check_anchor "$J4_LOG" "装好啦" "[]" 0)"; J4_HIT_LIST="${r%|*}"; J4_HIT_COUNT="${r#*|}"
 r="$(check_anchor "$J4_LOG" "🎉" "$J4_HIT_LIST" "$J4_HIT_COUNT")"; J4_HIT_LIST="${r%|*}"; J4_HIT_COUNT="${r#*|}"
@@ -152,14 +179,12 @@ r="$(check_anchor "$J4_LOG" "skeleton-demo" "$J4_HIT_LIST" "$J4_HIT_COUNT")"; J4
 r="$(check_anchor "$J4_LOG" "stats" "$J4_HIT_LIST" "$J4_HIT_COUNT")"; J4_HIT_LIST="${r%|*}"; J4_HIT_COUNT="${r#*|}"
 r="$(check_anchor "$J4_LOG" "\-\-help" "$J4_HIT_LIST" "$J4_HIT_COUNT")"; J4_HIT_LIST="${r%|*}"; J4_HIT_COUNT="${r#*|}"
 
-[ -f "$STATE_FILE" ] && J4_STATE_CREATED="true"
-
-# In non-TTY pipe mode, wizard renders menu and exits without writing state.
-# J4 passes if menu anchors appear in stdout (state file is a bonus check).
-if [ "$J4_HIT_COUNT" -ge 3 ]; then
+# Pass: menu anchors present AND TTY branch entered (prompt shown).
+# state_file_created is informational — write requires spawned cmd to exit 0.
+if [ "$J4_HIT_COUNT" -ge 3 ] && [ "$J4_TTY_BRANCH" = "true" ]; then
   J4_PASS="true"
 fi
-echo "[J4] exit=${J4_EXIT} anchors=${J4_HIT_COUNT}/5 state_created=${J4_STATE_CREATED} → ${J4_PASS}"
+echo "[J4] exit=${J4_EXIT} anchors=${J4_HIT_COUNT}/5 tty_branch=${J4_TTY_BRANCH} state_created=${J4_STATE_CREATED} → ${J4_PASS}"
 
 # ── J5: wizard second run ────────────────────────────────────────────────────
 echo ""
@@ -233,7 +258,7 @@ if command -v jq >/dev/null 2>&1; then
     --argjson j1_exit   "$J1_EXIT"   --arg j1_pass "$J1_PASS" \
     --argjson j2_exit   "$J2_EXIT"   --arg j2_pass "$J2_PASS" --argjson j2_tests "$J2_TESTS_PASSED" \
     --argjson j3_exit   "$J3_EXIT"   --arg j3_pass "$J3_PASS" --argjson j3_hits "$J3_HIT_COUNT" --argjson j3_lines "$J3_LINE_COUNT" \
-    --argjson j4_exit   "$J4_EXIT"   --arg j4_pass "$J4_PASS" --argjson j4_hits "$J4_HIT_COUNT" --arg j4_state "$J4_STATE_CREATED" \
+    --argjson j4_exit   "$J4_EXIT"   --arg j4_pass "$J4_PASS" --argjson j4_hits "$J4_HIT_COUNT" --arg j4_state "$J4_STATE_CREATED" --arg j4_tty "$J4_TTY_BRANCH" \
     --argjson j5_exit   "$J5_EXIT"   --arg j5_pass "$J5_PASS" --argjson j5_hits "$J5_HIT_COUNT" --argjson j5_steps "$J5_COMPLETED_STEPS" \
     --argjson j6_exit   "$J6_EXIT"   --arg j6_pass "$J6_PASS" --argjson j6_diff "$J6_DIFF_BYTES" \
     '{
@@ -244,7 +269,7 @@ if command -v jq >/dev/null 2>&1; then
         { id:"J1", tool:"typecheck",            pass:($j1_pass=="true"), exit_code:$j1_exit, stdout_path:"evidence/typecheck.log" },
         { id:"J2", tool:"vitest",               pass:($j2_pass=="true"), exit_code:$j2_exit, tests_passed:$j2_tests, stdout_path:"evidence/vitest.log" },
         { id:"J3", tool:"postinstall",          pass:($j3_pass=="true"), exit_code:$j3_exit, anchors_hit_count:$j3_hits, line_count:$j3_lines, stdout_path:"evidence/postinstall.stdout" },
-        { id:"J4", tool:"wizard-noargs-first",  pass:($j4_pass=="true"), exit_code:$j4_exit, anchors_hit_count:$j4_hits, state_file_created:($j4_state=="true"), stdout_path:"evidence/wizard-1.stdout" },
+        { id:"J4", tool:"wizard-noargs-first",  pass:($j4_pass=="true"), exit_code:$j4_exit, anchors_hit_count:$j4_hits, tty_branch_entered:($j4_tty=="true"), state_file_created:($j4_state=="true"), note:"state_file_created=false expected when defaultSpawn(choice) fails; see J2 vitest for state write coverage", stdout_path:"evidence/wizard-1.stdout" },
         { id:"J5", tool:"wizard-noargs-second", pass:($j5_pass=="true"), exit_code:$j5_exit, anchors_hit_count:$j5_hits, completed_steps_count:$j5_steps, stdout_path:"evidence/wizard-2.stdout" },
         { id:"J6", tool:"help-unchanged",       pass:($j6_pass=="true"), exit_code:$j6_exit, diff_bytes:$j6_diff, stdout_path:"evidence/help-diff.log" }
       ]
@@ -259,7 +284,7 @@ else
     { "id":"J1","tool":"typecheck",            "pass":%s,"exit_code":%s,"stdout_path":"evidence/typecheck.log" },
     { "id":"J2","tool":"vitest",               "pass":%s,"exit_code":%s,"tests_passed":%s,"stdout_path":"evidence/vitest.log" },
     { "id":"J3","tool":"postinstall",          "pass":%s,"exit_code":%s,"anchors_hit_count":%s,"line_count":%s,"stdout_path":"evidence/postinstall.stdout" },
-    { "id":"J4","tool":"wizard-noargs-first",  "pass":%s,"exit_code":%s,"anchors_hit_count":%s,"state_file_created":%s,"stdout_path":"evidence/wizard-1.stdout" },
+    { "id":"J4","tool":"wizard-noargs-first",  "pass":%s,"exit_code":%s,"anchors_hit_count":%s,"tty_branch_entered":%s,"state_file_created":%s,"stdout_path":"evidence/wizard-1.stdout" },
     { "id":"J5","tool":"wizard-noargs-second", "pass":%s,"exit_code":%s,"anchors_hit_count":%s,"completed_steps_count":%s,"stdout_path":"evidence/wizard-2.stdout" },
     { "id":"J6","tool":"help-unchanged",       "pass":%s,"exit_code":%s,"diff_bytes":%s,"stdout_path":"evidence/help-diff.log" }
   ]
@@ -268,7 +293,7 @@ else
   "$J1_PASS" "$J1_EXIT" \
   "$J2_PASS" "$J2_EXIT" "$J2_TESTS_PASSED" \
   "$J3_PASS" "$J3_EXIT" "$J3_HIT_COUNT" "$J3_LINE_COUNT" \
-  "$J4_PASS" "$J4_EXIT" "$J4_HIT_COUNT" "$J4_STATE_CREATED" \
+  "$J4_PASS" "$J4_EXIT" "$J4_HIT_COUNT" "$J4_TTY_BRANCH" "$J4_STATE_CREATED" \
   "$J5_PASS" "$J5_EXIT" "$J5_HIT_COUNT" "$J5_COMPLETED_STEPS" \
   "$J6_PASS" "$J6_EXIT" "$J6_DIFF_BYTES" > "$JUDGE_JSON"
 fi
@@ -279,7 +304,7 @@ echo "Judge results:"
 echo "  J1 typecheck:            ${J1_PASS}"
 echo "  J2 vitest:               ${J2_PASS} (tests_passed=${J2_TESTS_PASSED})"
 echo "  J3 postinstall:          ${J3_PASS} (anchors=${J3_HIT_COUNT}/6 lines=${J3_LINE_COUNT})"
-echo "  J4 wizard-first:         ${J4_PASS} (anchors=${J4_HIT_COUNT}/5 state=${J4_STATE_CREATED})"
+echo "  J4 wizard-first:         ${J4_PASS} (anchors=${J4_HIT_COUNT}/5 tty=${J4_TTY_BRANCH} state=${J4_STATE_CREATED})"
 echo "  J5 wizard-second:        ${J5_PASS} (anchors=${J5_HIT_COUNT} steps=${J5_COMPLETED_STEPS})"
 echo "  J6 help-unchanged:       ${J6_PASS} (diff_bytes=${J6_DIFF_BYTES})"
 echo ""
