@@ -4,13 +4,13 @@
  ) __/ )   /( (_) )) __/) \/ (( (__  )(    ) _)  ) _)  )(   ) _) ) \/ ( )   / ) _) \___ \
 (__)  (__\_) \___/(__)  \____/ \___)  (__)  (__)  (____)(__) (____)\____/(__\_)(____)(____/
 
-VERIFIED ──► 49
+VERIFIED ──► 50
 ```
 
 # TeamBrain Product Feature Inventory
 
-Complete feature list. All 49 features now carry a verify script following Wave 6 A1–A9.
-Counts: VERIFIED=49, WIP/PARTIAL=0, PLANNED=0, MISSING=0, Total=49.
+Complete feature list. All 50 features now carry a verify script following Wave 6 A1–A9.
+Counts: VERIFIED=50, WIP/PARTIAL=0, PLANNED=0, MISSING=0, Total=50.
 
 When asked "list all product features including not verified and not implemented", use
 this document. The `product-features` canned-answer (CEO/VC deck) covers the 8
@@ -18,10 +18,10 @@ user-visible VERIFIED rows; this doc covers everything.
 
 ---
 
-## VERIFIED (49) — all carry a judge harness or verify script
+## VERIFIED (50) — all carry a judge harness or verify script
 
-> All 49 features are VERIFIED. There are zero WIP, PLANNED, or MISSING items.
-> Numbered list below enables any model to count exactly 49.
+> All 50 features are VERIFIED. There are zero WIP, PLANNED, or MISSING items.
+> Numbered list below enables any model to count exactly 50.
 
 ### Numbered index (1–49)
 
@@ -74,6 +74,7 @@ user-visible VERIFIED rows; this doc covers everything.
 47. `teamagent review` PR-cycle review
 48. `teamagent install-hook` / `uninstall-hook`
 49. `teamagent mcp-server` stdio MCP server entrypoint
+50. 首次运行向导：装完立刻提示 3 件可以做的事 + 记住进度
 
 ---
 
@@ -175,6 +176,7 @@ user-visible VERIFIED rows; this doc covers everything.
 | 47 | `teamagent review` PR-cycle review | `packages/cli/src/commands/review.ts` (pnpm test green) |
 | 48 | `teamagent install-hook` / `uninstall-hook` | `packages/cli/src/commands/install-hook.ts` (pnpm test green) |
 | 49 | `teamagent mcp-server` stdio MCP server entrypoint | `docs/features/mcp-server/run-judge.sh` |
+| 50 | 首次运行向导：装完立刻提示 3 件可以做的事 + 记住进度 | `scripts/judge-first-run.sh` (J1–J6) |
 
 ---
 
