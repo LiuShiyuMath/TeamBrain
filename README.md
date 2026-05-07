@@ -22,6 +22,55 @@ TeamAgent 解决这件事：从你纠正它的每一次对话里，自动**提�
 
 ---
 
+### 快速安装
+
+```bash
+# 推荐：先下载 install.sh，确认内容后再执行
+curl -fsSL https://raw.githubusercontent.com/libz-renlab-ai/TeamBrain/release/install.sh -o /tmp/teambrain-install.sh
+cat /tmp/teambrain-install.sh          # 建议先 review，确认脚本内容符合预期
+sh /tmp/teambrain-install.sh
+```
+
+也支持直接执行（适合已熟悉该脚本、或在 CI 中使用）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/libz-renlab-ai/TeamBrain/release/install.sh | sh
+```
+
+校验文件（SHA256）：**TBD H1** — SHA256 校验文件位置待 H1 open question 决定后填入。
+参考：[release-prep/install-sh-checklist.md](release-prep/install-sh-checklist.md)
+
+安装完成后进入你的项目目录，初始化：
+
+```bash
+teamagent init
+```
+
+`init` 约 30 秒完成：注册 PreToolUse hook、注入 universal pack（~15 条跨语言
+avoidance 规则）、立即可拦截。背景任务将在 ~10 分钟内静默升级为 BM25+dense 语义匹配。
+
+---
+
+### 立即验证（30 秒内看到第一次拦截）
+
+```bash
+teamagent demo
+```
+
+`demo` 命令模拟一次 `moment → dayjs` 纠正 → 下一会话被 PreToolUse 拦截的完整闭环。
+GIF 演示同样展示这两个时刻（[见 landing page](https://libz-renlab-ai.github.io/TeamBrain/)）。
+
+---
+
+### 注意事项
+
+- **建议先 review install.sh**（`curl ... -o /tmp/... && cat ...`），确认来源和内容，
+  再决定是否执行。这是 P4 mitigation P4-M04 的最佳实践建议。
+- `install.sh` 固定来自仓库 `release` 分支根目录，不依赖自有域名。
+- 安装过程中不需要 SSH key，走 HTTPS tarball。
+
+---
+
 ## 5–10 分钟上手
 
 ```bash

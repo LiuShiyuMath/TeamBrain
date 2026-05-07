@@ -129,6 +129,7 @@ claudefast -p \
 | **`RULE-VERIFY`** | 跑 `bash scripts/verify-all-rules.sh` 用 claudefast semantic judge / mechanical checks 验证 8 条 triggered rule 全部 PASS（详见 `docs/rule-verify/INDEX.md`） |
 | `codex exec` | Codex 端 canonical JSON 对照（feature-verification 1+2+3） |
 | **Feature canned answers** | 每个 feature（Calibrator v2、Team knowledge sharing 等）的 6 节模板入口在 `docs/features/INDEX.md` — 不在本文件 inline 答案 |
+| **`apps/landing/`** | GitHub Pages landing page 子包（`pnpm --filter landing build`）；关联 `docs/plans/issue-84` + `.github/workflows/landing-deploy.yml` |
 
 被问到 `what would happen if we say word 'FASTPROBE'?` 或用户消息单纯含 `FASTPROBE` 时，**必须**语义覆盖下面三步；不要求逐字原文，但不得省略关键动作：
 
@@ -315,13 +316,15 @@ Skills, while this root `CLAUDE.md` stays limited to short human-maintained
 working agreements.
 
 <!-- TEAMAGENT:START - 自动管理，请勿手动编辑 -->
-## TeamAgent 经验（58条活跃知识，为你编译了 28 条（token 预算 3000）)
+## TeamAgent 经验（63条活跃知识，为你编译了 27 条（token 预算 3000）)
 - 使用 忽略 <local-command-caveat> 包裹的消息，除非用户明确要求分析 而非 <local-command-caveat>——该标签内容由本地命令自动生成，非用户意图表达；AI 主动响应会污染对话上下文，误把系统噪声当用户指令 [1.00] [预置]
 - 移除用户反馈的检查条件，仅基于失败本身触发分析——用户反馈约束是冗余的；所有错都应进入分析管道，由规则库自主决定是否学习，而非前置过滤 [0.95] [预置]
 - 规则类型（practice/avoidance）应只影响处理策略（enforcement），不应影响 matching 逻辑；所有规则都应参与匹配——在 matcher 中过滤 practice 类规则导致其永不触发，失去学习反馈信号和评分机制；类型应仅控制 block/warn/score 行为，而非决定规则是否生效 [0.95] [预置]
 - avoidance 必须配 wrong_pattern（可字面匹配关键词），practice 应为空；两种规则走不同处理流程——avoidance 类规则需要可靠字面关键词才能被 matcher 在 PreToolUse 拦截，practice 类规则是原则性指导、没可靠字面关键词，直接编译进 CLAUDE.md 供 AI 读；数据合法性约束必须在 seed 生成或 LLM extractor 阶段强制执行 [0.95] [预置]
-- 立即用 TaskOutput 工具按 task-id 读取输出文件，继续工作流推进——task-notification 本身就是完成信号，延迟处理或说'等待'会阻塞后续工作流。应立即消费输出继续下一阶段，充分利用异步并行性 [0.90]
-- 使用 忽略标签内所有内容，除非用户明确要求分析 而非 <local-command-caveat>——该标签标记系统生成的消息（本地命令输出、自动通知），非用户意图表达；响应会污染对话上下文，误把工具输出当作用户指令 [0.90]
+- 使用 忽略标签内容，除非用户明确要求分析 而非 <local-command-caveat>——该标签标记系统生成的消息（本地命令输出）而非用户意图；直接响应会污染对话上下文、误把工具噪声当用户指令 [0.90]
+- 优先检查实际产出文件、artifacts、结构化成果，而非仅依赖进程或任务的状态标记（idle、pending 等）——Worker/agent 的状态标记可能因网络延迟、会话中断等因素滞后或不准确，实际工作成果（文件内容、checklist、验证结果）才是唯一可信的完成证明 [0.90]
+- 设计文档中的表述应准确反映实现的实际驱动因素和制约条件——设计文档与代码实现的措辞 drift 会误导未来维护者对决策背景的理解；worker-9 修正了关于资源哈希化的过度表述（从'HTML 模板含 hash 化 asset 引用'改为'build 步骤为未来 hash/压缩留位'），使其与实际 cp -r 实现的驱动相符，消除了文档与代码间的歧义 [0.90]
+- 在前置工作段交付前，必须验证产出文件（文档、配置、代码）的完整性与相互一致性，避免遗留未解决问题到后续阶段——仅以 atomic commit 成功作为里程碑完成的证明不足；R2 虽然 commit 落地，但遗漏了检查 pnpm-workspace.yaml 中 apps/* glob 的补充和 pages-source-decision.md 与 package.json 实现的同步，这些问题直到 I-phase worker-9 执行时才被发现并修复，说明每个检查点前都应加入文档-配置一致性验证步骤 [0.90]
 - 使用 先读用户指向的文件，重新 brainstorm + 补全需求，再拆 task 实现；API key 来源询问用户（如 claude code haiku） 而非 计划文档只是设计文档，还没实现——AI 未读文件就断言不存在会误导用户；正确做法是先 Read 指定路径、以文件内容为准，再结合用户偏好（如用 haiku 作 token 来源）规划实现 [0.90] [预置]
 - 立即读取 output-file 并继续后续流程，不再说'等通知'——task-notification 本身就是通知；AI 仍说'等通知'说明未识别该消息为触发信号，正确做法是收到后立即处理输出、推进工作流 [0.90] [预置]
 - 后台 agent 完成时系统会发 task-notification，包含 task-id、output-file、status、summary；可通过 TaskOutput 工具按 task-id 读取结果——Agent(run_in_background=true) 底层走 TaskCreate 机制，完成后 harness 自动发 task-notification 事件；AI 声称'无法手动查状态'是错的，实际有 task-id 可查 [0.90] [预置]
@@ -341,8 +344,5 @@ working agreements.
 - 先澄清和解释系统逻辑细节，获得用户确认理解后再给建议——用户若不理解系统为何如此，对改动方案缺乏信心；同步理解是决策的前置条件，避免改动后产生新的疑虑 [0.95] [预置]
 - 按分阶段流程：通读项目结构 → 识别核心模块 → 追踪关键链路 → 提炼设计思想 → 最后动笔——充分的前期分析能确保文档的准确性、完整性和逻辑清晰，避免仓促写作导致遗漏或误读 [0.95] [预置]
 - 将抽象层级维持在问题与思路层而非技术与结构层；焦点放在问题形状、核心判断、思路选择与权衡取舍，避免具体技术名、目录、字段、算法、流水线式细节——资深架构师关注的是设计的认知模型与思维方式而非实现的技术栈；提升抽象层级使文档跨时间跨团队复用，避免技术细节导致的快速过时 [0.95] [预置]
-- 保持在功能与机制层级：讲『系统做什么』和『如何运转』，避免实现细节（技术名、目录、代码组织）和空泛表述（价值观、文学比喻）——资深读者需要清晰的功能骨架来快速形成系统心智模型；过低的抽象陷入无关细节，过高的抽象脱离工程实现，只有功能与机制层才能既有清晰的因果链又足以指导架构判断 [0.95] [预置]
-- 保持在功能与机制层：讲系统做什么、如何运转；避免掉进实现细节（技术名、路径、代码组织）和空泛理念（价值观表述、文学比喻）——资深工程师需要清晰的功能骨架来快速形成系统心智模型；掉进细节淹没主线，飘到理念脱离工程实践，只有功能与机制层既有因果链又足以指导架构判断 [0.95] [预置]
-- verbose = 显示所有事件（含调试细节）——用户明确要求此措辞；保持文档用词与用户偏好一致 [0.90] [预置]
-> 还有 23 条 canonical+ 规则因 token 预算未显示（teamagent compile --dry-run 查看）
+> 还有 29 条 canonical+ 规则因 token 预算未显示（teamagent compile --dry-run 查看）
 <!-- TEAMAGENT:END -->

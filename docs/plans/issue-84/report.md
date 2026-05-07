@@ -25,11 +25,11 @@ GitHub: <https://github.com/libz-renlab-ai/TeamBrain/issues/84>
 |------|------|--------|------|
 | R1 决策固化 | done | LiuShiyuMath | spec 7 条决策已存在；FASTPROBE round 1 完成，contradictions 见 research §G |
 | R2 产物拓扑 | done | LiuShiyuMath | FASTPROBE round 2 R2 完成；产物 see r2/INDEX.md（apps/landing/、release-prep/、workflow、4 worker summary） |
-| P1 设计探索 | pending | LiuShiyuMath | 跑 `/design-shotgun` ≥ 3 variant |
-| P2 安装产物 | pending | LiuShiyuMath | release 分支 + install.sh |
-| I1 GitHub Pages | pending | LiuShiyuMath | actions/deploy-pages |
-| I2 文档同步 | pending | LiuShiyuMath | CLAUDE.md / README.md |
-| V1 真用户 dogfood | pending | LiuShiyuMath | ≥1 真实陌生用户 |
+| I2 文档同步 | done | LiuShiyuMath | I-phase round 3 完成；CLAUDE.md / README.md install block applied（worker-12）；§C-1/§C-2 closed（worker-9） |
+| P1 设计探索 | in_progress | LiuShiyuMath | 3 variant ready（A/B/C，see i-phase/design-variants/）；待用户挑选 → apply 到 apps/landing/src/ |
+| P2 安装产物 | in_progress | LiuShiyuMath | install.sh.draft + gen-sha256.sh + release-publish-checklist 全 ready；待用户 OK push release branch + gh release |
+| I1 GitHub Pages | pending | LiuShiyuMath | 待 P1 + P2 收口后 PR 合并即触发 actions/deploy-pages |
+| V1 真用户 dogfood | pending | LiuShiyuMath | ≥1 真实陌生用户 TTHW ≤5min；Pages live 后启动 |
 | Verdict | pending | LLM judge | `verdict.json.passed=true` 是合并门禁 |
 
 ---
@@ -40,6 +40,7 @@ GitHub: <https://github.com/libz-renlab-ai/TeamBrain/issues/84>
 
 - [2026-05-07] FASTPROBE round 1 complete by issue-84-team (4 sonnet workers + 1 opus 1M reporter)：8 probes consolidated。Artifacts: `.fastprobe/issue84/p[1-8].{stream.json,json,debug.log}` + `docs/plans/issue-84/probes/p[1-2,3-4,5-6,7-8].md`。跨 probe contradictions surfaced in `research.md §G` (G1–G6，其中 G1–G4 标注 ⚠️、G5/G6 仅记录无矛盾)；open questions in `research.md §H` (H1–H7)。Workers + reporter 总 0 commit / 0 push。
 - [2026-05-07] R2 产物拓扑完成 by issue-84-team (worker-5..8 sonnet + reporter-r2 opus 1M)：12 R2 artifact 落到 `apps/landing/`、`release-prep/`、`.github/workflows/`、`docs/plans/issue-84/r2/`。Index: `docs/plans/issue-84/r2/INDEX.md`。所有 worker 总 0 commit / 0 push。关键决策：Pages source = Option 3（apps/landing/dist + Actions deploy，G3 escalation closed）；install.sh 双轨 URL（release 分支 raw + Release asset tarball，G4 closed，H1/H5/H6 部分 punt）；P4 7 项 mitigation 在 install.sh.draft 全覆盖（bash -n OK）；CLAUDE.md / README install block diff 草稿就绪（I2 apply）。⚠️ 矛盾：(1) pages-source-decision §R1 主张「hash 化 asset」与 package.json build 实际为纯 `cp -r` 不一致；(2) `pnpm-workspace.yaml` 仍只 `packages/*`，I2 必补 `apps/*` glob 否则 landing-deploy CI 失败。
+- [2026-05-07] I-phase (FASTPROBE round 3) complete by issue-84-team (worker-9..13 sonnet + reporter-i opus 1M)：5 worker × 2 probe = 10 probe 全跑通。**变更**：`pnpm-workspace.yaml`（+`apps/*` glob）、`CLAUDE.md`（Project tools 表 +1 row apps/landing/）、`README.md`（顶部 +49 行 install block）、`docs/plans/issue-84/r2/pages-source-decision.md`（§R1 措辞修正）。**新增**：3 design variants（A-minimalist / B-bold-typo / C-doc-style）、`release-publish-checklist.md`、`release-prep/gen-sha256.sh`、`PR-description.md`、`REVIEW-FOR-USER.md`、5 worker summary。**Index**: `docs/plans/issue-84/i-phase/INDEX.md`。Workers + reporter 总 0 commit / 0 push。**关闭**：§C-1（hash 化措辞 drift）、§C-2（pnpm-workspace.yaml 缺 apps/* glob）。**新浮**：D-1 ⚠️ B-bold-typo variant install 文案用 `npx teamagent init` 与 spec 决策 5 + 其它 variant + README 不一致，仅在用户选 B 时需手术修。
 
 ---
 
@@ -75,8 +76,9 @@ issue 验收要求 ≥ 1 行真实陌生用户。codex web for github 自动 ses
 
 > 偏离 plan 或触发 research §E 风险时记这里。
 
-- [2026-05-07 / R2] ⚠️ pages-source-decision §R1 vs package.json build 措辞 drift：decision 主张 build 步生成 content-hash 化 asset（如 `index.a1b2c3d4.js`），但 package.json scripts.build 是 `cp -r`，未引入 hash 工具。需要在 P1 / I1 阶段二选一：改 decision 措辞，或升级 build 引入最小 hash 化。Option 3 决策本身保留（preview deployment 仍成立）。
-- [2026-05-07 / R2] ⚠️ `pnpm-workspace.yaml` 仍只含 `packages/*`，I2 必补 `apps/*` glob。否则 `.github/workflows/landing-deploy.yml:31` 的 `pnpm install --filter landing` 将在 CI 失败。已记录在 r5-summary.md，本 report §4 升级为前置阻塞项。
+- [2026-05-07 / R2] ✅ closed（I-phase worker-9）pages-source-decision §R1 vs package.json build 措辞 drift：§R1 已改为「build 步骤为未来 hash/压缩留位，preview deployment（PR 上独立 URL）是当前主驱动」。Option 3 决策保留。
+- [2026-05-07 / R2] ✅ closed（I-phase worker-9）`pnpm-workspace.yaml` 已加 `apps/*` glob。CI `pnpm install --filter landing` 可解析 `@teamagent/landing`。
+- [2026-05-07 / I-phase] ⚠️ D-1 design variant B-bold-typo install 文案 drift：`design-variants/B-bold-typo/index.html:255-257` 用 `npx teamagent init` 替换 `curl ... release/install.sh | sh`，与 spec 决策 5 + A/C variant + README 不一致。仅在用户选 B 时阻塞 apply（手术换 install section 即可）。详见 `i-phase/INDEX.md §D-1`。
 
 ---
 

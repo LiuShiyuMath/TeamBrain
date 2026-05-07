@@ -17,7 +17,7 @@
 
 ## 决策结论（一句话）
 
-**选 Option 3，因为 Pretext-native landing 含 hash 化 asset 引用必须 build 步，且 PR 上 preview deployment 是验证链路的核心依赖。**
+**选 Option 3，因为 PR 上 preview deployment 是验证链路的核心依赖，且 build 步为未来 hash/压缩留位，无需重构即可接入。**
 
 ---
 
@@ -48,9 +48,9 @@
 
 ## 正方反驳：本仓库需要 Option 3 的两个不可省略理由
 
-### R1：必须 build 步 — HTML 模板含 hash 化 asset 引用
+### R1：必须 build 步 — build 步骤为未来 hash/压缩留位
 
-Landing 页面（含 Pretext-native HTML/CSS + 静态资源）中，JS/CSS 引用须携带 content hash（`index.a1b2c3d4.js`），确保浏览器强制缓存失效与新版本推送后立即生效。main:/docs 是源码目录，**不含 build 产物**；若让 Pages 直接 serve `apps/landing/src/`，则 hash 化产物无法生成，缓存失效机制失效。`apps/landing/dist/` 是 `pnpm --filter landing build` 的输出目录，专为 hash 化产物设计。
+`apps/landing/dist/` 是 `pnpm --filter landing build` 的输出目录。build 步骤为未来 content-hash 化 asset（`index.a1b2c3d4.js`）与 gzip/brotli 压缩留位，使 preview deployment 链路在生长过程中无需重构。main:/docs 是源码目录，**不含 build 产物**；若让 Pages 直接 serve `apps/landing/src/`，则 future hash/压缩基础设施无法接入。preview deployment（PR 上独立 URL）是当前主驱动，hash 化是顺水推舟的副产物。
 
 > 引用：`plan.md §I1`："Pages source = Actions deploy `apps/landing/dist/`"
 
