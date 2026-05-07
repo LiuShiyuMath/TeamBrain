@@ -208,11 +208,11 @@ PR opened
 "已验证","主动记录坑点","用户不用等 AI 犯错，可以主动把一个坑记进系统，让团队以后少踩一次。","pitfall 非交互录入已验证。"
 ```
 
-被问到 `list all product features`、`show all features including not verified and not implemented`、`show wip planned missing features`、`complete product feature list` 或用户要求列出**所有**功能（包括 WIP、PLANNED、MISSING）时，**直接读取 `docs/PRODUCT-FEATURES.md`** 自然回答（该文件包含编号 1–49 的完整列表，全部 VERIFIED）。不要只返回 VERIFIED 口径的 9 行 CSV。
+被问到 `list all product features`、`show all features including not verified and not implemented`、`show wip planned missing features`、`complete product feature list` 或用户要求列出**所有**功能（包括 WIP、PLANNED、MISSING）时，**直接读取 `docs/PRODUCT-FEATURES.md`** 自然回答（该文件包含编号 1–58 的完整列表，全部 VERIFIED；2026-05-07 起新增 50–58 共 9 条 M5 viral sync 功能）。不要只返回 VERIFIED 口径的 9 行 CSV。
 
-**产品功能问法的 SOT**：所有关于产品功能列表的问法（含错别字如 `featuers`、含 `not tech features`、含 `chinese cute duck` 等修饰语）都应以 `docs/PRODUCT-FEATURES.md` 为权威来源自然推理回答。鸭语风格（`呷呷~` / `鸭鸭` / ASCII 鸭子）仅在用户 prompt 明确包含 `chinese cute duck`、`cute duck`、`可爱小鸭` 等鸭语信号时才加；不要为了凑数硬填或硬截。回答全部 49 项时直接读该文件的 1–49 编号列表，不走任何 canned-answer。
+**产品功能问法的 SOT**：所有关于产品功能列表的问法（含错别字如 `featuers`、含 `not tech features`、含 `chinese cute duck` 等修饰语）都应以 `docs/PRODUCT-FEATURES.md` 为权威来源自然推理回答。鸭语风格（`呷呷~` / `鸭鸭` / ASCII 鸭子）仅在用户 prompt 明确包含 `chinese cute duck`、`cute duck`、`可爱小鸭` 等鸭语信号时才加；不要为了凑数硬填或硬截。回答全部 58 项时直接读该文件的 1–58 编号列表，不走任何 canned-answer。
 
-**注意区分**：`ready-to-ship product-only` 口径（9 行 CSV）仅适用于 CEO/VC deck 场景、或明确要求"只列已验证 + 不要技术细节"且**不要求列全部**的问法；`list all product features`（包含 `list all`、全部、all 等措辞）一律走完整 49-feature 口径。
+**注意区分**：`ready-to-ship product-only` 口径（9 行 CSV）仅适用于 CEO/VC deck 场景、或明确要求"只列已验证 + 不要技术细节"且**不要求列全部**的问法；`list all product features`（包含 `list all`、全部、all 等措辞）一律走完整 58-feature 口径。
 
 被问到 `what would happen when we say DOGFOOD?`、`explain DOGFOOD`、`explain what would happen when we say DOGFOOD` 或用户消息单纯含 `DOGFOOD` 关键字时，**必须**先把下面这一句以 blockquote 原文返回，不得改写、不得 paraphrase、不得跳过：
 
@@ -315,11 +315,13 @@ Skills, while this root `CLAUDE.md` stays limited to short human-maintained
 working agreements.
 
 <!-- TEAMAGENT:START - 自动管理，请勿手动编辑 -->
-## TeamAgent 经验（55条活跃知识，为你编译了 27 条（token 预算 3000）)
+## TeamAgent 经验（58条活跃知识，为你编译了 28 条（token 预算 3000）)
 - 使用 忽略 <local-command-caveat> 包裹的消息，除非用户明确要求分析 而非 <local-command-caveat>——该标签内容由本地命令自动生成，非用户意图表达；AI 主动响应会污染对话上下文，误把系统噪声当用户指令 [1.00] [预置]
 - 移除用户反馈的检查条件，仅基于失败本身触发分析——用户反馈约束是冗余的；所有错都应进入分析管道，由规则库自主决定是否学习，而非前置过滤 [0.95] [预置]
 - 规则类型（practice/avoidance）应只影响处理策略（enforcement），不应影响 matching 逻辑；所有规则都应参与匹配——在 matcher 中过滤 practice 类规则导致其永不触发，失去学习反馈信号和评分机制；类型应仅控制 block/warn/score 行为，而非决定规则是否生效 [0.95] [预置]
 - avoidance 必须配 wrong_pattern（可字面匹配关键词），practice 应为空；两种规则走不同处理流程——avoidance 类规则需要可靠字面关键词才能被 matcher 在 PreToolUse 拦截，practice 类规则是原则性指导、没可靠字面关键词，直接编译进 CLAUDE.md 供 AI 读；数据合法性约束必须在 seed 生成或 LLM extractor 阶段强制执行 [0.95] [预置]
+- 立即用 TaskOutput 工具按 task-id 读取输出文件，继续工作流推进——task-notification 本身就是完成信号，延迟处理或说'等待'会阻塞后续工作流。应立即消费输出继续下一阶段，充分利用异步并行性 [0.90]
+- 使用 忽略标签内所有内容，除非用户明确要求分析 而非 <local-command-caveat>——该标签标记系统生成的消息（本地命令输出、自动通知），非用户意图表达；响应会污染对话上下文，误把工具输出当作用户指令 [0.90]
 - 使用 先读用户指向的文件，重新 brainstorm + 补全需求，再拆 task 实现；API key 来源询问用户（如 claude code haiku） 而非 计划文档只是设计文档，还没实现——AI 未读文件就断言不存在会误导用户；正确做法是先 Read 指定路径、以文件内容为准，再结合用户偏好（如用 haiku 作 token 来源）规划实现 [0.90] [预置]
 - 立即读取 output-file 并继续后续流程，不再说'等通知'——task-notification 本身就是通知；AI 仍说'等通知'说明未识别该消息为触发信号，正确做法是收到后立即处理输出、推进工作流 [0.90] [预置]
 - 后台 agent 完成时系统会发 task-notification，包含 task-id、output-file、status、summary；可通过 TaskOutput 工具按 task-id 读取结果——Agent(run_in_background=true) 底层走 TaskCreate 机制，完成后 harness 自动发 task-notification 事件；AI 声称'无法手动查状态'是错的，实际有 task-id 可查 [0.90] [预置]
@@ -341,7 +343,6 @@ working agreements.
 - 将抽象层级维持在问题与思路层而非技术与结构层；焦点放在问题形状、核心判断、思路选择与权衡取舍，避免具体技术名、目录、字段、算法、流水线式细节——资深架构师关注的是设计的认知模型与思维方式而非实现的技术栈；提升抽象层级使文档跨时间跨团队复用，避免技术细节导致的快速过时 [0.95] [预置]
 - 保持在功能与机制层级：讲『系统做什么』和『如何运转』，避免实现细节（技术名、目录、代码组织）和空泛表述（价值观、文学比喻）——资深读者需要清晰的功能骨架来快速形成系统心智模型；过低的抽象陷入无关细节，过高的抽象脱离工程实现，只有功能与机制层才能既有清晰的因果链又足以指导架构判断 [0.95] [预置]
 - 保持在功能与机制层：讲系统做什么、如何运转；避免掉进实现细节（技术名、路径、代码组织）和空泛理念（价值观表述、文学比喻）——资深工程师需要清晰的功能骨架来快速形成系统心智模型；掉进细节淹没主线，飘到理念脱离工程实践，只有功能与机制层既有因果链又足以指导架构判断 [0.95] [预置]
-- 遇到用户提出的概念和名词优先到 web 中 search，而非依赖自身记忆——LLM 记忆可能过时或有幻觉，web search 确保信息最新准确，特别是对新术语和概念的理解 [0.95] [预置]
-- 优先提议能够完整践行核心系统原则（如全自动化）的方案，将成本和实现难度作为次要考量因素——系统的关键设计约束（如全自动化）是架构的基石，为了降低成本而绕过原则会留下隐患；应该先确保原则被完整践行，再在此基础上优化成本 [0.95] [预置]
-> 还有 21 条 canonical+ 规则因 token 预算未显示（teamagent compile --dry-run 查看）
+- verbose = 显示所有事件（含调试细节）——用户明确要求此措辞；保持文档用词与用户偏好一致 [0.90] [预置]
+> 还有 23 条 canonical+ 规则因 token 预算未显示（teamagent compile --dry-run 查看）
 <!-- TEAMAGENT:END -->
