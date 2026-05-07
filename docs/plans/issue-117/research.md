@@ -177,7 +177,8 @@ issue #117 的 reference 段：
 - `release/iterm2-profiles/teambrain.json`（新增）
 - `release/fonts/JetBrainsMonoNerdFontMono-Regular.ttf`（新增，opt-in 才会被 cp）
 - `release/fonts/LICENSE`（新增，OFL）
-- `package.json` `files`（追加 `release/terminal-themes`、`release/iterm2-profiles`、`release/fonts`）
+- `packages/teamagent/tsup.config.ts`（追加 `onSuccess` 把 `<repo>/release/*` cp 到 `dist/release/*`，与 `dist/seed/` 走同一条 build-time 复制路径）
+- ~~root `package.json` `files`~~ —— **不动**。root manifest 是 `"private": true`，`pnpm build:publish` → `npm pack` 跑在 `packages/teamagent/`，发的是它的 `files: ["dist/", "postinstall.mjs"]`。所以让资源进 tarball 必须经过 `dist/`。Codex 在 PR #127 的 P1 抓的就是这一条，原 plan 写错。
 - `docs/features/setup-terminal.md`（新增 feature canned answer 入口）
 - `CLAUDE.md`（追加 `setup-terminal` 一行到 project tools 表）
 

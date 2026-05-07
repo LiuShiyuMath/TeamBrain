@@ -77,6 +77,19 @@
 - `release/fonts/JetBrainsMonoNerdFontMono-Regular.ttf` + `release/fonts/LICENSE`（OFL）。
 - `docs/features/setup-terminal.md`：feature canned answer 入口（仿 `docs/features/compile.md`）。
 
+> ⚠️ **Tarball packaging — Codex P1 on PR #127 fixed**
+>
+> 仓库 root `package.json` 是 `"private": true`、root `files` 不被 publish 看到；真正 publish 的是 `packages/teamagent/`（`files: ["dist/", "postinstall.mjs"]`）。`pnpm build:publish` 触发 `tsup` 打包到 `packages/teamagent/dist/`；`npm pack --dry-run` 在那里跑。
+>
+> 因此 release 资源**不能只放仓库根** —— 必须经过一次 build-time 复制让它们出现在 `packages/teamagent/dist/release/`，与现有的 `dist/seed/rules.jsonl` 走同一条「dev 仓库内 / bundled dist 内」的路径。
+>
+> 资源解析层模仿 `packages/cli/src/commands/init.ts:506-526` 的 `resolveSeedPath()`：
+> ```ts
+> // dev:  <repo>/release/iterm2-profiles/teambrain.json
+> // bundled: <pkg-root>/dist/release/iterm2-profiles/teambrain.json
+> function resolveTerminalAssetPath(rel: string): string | undefined { ... }
+> ```
+
 **改文件**：
 
 - `packages/cli/src/commands/init.ts`：
@@ -85,7 +98,8 @@
   - 不真正调用 setup-terminal——只打印提示。Init 仍 non-interactive。
 - `packages/cli/src/__tests__/init.test.ts`：追加 1 个断言「`renderInitResult(result)` 输出含 `terminal` 与 `Y/N/skip`」。
 - `packages/cli/src/cli.ts`（若存在 sub-command 路由表）：注册 `setup-terminal`。
-- `package.json`（root）：`files` 字段追加 `release/terminal-themes`、`release/iterm2-profiles`、`release/fonts`，让 npm tarball 携带这些资源。
+- `packages/teamagent/tsup.config.ts`：加 `onSuccess` hook（或 sibling `prebuild.cjs`）把仓库根 `release/{terminal-themes,iterm2-profiles,fonts}` 复制到 `packages/teamagent/dist/release/`。**这是 Codex P1 的真正落点** —— 不动 root `package.json`，不动 `packages/teamagent/package.json` 的 `files` 数组（`dist/` 已被 ship 覆盖），让资源跟着 dist 一起进 tarball。
+- `packages/teamagent/package.json`：**不必**改 `files`（`dist/` 已涵盖）。改 `prebuild` 或加 `onSuccess` 即可。如果选择放 sibling 复制脚本，则 `prebuild` 加一行 `node prebuild-copy-release.cjs`。
 - `CLAUDE.md`：project tools 表追加 1 行 `setup-terminal | 终端主题 opt-in 安装；详见 docs/features/setup-terminal.md`。
 
 **关键实现细节**（防止 V3 翻车）：
@@ -143,8 +157,10 @@ issue #104（`statusLine` 不覆盖）的 `_teamagentTag` + `statusLineSkipped` 
 | `docs/plans/issue-117/research.md`                                | 已存 | ~200 行         | 已写完                                                       |
 | `docs/plans/issue-117/probes/*.jsonl`                             | 已存 | 3 文件          | claudefast 探针证据                                          |
 | `docs/plans/issue-117/report.md`                                  | 新增 | 实施完写        | 含实际 commit SHA、verification artifact 路径                |
-| `package.json`（root）                                            | 改   | +3 行           | `files` 数组含 `release/terminal-themes`、`release/iterm2-profiles`、`release/fonts` |
+| `packages/teamagent/tsup.config.ts`（或 sibling `prebuild-copy-release.cjs`） | 改/新增 | +~15 行 | 把 `<repo>/release/*` 复制到 `dist/release/*`，让 npm pack 把资源带进 tarball（**Codex P1 fix on PR #127**） |
 | `CLAUDE.md`                                                       | 改   | +1 行           | project tools 表新增 `setup-terminal` 行                     |
+
+> ❌ **Anti-fix（不要改这里）**：root `package.json` 是 `"private": true`，不参与 publish。改它的 `files` 数组**没用**——这是被 Codex P1 抓的原始错误版本，已替换为 `tsup.config.ts` 那一行。
 
 ### 2.2 CLI / 行为契约（reviewer 跑命令验证）
 
@@ -173,6 +189,12 @@ pnpm teamagent init --dry-run
 # A6: 非 darwin 平台 graceful
 TEAMAGENT_FAKE_PLATFORM=linux pnpm teamagent setup-terminal --no-prompt --all
 # 期望：stdout 含 "当前只支持 macOS"；exit 0；磁盘无副作用
+
+# A7: 真正的 publish tarball 含 release 资源（Codex P1 回归保护）
+pnpm build:publish
+cd packages/teamagent && npm pack --dry-run 2>&1 | grep -E 'release/(iterm2-profiles|terminal-themes|fonts)/'
+# 期望：grep 命中 ≥ 3 行（每个目录至少 1 个文件出现在 tarball 内容里）
+# 反例（修复前）：grep 0 命中，setup-terminal 运行时找不到资源
 ```
 
 ### 2.3 PR artifacts
@@ -404,6 +426,7 @@ claudefast -p \
 | 卸载时 backup.json 已被删 → 无法还原 default                  | 低   | 中   | 卸载前先 try-read backup；缺失就只删自己装的，不动 default |
 | issue #104 statusLineSkipped 提示与新 terminal-prompt 互踩    | 低   | 低   | 两个 prompt 段彼此独立；init.test.ts 加共存测试       |
 | npm tarball 因 .ttf 体积超阈值                                | 低   | 低   | JetBrainsMonoNF Mono Regular ~2MB，远低于 npm 50MB 上限 |
+| release 资源没进 tarball（assets 漏发）                       | 中→低 | 高   | A7 回归断言（`npm pack --dry-run` grep 资源路径）；与 `dist/seed/` 走同一条 build-time 复制路径，复用现有验证模式 |
 
 **完整回滚**：
 
