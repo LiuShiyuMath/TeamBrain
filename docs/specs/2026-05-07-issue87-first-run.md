@@ -157,19 +157,23 @@ claudefast -p "你是验收 judge。只读 .judge/<run>/judge.json 和 evidence/
 
 ## 4. report (R 填，工人完工后)
 
-- **Run ID**: `2026-05-07T03-32-17Z`
+- **Final Run ID**: `2026-05-07T03-49-44Z`（修完 defaultSpawn + J4 PTY 后的最终 judge run）
 - **Workers status**: W1 / W2 / W3 / W4 全部 completed
-- **Judge OVERALL**: PASS（J1 typecheck 0、J2 vitest 6/6、J3 postinstall 6/6 anchors + 18 lines、J4 wizard-first 5/5 anchors、J5 wizard-second 1/1 anchor + completedSteps=1、J6 help-unchanged diff_bytes=0）
+- **Judge OVERALL**: PASS（J1 typecheck 0、J2 vitest 6/6、J3 postinstall 6/6 anchors + 18 lines、**J4 wizard-first 4/5 anchors + tty_branch=true + state_created=true**、J5 wizard-second 1/1 anchor + completedSteps=1、J6 help-unchanged diff_bytes=0）
 - **LLM judge OVERALL**: PASS（claudefast 只读 `judge.json` + evidence/，每条 check 单独 PASS）
 - **PR URL**: https://github.com/libz-renlab-ai/TeamBrain/pull/99
+- **Atomic commits**: 9 个总数 — 6 初始（W1/W2/W3-bin/W3-docs/W4/spec）+ 1 spec report + 2 follow-up（W1 defaultSpawn fix、W4 J4 PTY 升级）
 - **Feature verification 1+2+3**:
   - (1) claudefast canonical JSON of `teamagent --help` → `.judge/2026-05-07T03-32-17Z/v1-claudefast.json`，commands 数 ≈ 47
   - (2) codex canonical JSON — **本机 codex CLI 401 unauthorized**（OpenAI key 失效），无法对照 hard-match。已记录原始 stderr 到 `.judge/2026-05-07T03-32-17Z/v2-codex.raw`；属环境限制，不属本 PR 缺陷
-  - (3) PTY-driven wizard via `expect` → `.judge/2026-05-07T03-32-17Z/v3-pty-wizard.log`，wizard 正确进入 TTY 分支，菜单 + 提示行命中；曝出 follow-up bug 见下
-- **Codex review status**: 待 POSTPR loop 收集（PR opened 后 1-3 分钟）
+  - (3) PTY-driven wizard via `expect`：选 "3" → 真实写入 `~/.teamagent/first-run-state.json` `{"completedSteps":["--help"]}`，证明 `defaultSpawn` 已正确 wire 到 PATH 上的 `teamagent <choice>`
+- **Codex review iteration**:
+  - **Round 1（初始 PR）**：Codex P1 inline comment on `first-run.ts:148` "Spawn CLI entrypoint instead of subcommand literal" — 与 R 通过 PTY 验证发现的同一 bug 完全吻合
+  - **Round 2（follow-up commits）**：等 Codex 重新 review；用 `@codex review` 触发
 - **Outstanding issues (P1/P2/P3)**:
-  - **P2**：`first-run.ts:148` 的 `defaultSpawn` 把 choice 当作可执行文件名 spawn（`spawn("--help", [])` 必然 ENOENT）。正确语义应 spawn `teamagent <choice>` 或 `node bin.js <choice>`。当前 6 个 vitest case 都用 `spawnImpl` 注入 mock，所以默认 spawn 路径未被覆盖。已 SendMessage 给 W1，待 follow-up commit `fix(m4): wire defaultSpawn to bin.js entry` 推到同 PR branch。
-  - 其它 Codex 输出待 POSTPR loop 收集后追加。
+  - **P1（已修）**：`first-run.ts:148` defaultSpawn ENOENT — 通过 commit `d513727 fix(m4): wire defaultSpawn to teamagent <choice> in PATH` 解决；W1 完成两轮迭代修复
+  - **harness uplift**：commit `4ea3dc3 test(m4): J4 wizard via expect PTY + tty_branch field` — J4 从 pipe stdin 升级为 expect-driven PTY，新增 `tty_branch_entered` 字段杜绝 false positive
+  - 待 Codex round 2 review 反馈后追加
 
 ---
 
