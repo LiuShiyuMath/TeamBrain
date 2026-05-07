@@ -7,7 +7,7 @@
  */
 import { runM5Bootstrap } from "./m5-bootstrap.js";
 import { runM5Sync } from "./m5-sync.js";
-import { FsBootstrap } from "@teamagent/adapters/m5/fs-bootstrap";
+import { createDefaultBootstrapPort } from "../m5-default-port.js";
 
 export interface M5StatusOptions {
   projectRoot: string;
@@ -30,12 +30,7 @@ export interface M5StatusResult {
 export async function runM5Status(
   opts: M5StatusOptions
 ): Promise<M5StatusResult> {
-  const port = new FsBootstrap({
-    readTeamagentVersion: async () => null,
-    readInstalledPlugins: async () => [],
-    readInstalledProjectSkills: async () => [],
-    readInstalledHooks: async () => [],
-  });
+  const port = createDefaultBootstrapPort();
 
   const manifestRaw = await port.readManifest(opts.projectRoot);
   const result: M5StatusResult = {
