@@ -211,6 +211,18 @@ user-visible VERIFIED rows; this doc covers everything.
 |---|---------|----------|
 | 59 | 首次运行向导：装完立刻提示 3 件可以做的事 + 记住进度 | `scripts/judge-first-run.sh` (J1–J6) |
 
+### Pack management (#90)
+
+> Implements ADR 0002 (`docs/adr/0002-stack-detection-via-coding-agent.md`):
+> TeamAgent does not auto-detect stacks; `teamagent init` emits a versioned
+> markdown prompt and the user's coding agent picks the right packs. Pack rule
+> content (`universal.jsonl`, `frontend-js.jsonl` etc.) lands in sibling
+> issues #88 and #89.
+
+| # | Feature | Evidence |
+|---|---------|----------|
+| 60 | `teamagent pack list/add/remove` + `init` agent-driven prompt (v1 contract) | `bash docs/features/pack-cli/run-judge.sh` (10/10 checks PASS) |
+
 ---
 
 ## Biggest Known Limitations (residual, not blockers)
