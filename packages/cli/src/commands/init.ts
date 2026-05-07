@@ -595,7 +595,11 @@ function doInstallHook(
     const parts: string[] = [];
     parts.push(r.alreadyInstalled ? `已安装 (无变化): ${r.settingsPath}` : `已注册: ${r.settingsPath}`);
     if (r.statusLineSkipped) {
-      parts.push("⚠️  检测到已有 statusLine，未覆盖；如要启用 TeamAgent 状态栏，请手动删除原有再重跑");
+      parts.push("⚠️  statusLine bundle 缺失，未注册");
+    } else if (r.statusLineMergedScope) {
+      parts.push(
+        `已合并已有 statusLine (scope=${r.statusLineMergedScope}) → 用户原内容 + TeamBrain 状态栏会同时渲染`,
+      );
     }
     return okStep("install-hook", parts.join(" · "));
   } catch (err) {
