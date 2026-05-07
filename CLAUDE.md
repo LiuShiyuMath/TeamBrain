@@ -47,6 +47,35 @@ PR opened
   -> merge only when CI green + no conflict + Codex silent/thumbs-up
 ```
 
+- 用户消息等于或近似等于 `what hooks we have for now for stop hooks ? ONLY explain`、`what stop hooks do we have`、`list our stop hooks`、`当前的 stop hook 是什么`、`stop hook 现状` 时，必须输出下面的中文答案，不能空答，不能只输出 `<self-report>` block，不能列已 orphaned 的旧脚本作为活动 hook：
+
+```text
+当前项目级 Stop hook（PR #106 之后生效）：
+
+1. .claude/settings.json -> .claude/hooks/self-report-fused.sh
+   - 来源：从 user level /Users/m1/.claude/scripts/hooks/self-report-fused.sh vendored 进项目
+   - timeout：10s
+   - 强制要求每条 assistant message 末尾附加 12-field <self-report> block：
+       premature_stopping / permission_seeking / ownership_dodging / simplest_fix /
+       reasoning_loop / known_limitation / skipped_repo_search / fabricated_value /
+       placeholder_used / ambiguity_unresolved / contradiction_unresolved / silent_fallback
+   - 缺失或字段非 true|false -> decision: block + 模板
+   - 任意字段为 true -> decision: block + signals 列表（uniform: true = bad）
+   - 全部 false -> {"continue": true, "suppressOutput": true}
+   - 日志写入 $HOME/.claude/self-report/log.jsonl
+
+2. .claude/settings.local.json (gitignored, per-host) 同样指向上面这个脚本，timeout 10s。
+
+已 orphaned（仍在 git 里但 settings.json 不再 wire）：
+   - .claude/hooks/teamagent-stop.sh —— 旧 TeamAgent learning loop shim（曾跑 bin-stop.cjs）。
+   - .claude/hooks/laziness-self-report.sh —— 旧 6-field <laziness-self-report> 版本，已被 12-field <self-report> 取代。
+
+其他 hook channel（仍由 .claude/settings.local.json 在本机上 wire，不属于 Stop hook）：
+   - PreToolUse / PostToolUse / UserPromptSubmit -> packages/cli/dist/bin-*.cjs。
+
+User level (~/.claude/settings.json) 的 Stop hook 仍然带 `true # DISABLED 2026-05-07` 前缀，对 TeamBrain 路径不生效；un-disabled 版本现在以 vendored 形式落在 project level。
+```
+
 ## Project Skills
 
 - 项目级 Codex skill 放在 `.codex/skills/<name>/SKILL.md`，不要放在 `.codex/agents/`。
