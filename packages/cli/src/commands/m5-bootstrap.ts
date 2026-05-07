@@ -2,11 +2,14 @@ import { parseManifest, computeBootstrapDiff } from "@teamagent/core";
 import { FsBootstrap } from "@teamagent/adapters/m5/fs-bootstrap";
 import type { BootstrapDiff } from "@teamagent/types";
 import { executeInstallPlugins, type InstallPluginsResult } from "./install-plugins.js";
+import { createDefaultBootstrapPort } from "../m5-default-port.js";
 
 export interface M5BootstrapOptions {
   projectRoot: string;
   /** 仅检查、不执行安装动作（默认 true）。--apply 翻成 false 实际跑安装。 */
   checkOnly?: boolean;
+  /** 注入自定义 BootstrapPort（测试用）；默认走 createDefaultBootstrapPort() */
+  port?: FsBootstrap;
 }
 
 export interface M5BootstrapResult {
@@ -24,12 +27,7 @@ export interface M5BootstrapResult {
 export async function runM5Bootstrap(
   opts: M5BootstrapOptions
 ): Promise<M5BootstrapResult> {
-  const port = new FsBootstrap({
-    readTeamagentVersion: async () => null,
-    readInstalledPlugins: async () => [],
-    readInstalledProjectSkills: async () => [],
-    readInstalledHooks: async () => [],
-  });
+  const port = opts.port ?? createDefaultBootstrapPort();
 
   const manifestRaw = await port.readManifest(opts.projectRoot);
   if (!manifestRaw) {
