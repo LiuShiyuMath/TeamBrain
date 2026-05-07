@@ -157,14 +157,19 @@ claudefast -p "你是验收 judge。只读 .judge/<run>/judge.json 和 evidence/
 
 ## 4. report (R 填，工人完工后)
 
-> _Reporter writes here after all workers report completed and judge harness passes._
-
-- Run ID:
-- Workers status:
-- Judge OVERALL:
-- PR URL:
-- Codex review status:
-- Outstanding issues (P1/P2/P3):
+- **Run ID**: `2026-05-07T03-32-17Z`
+- **Workers status**: W1 / W2 / W3 / W4 全部 completed
+- **Judge OVERALL**: PASS（J1 typecheck 0、J2 vitest 6/6、J3 postinstall 6/6 anchors + 18 lines、J4 wizard-first 5/5 anchors、J5 wizard-second 1/1 anchor + completedSteps=1、J6 help-unchanged diff_bytes=0）
+- **LLM judge OVERALL**: PASS（claudefast 只读 `judge.json` + evidence/，每条 check 单独 PASS）
+- **PR URL**: https://github.com/libz-renlab-ai/TeamBrain/pull/99
+- **Feature verification 1+2+3**:
+  - (1) claudefast canonical JSON of `teamagent --help` → `.judge/2026-05-07T03-32-17Z/v1-claudefast.json`，commands 数 ≈ 47
+  - (2) codex canonical JSON — **本机 codex CLI 401 unauthorized**（OpenAI key 失效），无法对照 hard-match。已记录原始 stderr 到 `.judge/2026-05-07T03-32-17Z/v2-codex.raw`；属环境限制，不属本 PR 缺陷
+  - (3) PTY-driven wizard via `expect` → `.judge/2026-05-07T03-32-17Z/v3-pty-wizard.log`，wizard 正确进入 TTY 分支，菜单 + 提示行命中；曝出 follow-up bug 见下
+- **Codex review status**: 待 POSTPR loop 收集（PR opened 后 1-3 分钟）
+- **Outstanding issues (P1/P2/P3)**:
+  - **P2**：`first-run.ts:148` 的 `defaultSpawn` 把 choice 当作可执行文件名 spawn（`spawn("--help", [])` 必然 ENOENT）。正确语义应 spawn `teamagent <choice>` 或 `node bin.js <choice>`。当前 6 个 vitest case 都用 `spawnImpl` 注入 mock，所以默认 spawn 路径未被覆盖。已 SendMessage 给 W1，待 follow-up commit `fix(m4): wire defaultSpawn to bin.js entry` 推到同 PR branch。
+  - 其它 Codex 输出待 POSTPR loop 收集后追加。
 
 ---
 
