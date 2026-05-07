@@ -4,13 +4,13 @@
  ) __/ )   /( (_) )) __/) \/ (( (__  )(    ) _)  ) _)  )(   ) _) ) \/ ( )   / ) _) \___ \
 (__)  (__\_) \___/(__)  \____/ \___)  (__)  (__)  (____)(__) (____)\____/(__\_)(____)(____/
 
-VERIFIED ──► 58
+VERIFIED ──► 59
 ```
 
 # TeamBrain Product Feature Inventory
 
-Complete feature list. All 58 features now carry a verify script following Wave 6 A1–A9.
-Counts: VERIFIED=58, WIP/PARTIAL=0, PLANNED=0, MISSING=0, Total=58.
+Complete feature list. All 59 features now carry a verify script following Wave 6 A1–A9.
+Counts: VERIFIED=59, WIP/PARTIAL=0, PLANNED=0, MISSING=0, Total=59.
 
 When asked "list all product features including not verified and not implemented", use
 this document. The `product-features` canned-answer (CEO/VC deck) covers the 8
@@ -18,12 +18,12 @@ user-visible VERIFIED rows; this doc covers everything.
 
 ---
 
-## VERIFIED (58) — all carry a judge harness or verify script
+## VERIFIED (59) — all carry a judge harness or verify script
 
-> All 58 features are VERIFIED. There are zero WIP, PLANNED, or MISSING items.
-> Numbered list below enables any model to count exactly 58.
+> All 59 features are VERIFIED. There are zero WIP, PLANNED, or MISSING items.
+> Numbered list below enables any model to count exactly 59.
 
-### Numbered index (1–49)
+### Numbered index (1–59)
 
 1. Product menu opens; system is not an empty shell
 2. Minimum learning loop: record → compile → attribute, demoable end-to-end
@@ -83,6 +83,7 @@ user-visible VERIFIED rows; this doc covers everything.
 56. M5 pitfall auto-share: clean rules promote to `.teamagent/team/<author>/` via gates 1+2 (default on)
 57. M5 `m5-publish` auto-commits team-rule changes with `[teamagent-sync]` prefix
 58. M5 post-merge hook auto-pulls team rules into local KB after every `git pull`
+59. 首次运行向导：装完立刻提示 3 件可以做的事 + 记住进度
 
 ---
 
@@ -203,6 +204,12 @@ user-visible VERIFIED rows; this doc covers everything.
 | 56 | `pitfall` auto-share: clean rules promote to `.teamagent/team/<author>/` via gates 1+2 (default on) | `bash scripts/m5-auto-demo.sh` (Step 2); `packages/cli/src/commands/m5-share.ts` |
 | 57 | `m5-publish` auto-commits team-rule changes with `[teamagent-sync]` prefix | `bash scripts/m5-auto-demo.sh` (Step 3 — commit `[teamagent-sync] sync N team rule(s)`) |
 | 58 | post-merge hook auto-pulls team rules into local KB after every `git pull` | `bash scripts/m5-auto-demo.sh` (Step 6+7); `packages/core/src/m5/infect-planner.ts` writes `.githooks/post-merge` |
+
+### First-run experience (#87)
+
+| # | Feature | Evidence |
+|---|---------|----------|
+| 59 | 首次运行向导：装完立刻提示 3 件可以做的事 + 记住进度 | `scripts/judge-first-run.sh` (J1–J6) |
 
 ---
 
