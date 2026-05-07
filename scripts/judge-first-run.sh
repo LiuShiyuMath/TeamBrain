@@ -179,9 +179,12 @@ r="$(check_anchor "$J4_LOG" "skeleton-demo" "$J4_HIT_LIST" "$J4_HIT_COUNT")"; J4
 r="$(check_anchor "$J4_LOG" "stats" "$J4_HIT_LIST" "$J4_HIT_COUNT")"; J4_HIT_LIST="${r%|*}"; J4_HIT_COUNT="${r#*|}"
 r="$(check_anchor "$J4_LOG" "\-\-help" "$J4_HIT_LIST" "$J4_HIT_COUNT")"; J4_HIT_LIST="${r%|*}"; J4_HIT_COUNT="${r#*|}"
 
-# Pass: menu anchors present AND TTY branch entered (prompt shown).
-# state_file_created is informational — write requires spawned cmd to exit 0.
-if [ "$J4_HIT_COUNT" -ge 3 ] && [ "$J4_TTY_BRANCH" = "true" ]; then
+# Pass: anchors present AND TTY branch entered AND wizard subprocess exited 0
+# AND state file written. All four required — loosening any condition hides a
+# broken first-run flow. Currently fails on state_file_created because W1's
+# defaultSpawn(choice,[]) can't find the subcommand binary; will pass once W1
+# fixes spawn to use the actual CLI entrypoint.
+if [ "$J4_HIT_COUNT" -ge 3 ] && [ "$J4_TTY_BRANCH" = "true" ] && [ "$J4_EXIT" -eq 0 ] && [ "$J4_STATE_CREATED" = "true" ]; then
   J4_PASS="true"
 fi
 echo "[J4] exit=${J4_EXIT} anchors=${J4_HIT_COUNT}/5 tty_branch=${J4_TTY_BRANCH} state_created=${J4_STATE_CREATED} → ${J4_PASS}"
