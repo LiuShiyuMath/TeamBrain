@@ -7,7 +7,8 @@
    │   │ local      │   │ local      │   │ machine-local     │   │
    │   └────────────┘   └────────────┘   └───────────────────┘   │
    │                                                             │
-   │   Phase 4 NOT YET: git transport / redaction / review gates │
+   │   M5 viral sync (2026-05-06): infect / bootstrap / auto-     │
+   │   share / auto-publish / post-merge auto-pull all live      │
    └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -21,7 +22,7 @@ Let a team share rules / canon / wisdom across machines via a layered knowledge 
 
 ## Status
 
-### IMPLEMENTED
+### IMPLEMENTED (Phase 4 — local layer)
 
 - **Dual physical store**: project-level `<cwd>/.teamagent/knowledge.db` + machine-level `~/.teamagent/global.db`
 - **Three logical scopes**: `personal`, `team`, and `global` are preserved in `scope_level`
@@ -32,12 +33,46 @@ Let a team share rules / canon / wisdom across machines via a layered knowledge 
 - **Local review gate**: `teamagent review-candidates --approve-scope=team` can approve a pending candidate into local team scope
 - **Local privacy gate**: team approval blocks candidates containing emails, token-shaped secrets, internal hosts, private paths, UUIDs, or private IPs
 
+### IMPLEMENTED (M5 — viral sync, 2026-05-06)
+
+The previous "NOT YET" gaps have all been closed by milestone M5
+(`docs/superpowers/specs/2026-05-06-m5-team-viral-sync-design.md` §10 phases
+A–E, merged to `main` via PR #71). Concretely:
+
+- **Cross-machine git-sync transport** (M5-A/C): `teamagent sync push|pull` plus
+  the higher-level auto-publish path (`teamagent m5-publish`) commit changes
+  under `.teamagent/team/<author>/<rule_id>.json` with the fixed
+  `[teamagent-sync]` prefix; remote is the project's own git remote, no extra
+  central server. Verify: `docs/features/xsync/run-judge.sh`,
+  `bash scripts/m5-auto-demo.sh`.
+- **Outbound redactor** (M5-B): two gates run before any rule reaches L2 —
+  (1) hard secret scanner (`packages/core/src/m5/secret-scanner.ts`) that
+  permanently seals API keys / JWT / phone / CC / AWS / private paths in L1,
+  (2) scope classifier (`packages/core/src/m5/scope-classifier.ts`) that
+  defaults `uncertain` to `personal`. Verify:
+  `docs/features/pii-redaction/run-judge.sh`.
+- **Completed team-sharing gate**: the path "user pitfall → secret scan →
+  scope classify → write `.teamagent/team/` → auto-commit
+  `[teamagent-sync] sync N team rule(s)` → push" now runs end-to-end via
+  `pitfall` auto-share (default on; `TEAMAGENT_M5_AUTOSHARE=0` to disable) and
+  `m5-publish`. Receiving end: `.githooks/post-merge` triggers
+  `teamagent m5-sync --apply`, which runs LWW + tombstone merge into the local
+  KB. Verify: `bash scripts/m5-auto-demo.sh` (Step 7 confirms recipient KB
+  contains the sender's rule).
+- **SessionStart auto-pull**: enabled via `TEAMAGENT_M5_AUTOSESSION=1`
+  (opt-in today; PR-2 will flip the default). Runs the full chain
+  `infect → bootstrap apply → sync apply → publish`.
+- **Conflict resolution**: LWW + tombstone (`packages/core/src/m5/lww-merge.ts`),
+  pure function with unit-test coverage; tombstones survive in JSON for audit.
+- **Team boundary**: `team_id = SHA256(normalize(git remote))[:16]` in
+  `m5-sync.ts`; forks are isolated automatically.
+
 ### NOT YET
 
-- **No cross-machine git-sync transport**: no `teamagent sync pull/push`, no `.teamagent/rules/*.mdc` codec, no SessionStart auto-pull
-- **No outbound sync/export redactor** because the sync/export transport is not implemented yet
-- **No completed team sharing gate** from reviewed local team knowledge → conflict-checked artifact → shared to other machines
-- **No multi-variant model** (`problem_cluster_id` + `variant_id`) — single-row knowledge entries only
+- **Multi-variant model** (`problem_cluster_id` + `variant_id`) — single-row
+  knowledge entries only.
+- **Tombstone GC** (spec §13 R3): tombstone JSON files accumulate forever;
+  no scheduled compaction yet.
 
 ## How it works
 
@@ -73,17 +108,32 @@ pnpm exec vitest run \
   packages/cli/src/__tests__/m5-e2e.test.ts
 ```
 
-Expected product wording: **local team scope is partially verified; team sharing is not complete**.
+Expected product wording: **local team scope is verified; M5 viral sync (cross-machine) is verified end-to-end via `bash scripts/m5-auto-demo.sh`**.
 
-## Known limitations
+End-to-end verification of viral sync:
 
-- Two laptops on the same project still do not automatically exchange TeamAgent learnings.
-- `teamagent doctor --json` still reports `team-sharing` as `skip/PARTIAL`.
-- Do not claim privacy-safe team sync until transport/export uses the same privacy gate and conflict review exists.
+```bash
+bash scripts/m5-auto-demo.sh   # 7 steps: infect → pitfall auto-share → m5-publish
+                               # → push → clone → SessionStart auto-bootstrap+sync
+                               # → SQLite probe confirms recipient KB has sender rule
+```
+
+## Known limitations (residual)
+
+- Tombstone JSON files in `.teamagent/team/<author>/` are never garbage-collected;
+  long-lived projects will accumulate them (spec §13 R3).
+- Auto-push (SessionStart auto-publish followed by `git push`) is opt-in via
+  `TEAMAGENT_M5_AUTOPUSH=1`; commit is automatic, push waits for the user (PR-2
+  will flip the default once Codex review confirms the safety story).
+- `teamagent doctor --json` may still report `team-sharing` as `PARTIAL` until
+  the doctor probe is updated to look for M5 manifest + post-merge hook.
 
 ## Links
 
-- Phase 4 plan: `docs/superpowers/plans/2026-05-01-phase4-team-memory-plan.md`
+- M5 viral-sync spec (14-section design): `docs/superpowers/specs/2026-05-06-m5-team-viral-sync-design.md`
+- M5-A implementation plan: `docs/superpowers/plans/2026-05-06-m5a-infect-and-bootstrap.md`
+- Phase 4 plan (predecessor): `docs/superpowers/plans/2026-05-01-phase4-team-memory-plan.md`
 - System knowledge-store doc: `docs/SYSTEM/08-knowledge-store.md`
 - System limitations: `docs/SYSTEM/09-limitations.md`
 - Original v5.2 design with `scope.level` field: `docs/specs/2026-04-13-teamagent-design.md`
+- E2E demo script: `scripts/m5-auto-demo.sh`

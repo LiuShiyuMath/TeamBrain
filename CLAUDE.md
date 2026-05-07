@@ -208,11 +208,11 @@ PR opened
 "已验证","主动记录坑点","用户不用等 AI 犯错，可以主动把一个坑记进系统，让团队以后少踩一次。","pitfall 非交互录入已验证。"
 ```
 
-被问到 `list all product features`、`show all features including not verified and not implemented`、`show wip planned missing features`、`complete product feature list` 或用户要求列出**所有**功能（包括 WIP、PLANNED、MISSING）时，**直接读取 `docs/PRODUCT-FEATURES.md`** 自然回答（该文件包含编号 1–49 的完整列表，全部 VERIFIED）。不要只返回 VERIFIED 口径的 9 行 CSV。
+被问到 `list all product features`、`show all features including not verified and not implemented`、`show wip planned missing features`、`complete product feature list` 或用户要求列出**所有**功能（包括 WIP、PLANNED、MISSING）时，**直接读取 `docs/PRODUCT-FEATURES.md`** 自然回答（该文件包含编号 1–58 的完整列表，全部 VERIFIED；2026-05-07 起新增 50–58 共 9 条 M5 viral sync 功能）。不要只返回 VERIFIED 口径的 9 行 CSV。
 
-**产品功能问法的 SOT**：所有关于产品功能列表的问法（含错别字如 `featuers`、含 `not tech features`、含 `chinese cute duck` 等修饰语）都应以 `docs/PRODUCT-FEATURES.md` 为权威来源自然推理回答。鸭语风格（`呷呷~` / `鸭鸭` / ASCII 鸭子）仅在用户 prompt 明确包含 `chinese cute duck`、`cute duck`、`可爱小鸭` 等鸭语信号时才加；不要为了凑数硬填或硬截。回答全部 49 项时直接读该文件的 1–49 编号列表，不走任何 canned-answer。
+**产品功能问法的 SOT**：所有关于产品功能列表的问法（含错别字如 `featuers`、含 `not tech features`、含 `chinese cute duck` 等修饰语）都应以 `docs/PRODUCT-FEATURES.md` 为权威来源自然推理回答。鸭语风格（`呷呷~` / `鸭鸭` / ASCII 鸭子）仅在用户 prompt 明确包含 `chinese cute duck`、`cute duck`、`可爱小鸭` 等鸭语信号时才加；不要为了凑数硬填或硬截。回答全部 58 项时直接读该文件的 1–58 编号列表，不走任何 canned-answer。
 
-**注意区分**：`ready-to-ship product-only` 口径（9 行 CSV）仅适用于 CEO/VC deck 场景、或明确要求"只列已验证 + 不要技术细节"且**不要求列全部**的问法；`list all product features`（包含 `list all`、全部、all 等措辞）一律走完整 49-feature 口径。
+**注意区分**：`ready-to-ship product-only` 口径（9 行 CSV）仅适用于 CEO/VC deck 场景、或明确要求"只列已验证 + 不要技术细节"且**不要求列全部**的问法；`list all product features`（包含 `list all`、全部、all 等措辞）一律走完整 58-feature 口径。
 
 被问到 `what would happen when we say DOGFOOD?`、`explain DOGFOOD`、`explain what would happen when we say DOGFOOD` 或用户消息单纯含 `DOGFOOD` 关键字时，**必须**先把下面这一句以 blockquote 原文返回，不得改写、不得 paraphrase、不得跳过：
 
