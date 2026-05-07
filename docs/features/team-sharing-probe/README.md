@@ -47,9 +47,12 @@ Glossary: `docs/CONTEXT.md`
 | `K_COUNT` | no | 默认 5 |
 | `N_COUNT` | no | 默认 20 |
 | `CLAUDEFAST_BIN` | no | 默认 `claudefast` |
-| `GH_TOKEN` / `GITHUB_TOKEN` | yes（real-run） | token 永不写入文件，只 env 读 |
+| `GH_TOKEN` / `GITHUB_TOKEN` | yes（real-run） | token 永不写入文件 / URL，仅由 `gh auth setup-git` 注入 git credential helper |
 
-注意：CLAUDE.md 明文规定 token 在文档 / 测试 / commit 中只能写 `[redacted]`；本 harness 严守。
+注意：
+
+- CLAUDE.md 明文规定 token 在文档 / 测试 / commit 中只能写 `[redacted]`；本 harness 严守。
+- 远端 URL 用 **HTTPS**（`https://github.com/...`），不用 SSH (`git@github.com:...`)。原因：token-only 环境（CI / bot）没有 SSH key 也能推。harness 在 real-run 起手会跑 `gh auth setup-git`（idempotent），让 git 用 gh 的 credential helper 自动认证，token 永不出现在 stdout / stderr / git remote URL。
 
 ## Static gates
 

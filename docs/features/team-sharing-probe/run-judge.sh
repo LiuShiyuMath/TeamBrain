@@ -49,6 +49,11 @@ RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 EVIDENCE_DIR="${REPO_ROOT}/tmp/.judge/team-sharing-probe/${RUN_ID}"
 TRIGGER_PHRASE="${TRIGGER_PHRASE:-PR 合并后必须 fetch codex review 直到 silent}"
 
+# Token-friendly remote URL (HTTPS) + gh credential helper handles auth.
+# Never embed token into URL — gh auth setup-git installs credential.helper
+# at script start (real-run only) so token never leaks into stdout/stderr.
+PROBE_REMOTE_URL="https://github.com/${PROBE_REPO_OWNER}/${PROBE_REPO_NAME}.git"
+
 # ── Helpers ─────────────────────────────────────────────────────────────────
 say() { printf '[%s] %s\n' "$MODE" "$*"; }
 
@@ -89,6 +94,12 @@ BOB_DIR="$WORK_DIR/bob"
 ALICE_HOME="$WORK_DIR/alice-home"
 BOB_HOME="$WORK_DIR/bob-home"
 
+# ── Step 0.5: ensure git uses gh's credential helper so HTTPS+token works ───
+# (real-run only; dry-run skips). gh auth setup-git is idempotent.
+if [[ "$MODE" == "real-run" ]]; then
+  gh auth setup-git
+fi
+
 # ── Step 1: prepare probe repo (real-run only) ──────────────────────────────
 say "STEP 1: ensure probe repo exists & is at clean state"
 if require_real "gh repo + reset"; then
@@ -124,16 +135,20 @@ run "mkdir -p $ALICE_DIR $ALICE_HOME"
 run "git init -q $ALICE_DIR"
 run "git -C $ALICE_DIR config user.email '$PROBE_AUTHOR_EMAIL'"
 run "git -C $ALICE_DIR config user.name 'alice-probe'"
-run "git -C $ALICE_DIR remote add origin git@github.com:${PROBE_REPO_OWNER}/${PROBE_REPO_NAME}.git"
-run "HOME='$ALICE_HOME' pnpm --silent --dir '$REPO_ROOT' teamagent pitfall \
+run "git -C $ALICE_DIR remote add origin '$PROBE_REMOTE_URL'"
+# pitfall must run with cwd=ALICE_DIR so .teamagent/ is created in the probe
+# project, NOT in REPO_ROOT (TeamBrain itself). The subshell + cd guarantees
+# this; --dir REPO_ROOT only locates the pnpm package.json, it does not
+# change the spawned process cwd. (codex P1 on PR #129)
+run "( cd '$ALICE_DIR' && HOME='$ALICE_HOME' pnpm --silent --dir '$REPO_ROOT' teamagent pitfall \
   --non-interactive \
   '--trigger=$TRIGGER_PHRASE' \
   '--correct=fetch codex review 直到 silent' \
   '--reason=验证 issue #82 e2e probe' \
   '--category=K' '--tags=pr,review,probe' \
-  '--level=personal'   # 闸门 2 应升 team"
-run "HOME='$ALICE_HOME' pnpm --silent --dir '$REPO_ROOT' teamagent m5-publish \
-  --project-root '$ALICE_DIR'"
+  '--level=personal' )"
+run "( cd '$ALICE_DIR' && HOME='$ALICE_HOME' pnpm --silent --dir '$REPO_ROOT' teamagent m5-publish \
+  --project-root '$ALICE_DIR' )"
 run "git -C $ALICE_DIR push origin main \
   > $EVIDENCE_DIR/alice-push.stdout 2> $EVIDENCE_DIR/alice-push.stderr || \
   echo \"push exit=\$?\" > $EVIDENCE_DIR/alice-push.exitcode"
@@ -151,7 +166,7 @@ run "shasum -a 256 '$SCENARIOS' | awk '{print \$1}' > '$EVIDENCE_DIR/scenarios.s
 # ── Step 4: bob tmux pane — clone + pull + run K+N prompts ──────────────────
 say "STEP 4: teammate clones, pulls (post-merge → m5-sync apply), runs $K_COUNT+$N_COUNT prompts"
 run "mkdir -p $BOB_DIR $BOB_HOME"
-run "git clone git@github.com:${PROBE_REPO_OWNER}/${PROBE_REPO_NAME}.git $BOB_DIR"
+run "git clone '$PROBE_REMOTE_URL' $BOB_DIR"
 run "git -C $BOB_DIR config user.email '$PROBE_TEAMMATE_EMAIL'"
 run "git -C $BOB_DIR config core.hooksPath .githooks"
 # post-merge fires on next pull; force a pull cycle:
