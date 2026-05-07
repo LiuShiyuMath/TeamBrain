@@ -4,13 +4,13 @@
  ) __/ )   /( (_) )) __/) \/ (( (__  )(    ) _)  ) _)  )(   ) _) ) \/ ( )   / ) _) \___ \
 (__)  (__\_) \___/(__)  \____/ \___)  (__)  (__)  (____)(__) (____)\____/(__\_)(____)(____/
 
-VERIFIED ──► 59
+VERIFIED ──► 60
 ```
 
 # TeamBrain Product Feature Inventory
 
-Complete feature list. All 59 features now carry a verify script following Wave 6 A1–A9.
-Counts: VERIFIED=59, WIP/PARTIAL=0, PLANNED=0, MISSING=0, Total=59.
+Complete feature list. All 60 features now carry a verify script following Wave 6 A1–A9.
+Counts: VERIFIED=60, WIP/PARTIAL=0, PLANNED=0, MISSING=0, Total=60.
 
 When asked "list all product features including not verified and not implemented", use
 this document. The `product-features` canned-answer (CEO/VC deck) covers the 8
@@ -18,12 +18,12 @@ user-visible VERIFIED rows; this doc covers everything.
 
 ---
 
-## VERIFIED (59) — all carry a judge harness or verify script
+## VERIFIED (60) — all carry a judge harness or verify script
 
-> All 59 features are VERIFIED. There are zero WIP, PLANNED, or MISSING items.
-> Numbered list below enables any model to count exactly 59.
+> All 60 features are VERIFIED. There are zero WIP, PLANNED, or MISSING items.
+> Numbered list below enables any model to count exactly 60.
 
-### Numbered index (1–59)
+### Numbered index (1–60)
 
 1. Product menu opens; system is not an empty shell
 2. Minimum learning loop: record → compile → attribute, demoable end-to-end
@@ -84,6 +84,7 @@ user-visible VERIFIED rows; this doc covers everything.
 57. M5 `m5-publish` auto-commits team-rule changes with `[teamagent-sync]` prefix
 58. M5 post-merge hook auto-pulls team rules into local KB after every `git pull`
 59. 首次运行向导：装完立刻提示 3 件可以做的事 + 记住进度
+60. One-line `curl|sh` installer at `release/install.sh`: gates `node ≥ 22`, picks `npm`/`pnpm`, runs release-tarball install with deterministic exit codes (#92)
 
 ---
 
@@ -210,6 +211,12 @@ user-visible VERIFIED rows; this doc covers everything.
 | # | Feature | Evidence |
 |---|---------|----------|
 | 59 | 首次运行向导：装完立刻提示 3 件可以做的事 + 记住进度 | `scripts/judge-first-run.sh` (J1–J6) |
+
+### Landing CTA installer (#92)
+
+| # | Feature | Evidence |
+|---|---------|----------|
+| 60 | One-line `curl\|sh` installer at `release/install.sh` (POSIX sh): gates `node ≥ 22`, picks `npm`/`pnpm`, runs release-tarball install with deterministic exit codes (10/11/20/30) and idempotent re-run | `bash docs/features/install-sh/run-judge.sh` (6 scenarios: syntax / node-missing / node-old / node-ok-install with captured argv / idempotent-rerun / dash-portability) |
 
 ---
 
