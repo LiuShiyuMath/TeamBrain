@@ -73,7 +73,7 @@
 - `packages/cli/src/__tests__/setup-terminal.test.ts`
   - 行为测试：detect、prompt 文案、apply（dry-run + 真实写入隔离 tmp HOME）、uninstall 还原、不破坏用户原 Profile（V3 模拟）。
 - `release/terminal-themes/TeamBrain.terminal`：预构建 plist（手动用 Terminal.app GUI 配 Solarized Dark + JetBrainsMono Nerd Font Mono 后 export，落到 git）。
-- `release/iterm2-profiles/teambrain.json`：Solarized Dark 的 iTerm2 DynamicProfile JSON（手写，含稳定 GUID `5ec96c8e-bb33-5b97-9b29-teambrain001`，UUIDv5 from `name=TeamBrain`）。
+- `release/iterm2-profiles/teambrain.json`：Solarized Dark 的 iTerm2 DynamicProfile JSON（手写）。**TODO at implementation**：在落地这份 JSON 前用 `uuidgen`（macOS 自带）或 `node -e "console.log(crypto.randomUUID())"` 一次性生成一个真 UUID，写死在 git 里。**幂等性靠固定 GUID** —— 每次 TeamBrain 升级时这份文件 GUID 必须保持同一个值，否则 iTerm2 会把它当成新 Profile 重复加载。本 plan 不在这里写假 UUID 占位。
 - `release/fonts/JetBrainsMonoNerdFontMono-Regular.ttf` + `release/fonts/LICENSE`（OFL）。
 - `docs/features/setup-terminal.md`：feature canned answer 入口（仿 `docs/features/compile.md`）。
 
