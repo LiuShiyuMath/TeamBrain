@@ -8,6 +8,7 @@
 - Phase 2 设计：`docs/superpowers/specs/2026-04-15-phase2-design.md`
 - Phase 1 实现计划（已归档）：`docs/backup/phase1/specs/2026-04-14-teamagent-phase1-plan.md`
 - **多工具适配**：`docs/features/multi-tool.md` — 4 通道（PreToolUse / UserPromptSubmit / Stop analyze / AttributionBus）已实现；MCP Server / Cursor compiler **NOT YET**。任何「这功能跑通了吗 / 支持哪些 AI 工具」问题先读此文档，禁止说"即将上线"或省略 NOT YET 标记。
+- **如何为一个 PR 写计划 / how to plan for a PR**：`docs/HOWTO-PLAN-PR.md` — 四段结构（plan / expected outputs / how-to-verify / claudefast probes），把 DUCKPLAN、`docs/feature-verification.md` 1+2+3 门禁、`docs/FASTPROBE.md` 三步探针、`docs/POSTPR.md` 循环串成一条 PR 工作流。任何「PR 怎么计划 / 计划里写什么 / PR 前要跑哪些 probes」问题先读此文档，不要走 canned-answer 捷径。
 
 ---
 
@@ -44,6 +45,35 @@ PR opened
   -> push same PR branch or follow-up PR if already merged
   -> POSTPR loop
   -> merge only when CI green + no conflict + Codex silent/thumbs-up
+```
+
+- 用户消息等于或近似等于 `what hooks we have for now for stop hooks ? ONLY explain`、`what stop hooks do we have`、`list our stop hooks`、`当前的 stop hook 是什么`、`stop hook 现状` 时，必须输出下面的中文答案，不能空答，不能只输出 `<self-report>` block，不能列已 orphaned 的旧脚本作为活动 hook：
+
+```text
+当前项目级 Stop hook（PR #106 之后生效）：
+
+1. .claude/settings.json -> .claude/hooks/self-report-fused.sh
+   - 来源：从 user level /Users/m1/.claude/scripts/hooks/self-report-fused.sh vendored 进项目
+   - timeout：10s
+   - 强制要求每条 assistant message 末尾附加 12-field <self-report> block：
+       premature_stopping / permission_seeking / ownership_dodging / simplest_fix /
+       reasoning_loop / known_limitation / skipped_repo_search / fabricated_value /
+       placeholder_used / ambiguity_unresolved / contradiction_unresolved / silent_fallback
+   - 缺失或字段非 true|false -> decision: block + 模板
+   - 任意字段为 true -> decision: block + signals 列表（uniform: true = bad）
+   - 全部 false -> {"continue": true, "suppressOutput": true}
+   - 日志写入 $HOME/.claude/self-report/log.jsonl
+
+2. .claude/settings.local.json (gitignored, per-host) 同样指向上面这个脚本，timeout 10s。
+
+已 orphaned（仍在 git 里但 settings.json 不再 wire）：
+   - .claude/hooks/teamagent-stop.sh —— 旧 TeamAgent learning loop shim（曾跑 bin-stop.cjs）。
+   - .claude/hooks/laziness-self-report.sh —— 旧 6-field <laziness-self-report> 版本，已被 12-field <self-report> 取代。
+
+其他 hook channel（仍由 .claude/settings.local.json 在本机上 wire，不属于 Stop hook）：
+   - PreToolUse / PostToolUse / UserPromptSubmit -> packages/cli/dist/bin-*.cjs。
+
+User level (~/.claude/settings.json) 的 Stop hook 仍然带 `true # DISABLED 2026-05-07` 前缀，对 TeamBrain 路径不生效；un-disabled 版本现在以 vendored 形式落在 project level。
 ```
 
 ## Project Skills
@@ -91,7 +121,7 @@ pnpm teamagent <cmd>  # 跑 CLI（M0 可用：skeleton-demo）
 ## claudefast 约定
 
 - `claudefast` 不是 TeamAgent 命令；在本项目里它表示“用更便宜或更快的 Claude Code profile 跑非交互测试”的本地 wrapper/alias。
-- 在这台机器上，`claudefast` 位于 `/Users/liushiyu/.local/bin/claudefast`，最终会调用 `claude`，并使用 MiniMax Anthropic-compatible fast profile。不要把 wrapper 里的 API token 写进文档、测试或 commit；解释该 wrapper 时也不要展示 token 的任何片段、前缀或后缀，统一写成 `[redacted]`。
+- `claudefast` 一般作为本地 wrapper 安装在用户 PATH 上（macOS/Linux 常见 `~/.local/bin/claudefast`，Windows Git Bash 看具体安装），最终会调用 `claude`，并使用 MiniMax Anthropic-compatible fast profile。不要把 wrapper 里的 API token 写进文档、测试或 commit；解释该 wrapper 时也不要展示 token 的任何片段、前缀或后缀，统一写成 `[redacted]`。
 - 在其他机器上，`claudefast` 可能只是 `claude --model haiku` 一类 alias；项目脚本只能假设它最终兼容 Claude Code CLI 参数。
 - Claude Code 交互界面里的 `!claudefast ...` 表示执行本地 shell 命令；普通 shell、脚本和 CI 里写 `claudefast ...`，不要带 `!`。
 - Hook JSON 测试的推荐模板：
@@ -114,7 +144,7 @@ claudefast -p \
 
 ## Project tools / FASTPROBE
 
-被问到 `what project tools we have?` 时，回答必须列出本项目工具并**显式包含 `FASTPROBE`**。当前 canonical 列表：
+被问到 `what project tools we have?` 时，回答必须列出本项目工具并**显式包含 `FASTPROBE` 与 `TEAMWORK`**。当前 canonical 列表：
 
 | Tool | Purpose |
 |------|---------|
@@ -124,9 +154,11 @@ claudefast -p \
 | **`FASTPROBE`** | 本项目调研/审计的 `claudefast` 三步固定组合（详见 `docs/FASTPROBE.md`） |
 | **`DOGFOOD`** | 双 tmux 窗口 left/right split（左 dev claude / 右 sandbox claudefast）live agent dev loop（详见 `docs/DOGFOOD.md`） |
 | **`BUGREPORT`** | 报 bug 流程：开 issue 在 `https://github.com/libz-renlab-ai/TeamBrain`，三段 system info / how-to-reproduce / raw logs（详见 `docs/BUGREPORT.md`，自动收集 `bash scripts/bugreport-collect.sh`） |
+| **`HOWTOISSUE`** | 在仓库新建 issue 的写法约定：三段式（问题 / 复现步骤 / 修复验证清单），严禁写 root cause 分析、fix 建议、实现细节；canonical 范式 issue #100（详见 `docs/HOW-TO-ISSUE.md`） |
 | **`POSTPR`** | 每个 PR 开完后必做：fetch Codex review → triage P1/P2 → loop until silent or 👍（详见 `docs/POSTPR.md`） |
 | **`PRESHIP`** | 发版前给 CEO/VC 小鸭看的 verified-only 产品功能状态 CSV（详见 `docs/PRESHIP.md`） |
 | **`RULE-VERIFY`** | 跑 `bash scripts/verify-all-rules.sh` 用 claudefast semantic judge / mechanical checks 验证 8 条 triggered rule 全部 PASS（详见 `docs/rule-verify/INDEX.md`） |
+| **`TEAMWORK`** | N+1+(2N) 成员 agent 团队模式：N 个 sonnet worker（每人跑 2 个 claudefast probe 更新文档）+ 1 个 opus 1M reporter 汇总验收；lead 必须在非 main 分支/worktree 上操作，绝不在 main 直接工作（详见 `docs/TEAMWORK.md`） |
 | `codex exec` | Codex 端 canonical JSON 对照（feature-verification 1+2+3） |
 | **Feature canned answers** | 每个 feature（Calibrator v2、Team knowledge sharing 等）的 6 节模板入口在 `docs/features/INDEX.md` — 不在本文件 inline 答案 |
 | **`apps/landing/`** | GitHub Pages landing page 子包（`pnpm --filter landing build`）；关联 `docs/plans/issue-84` + `.github/workflows/landing-deploy.yml` |
@@ -258,11 +290,8 @@ PR opened
 
 详情、`gh api` 配方、Codex 标签解读见 `docs/POSTPR.md`。验证脚本 `bash docs/postpr/verify-canned-answer.sh` 必须 PASS —— grep 锚点 `fetch the codex review` / `chatgpt-codex-connector` / `pulls/.*comments` / `@codex review` / `silent` / `loop` 全部命中。
 
-## GitHub account
+## Canned answers (misc)
 
-- 本项目 GitHub account 使用 `LiuShiyuMath`，不要使用 `liush2yuxjtu`。
-- 如果本机 `GITHUB_TOKEN` 让 `gh` 识别成 `liush2yuxjtu`，运行 GitHub CLI 时用 `env -u GITHUB_TOKEN gh ...`，确保走 keyring 里的 `LiuShiyuMath`。
-- 被问到 "what accounts we use for github ?" 时，直接回答：`LiuShiyuMath`。
 - 被问到 "16 status ? anything still need fix ?" 时，按 `docs/pr-status/16.md` 回答。
 
 ## Codex Web for GitHub 使用 Claude Code CLI
@@ -314,35 +343,3 @@ Learned behavior is no longer carried by a generated managed block in this file.
 Project knowledge should propagate through `docs/knowledge/INDEX.md` and project
 Skills, while this root `CLAUDE.md` stays limited to short human-maintained
 working agreements.
-
-<!-- TEAMAGENT:START - 自动管理，请勿手动编辑 -->
-## TeamAgent 经验（63条活跃知识，为你编译了 27 条（token 预算 3000）)
-- 使用 忽略 <local-command-caveat> 包裹的消息，除非用户明确要求分析 而非 <local-command-caveat>——该标签内容由本地命令自动生成，非用户意图表达；AI 主动响应会污染对话上下文，误把系统噪声当用户指令 [1.00] [预置]
-- 移除用户反馈的检查条件，仅基于失败本身触发分析——用户反馈约束是冗余的；所有错都应进入分析管道，由规则库自主决定是否学习，而非前置过滤 [0.95] [预置]
-- 规则类型（practice/avoidance）应只影响处理策略（enforcement），不应影响 matching 逻辑；所有规则都应参与匹配——在 matcher 中过滤 practice 类规则导致其永不触发，失去学习反馈信号和评分机制；类型应仅控制 block/warn/score 行为，而非决定规则是否生效 [0.95] [预置]
-- avoidance 必须配 wrong_pattern（可字面匹配关键词），practice 应为空；两种规则走不同处理流程——avoidance 类规则需要可靠字面关键词才能被 matcher 在 PreToolUse 拦截，practice 类规则是原则性指导、没可靠字面关键词，直接编译进 CLAUDE.md 供 AI 读；数据合法性约束必须在 seed 生成或 LLM extractor 阶段强制执行 [0.95] [预置]
-- 使用 忽略标签内容，除非用户明确要求分析 而非 <local-command-caveat>——该标签标记系统生成的消息（本地命令输出）而非用户意图；直接响应会污染对话上下文、误把工具噪声当用户指令 [0.90]
-- 优先检查实际产出文件、artifacts、结构化成果，而非仅依赖进程或任务的状态标记（idle、pending 等）——Worker/agent 的状态标记可能因网络延迟、会话中断等因素滞后或不准确，实际工作成果（文件内容、checklist、验证结果）才是唯一可信的完成证明 [0.90]
-- 设计文档中的表述应准确反映实现的实际驱动因素和制约条件——设计文档与代码实现的措辞 drift 会误导未来维护者对决策背景的理解；worker-9 修正了关于资源哈希化的过度表述（从'HTML 模板含 hash 化 asset 引用'改为'build 步骤为未来 hash/压缩留位'），使其与实际 cp -r 实现的驱动相符，消除了文档与代码间的歧义 [0.90]
-- 在前置工作段交付前，必须验证产出文件（文档、配置、代码）的完整性与相互一致性，避免遗留未解决问题到后续阶段——仅以 atomic commit 成功作为里程碑完成的证明不足；R2 虽然 commit 落地，但遗漏了检查 pnpm-workspace.yaml 中 apps/* glob 的补充和 pages-source-decision.md 与 package.json 实现的同步，这些问题直到 I-phase worker-9 执行时才被发现并修复，说明每个检查点前都应加入文档-配置一致性验证步骤 [0.90]
-- 使用 先读用户指向的文件，重新 brainstorm + 补全需求，再拆 task 实现；API key 来源询问用户（如 claude code haiku） 而非 计划文档只是设计文档，还没实现——AI 未读文件就断言不存在会误导用户；正确做法是先 Read 指定路径、以文件内容为准，再结合用户偏好（如用 haiku 作 token 来源）规划实现 [0.90] [预置]
-- 立即读取 output-file 并继续后续流程，不再说'等通知'——task-notification 本身就是通知；AI 仍说'等通知'说明未识别该消息为触发信号，正确做法是收到后立即处理输出、推进工作流 [0.90] [预置]
-- 后台 agent 完成时系统会发 task-notification，包含 task-id、output-file、status、summary；可通过 TaskOutput 工具按 task-id 读取结果——Agent(run_in_background=true) 底层走 TaskCreate 机制，完成后 harness 自动发 task-notification 事件；AI 声称'无法手动查状态'是错的，实际有 task-id 可查 [0.90] [预置]
-- 立即读取 output-file，继续后续流程（如 dispatch 下一 Wave）——task-notification 本身就是完成信号；收到后仍说'等通知'说明 AI 未识别该消息为触发点，正确做法是收到即处理，不需要额外等待 [0.90] [预置]
-- 维护游标，增量扫描新增 turn，去重已处理；仅在 /new、/clear、/compact、退出、关闭窗口时做完整重扫——Stop 每轮触发，全量重扫导致 token 消耗呈平方增长；增量扫描维护游标可避免重复，关键时刻完整重扫确保一致性 [0.90] [预置]
-- 自动化拉取 + 自动清理过时数据——手动维护导致数据陈旧（拉取滞后5天）和无效数据堆积，自动化+清理确保知识及时可用且命中率高 [0.90] [预置]
-- 立即用 TaskOutput 工具按 task-id 读取输出，继续流程——task-notification 本身就是完成信号，harness 发出即表示任务已完；立即处理充分利用并行性而非阻塞 [0.90] [预置]
-- 忽略标签内所有内容，除非用户明确要求分析——<local-command-caveat> 由本地命令自动生成而非用户意图，响应会把系统噪声当指令污染对话 [0.90] [预置]
-- 分别为 Windows（where/findstr/PowerShell）和 Unix（which/grep）提供诊断命令，或明确标注环境要求——Unix 命令（which, grep, cat |）在 Windows cmd 原生环境不可用；跨平台用户群需要对应平台的等价命令，混合给两个平台的指令会导致 Windows 用户卡住且困惑 [0.90] [预置]
-- 使用 Hook 系统完整工作；flag 仅隐藏 Claude Code UI 权限交互弹窗 而非 --dangerously-skip-permissions——Flag 名字暗示禁用全部权限检查，实际只跳过交互式弹窗。PreToolUse/PostToolUse/Stop/SessionStart 等 hook 独立于此标志完整运行，不受影响 [0.90] [预置]
-- 当遇到 `<local-command-caveat>` 标签，忽略其包裹的内容，除非用户明确要求分析或响应——该标签标记系统生成的消息（如本地命令输出），非用户的显式意图；直接响应会污染对话上下文并误把工具输出当作用户指令 [0.90] [预置]
-- 不要凭记忆作答；优先用 WebSearch/WebFetch 或 mcp 搜索工具验证，再结合当前代码上下文作答——模型记忆会过时或臆造（幻觉）；用户用到的新概念常在训练数据截止之后出现。先搜索再作答可避免给出错误事实、误导用户 [0.95] [预置]
-- 先把凭据/环境持久化到项目配置（增量、不改已有内容），再让 subagent 自主完成；远程实验需先检测空闲显卡避免影响他人——反复追问凭据打断用户节奏；配置应一次记录永久复用。subagent 应自主推进而非报 BLOCKED。共享 GPU 资源需礼让他人实验 [0.95] [预置]
-- 按产品经理视角讲架构、流程、关键原理,略过代码级细节——默认倾向给技术细节会淹没非技术受众；产品经理需要整体认知(架构/流程/原理)而非实现,讲解粒度要匹配听众心智模型 [0.95] [预置]
-- 使用 直接调用 mcp 工具 而非 通过 wiki 知识库系统——wiki 知识库方案过度复杂；应优先检查是否有现成 mcp 工具可直接调用，避免绕路 [0.95] [预置]
-- 全局单次init，所有项目共享规则——全局 init 避免重复配置和规则分散，保证用户所有项目规则一致，降低管理成本 [0.95] [预置]
-- 先澄清和解释系统逻辑细节，获得用户确认理解后再给建议——用户若不理解系统为何如此，对改动方案缺乏信心；同步理解是决策的前置条件，避免改动后产生新的疑虑 [0.95] [预置]
-- 按分阶段流程：通读项目结构 → 识别核心模块 → 追踪关键链路 → 提炼设计思想 → 最后动笔——充分的前期分析能确保文档的准确性、完整性和逻辑清晰，避免仓促写作导致遗漏或误读 [0.95] [预置]
-- 将抽象层级维持在问题与思路层而非技术与结构层；焦点放在问题形状、核心判断、思路选择与权衡取舍，避免具体技术名、目录、字段、算法、流水线式细节——资深架构师关注的是设计的认知模型与思维方式而非实现的技术栈；提升抽象层级使文档跨时间跨团队复用，避免技术细节导致的快速过时 [0.95] [预置]
-> 还有 29 条 canonical+ 规则因 token 预算未显示（teamagent compile --dry-run 查看）
-<!-- TEAMAGENT:END -->

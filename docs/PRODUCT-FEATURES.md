@@ -4,13 +4,13 @@
  ) __/ )   /( (_) )) __/) \/ (( (__  )(    ) _)  ) _)  )(   ) _) ) \/ ( )   / ) _) \___ \
 (__)  (__\_) \___/(__)  \____/ \___)  (__)  (__)  (____)(__) (____)\____/(__\_)(____)(____/
 
-VERIFIED ──► 58
+VERIFIED ──► 61
 ```
 
 # TeamBrain Product Feature Inventory
 
-Complete feature list. All 58 features now carry a verify script following Wave 6 A1–A9.
-Counts: VERIFIED=58, WIP/PARTIAL=0, PLANNED=0, MISSING=0, Total=58.
+Complete feature list. All 61 features now carry a verify script following Wave 6 A1–A9.
+Counts: VERIFIED=61, WIP/PARTIAL=0, PLANNED=0, MISSING=0, Total=61.
 
 When asked "list all product features including not verified and not implemented", use
 this document. The `product-features` canned-answer (CEO/VC deck) covers the 8
@@ -18,12 +18,12 @@ user-visible VERIFIED rows; this doc covers everything.
 
 ---
 
-## VERIFIED (58) — all carry a judge harness or verify script
+## VERIFIED (61) — all carry a judge harness or verify script
 
-> All 58 features are VERIFIED. There are zero WIP, PLANNED, or MISSING items.
-> Numbered list below enables any model to count exactly 58.
+> All 61 features are VERIFIED. There are zero WIP, PLANNED, or MISSING items.
+> Numbered list below enables any model to count exactly 61.
 
-### Numbered index (1–49)
+### Numbered index (1–61)
 
 1. Product menu opens; system is not an empty shell
 2. Minimum learning loop: record → compile → attribute, demoable end-to-end
@@ -83,6 +83,9 @@ user-visible VERIFIED rows; this doc covers everything.
 56. M5 pitfall auto-share: clean rules promote to `.teamagent/team/<author>/` via gates 1+2 (default on)
 57. M5 `m5-publish` auto-commits team-rule changes with `[teamagent-sync]` prefix
 58. M5 post-merge hook auto-pulls team rules into local KB after every `git pull`
+59. 首次运行向导：装完立刻提示 3 件可以做的事 + 记住进度
+60. One-line `curl|sh` installer at `release/install.sh`: gates `node ≥ 22`, picks `npm`/`pnpm`, runs release-tarball install with deterministic exit codes (#92)
+61. Universal seed pack: 12 substring-friendly cross-language avoidance rules ship out-of-box, hit legacy keyword matcher within 30s of `teamagent init` (#88)
 
 ---
 
@@ -203,6 +206,29 @@ user-visible VERIFIED rows; this doc covers everything.
 | 56 | `pitfall` auto-share: clean rules promote to `.teamagent/team/<author>/` via gates 1+2 (default on) | `bash scripts/m5-auto-demo.sh` (Step 2); `packages/cli/src/commands/m5-share.ts` |
 | 57 | `m5-publish` auto-commits team-rule changes with `[teamagent-sync]` prefix | `bash scripts/m5-auto-demo.sh` (Step 3 — commit `[teamagent-sync] sync N team rule(s)`) |
 | 58 | post-merge hook auto-pulls team rules into local KB after every `git pull` | `bash scripts/m5-auto-demo.sh` (Step 6+7); `packages/core/src/m5/infect-planner.ts` writes `.githooks/post-merge` |
+
+### First-run experience (#87)
+
+| # | Feature | Evidence |
+|---|---------|----------|
+| 59 | 首次运行向导：装完立刻提示 3 件可以做的事 + 记住进度 | `scripts/judge-first-run.sh` (J1–J6) |
+
+### Landing CTA installer (#92)
+
+| # | Feature | Evidence |
+|---|---------|----------|
+| 60 | One-line `curl\|sh` installer at `release/install.sh` (POSIX sh): gates `node ≥ 22`, picks `npm`/`pnpm`, runs release-tarball install with deterministic exit codes (10/11/20/30) and idempotent re-run | `bash docs/features/install-sh/run-judge.sh` (6 scenarios: syntax / node-missing / node-old / node-ok-install with captured argv / idempotent-rerun / dash-portability) |
+
+### Seed packs / first-run interception (issue #88)
+
+> Decision 2 of `docs/specs/2026-05-07-landing-copy-actually-needed.md`:
+> "30 秒内首次拦截". Substring-friendly seed pack lets the legacy keyword
+> matcher fire within the 30-second window before the vector model has been
+> downloaded (ADR 0001 two-stage install).
+
+| # | Feature | Evidence |
+|---|---------|----------|
+| 61 | Universal seed pack: 12 cross-language substring rules ship out-of-box (moment, /Users/, /home/, rm -rf /, chmod 777, eval(, git push --force, git reset --hard, --no-verify, dangerouslySetInnerHTML, pickle.loads, .env) | `docs/features/universal-pack/run-judge.sh`; `packages/cli/src/__tests__/seed-pack-universal.test.ts` (27 tests); `packages/teamagent/seed/packs/universal.jsonl` |
 
 ---
 
