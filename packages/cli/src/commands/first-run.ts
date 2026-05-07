@@ -50,10 +50,13 @@ function nextStep(completedSteps: string[]): string {
 }
 
 function defaultSpawn(cmd: string, args: string[]): Promise<number> {
-  // Wizard only triggers when the user runs `teamagent` (no args), so `teamagent`
-  // is guaranteed to be in PATH. Spawn it directly as the entry binary.
+  // Use process.argv[1] (the current entry script) so this works in both
+  // dev (tsx src/bin.ts) and prod (node dist/bin.js) without hardcoding a bin name.
+  const entry = process.argv[1] ?? "teamagent";
   return new Promise((resolve) => {
-    const child = spawn("teamagent", [cmd, ...args], { stdio: "inherit" });
+    const child = entry.endsWith(".ts")
+      ? spawn("npx", ["tsx", entry, cmd, ...args], { stdio: "inherit" })
+      : spawn(process.execPath, [entry, cmd, ...args], { stdio: "inherit" });
     child.on("close", (code) => resolve(code ?? 0));
     child.on("error", () => resolve(1));
   });
