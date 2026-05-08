@@ -1,6 +1,26 @@
-import type { ErrorSignalCollector, RawErrorSignal } from "@teamagent/ports";
 import type { PersistedEvent, ParsedSession } from "@teamagent/types";
-import { ruleBasedCorrectionDetector, clusterByTag } from "@teamagent/core";
+import {
+  ruleBasedCorrectionDetector,
+  clusterByTag,
+  type RawErrorSignal,
+} from "@teamagent/core";
+
+/**
+ * 错误信号采集 Port。
+ *
+ * `RawErrorSignal` 类型定义住在 `@teamagent/core` (cross-session-cluster.ts) — 唯一定义，避免 nominal divergence。
+ *
+ * 信号类型：
+ *   A - 用户纠正 AI（correction_moment）
+ *   B - build/test 失败（hook-post.result, succeeded=false）
+ *   C - AI override 被人类强行覆盖（ai.override.ignored）
+ *   D - 同一任务多次连续失败（multi_failure）
+ *   G - hook-pre.blocked 后用户继续（规则被绕过）
+ *   H - 同一 tag/pattern 跨 session 重复出现（聚类）
+ */
+export interface ErrorSignalCollector {
+  collect(since: Date): Promise<RawErrorSignal[]>;
+}
 
 export interface CompositeCollectorOptions {
   events: PersistedEvent[];
