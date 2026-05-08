@@ -39,7 +39,9 @@
 执行：
 
 - dump trace 到 `/tmp/verify-<feature>-<ts>.txt`
-- **不要求 trace 结构化**；judge 看不懂时下一轮主 agent 决定加什么 logging
+- **不要求 trace 结构化**；但 dogfood 经验表明带「numbered EVIDENCE sections」（`=== EVIDENCE 1 ===`、`=== EVIDENCE 2 ===` ...）的 trace 让 JUDGE 引用更精准（reason 文本可指向具体 evidence #）
+- judge 看不懂时下一轮主 agent 决定加什么 logging
+- **可顺手读引入 PR 的 commit message**：feature 作者常在 commit message 里嵌入首次 `run_id` / verdict / leak 列表（参考 PR `c08b8fa`）——这是天然的 audit trail，code-frozen attestation 应该把它纳入 trace
 
 ### worktree `node_modules` 缺失时的降级：code-frozen attestation
 

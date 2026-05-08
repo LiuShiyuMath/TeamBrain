@@ -17,6 +17,25 @@ JUDGE 看 feature 对不对；loop 进度由 [META-JUDGE](META-JUDGE.md) 判。
 | `GOAL` | `docs/features/<name>/GOAL.md` 全文 |
 | `TRACE` | RUN harness dump 到 `/tmp/verify-<feature>-<ts>.txt` |
 
+### Trace 结构建议（来自 dogfood 经验）
+
+可选但强烈推荐：用 `=== EVIDENCE N: <题目> ===` 把 trace 切成
+有编号的 evidence sections。JUDGE 的 reason 文本会自然引用
+`(EVIDENCE 3)` 之类的锚点，方便人工 audit。
+
+### 当 feature 自带 mechanical harness（如 `run-judge.sh`）
+
+JUDGE 的角色不是 rubber-stamp harness 的 `exit_code`，而是验证
+**harness 的窄信号是否 align GOAL 的产品语言**。例如：
+
+- harness 报 `leaked_pii_count == 0` ✓
+- 但 GOAL 锚点是「5 类公开 PII 全部被 scrub」
+- JUDGE 要核对：harness fixture 是否覆盖这 5 类？harness 跑的
+  test 是否对每类各有 assertion？
+
+不对齐时 → INCONCLUSIVE，要求下一轮把 harness fixture / test
+补齐到 GOAL 锚点维度。
+
 ## Prompt 模板
 
 ```text
