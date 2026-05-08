@@ -12,8 +12,11 @@ PASS on iteration 1 of dogfood run.
 
 ## What was checked
 
-- `positiveTriggerRate = 1.0` (all 10 positive probes triggered in last live run)
-- `falsePositiveRate = 0.0` (negative probes silent — no false matches)
+- `positiveTriggerRate = 1.0` (every positive-kind probe triggered;
+  `e2e-evaluate.test.ts` runs **10 probes total** split across mixed
+  kinds — positive / generalization / negative — and
+  `positiveTriggerRate` is computed only over the positive subset)
+- `falsePositiveRate = 0.0` (negative-kind probes silent — no false matches)
 - enforcement logic: `confidence ≥ 0.9 + objective + enforcement=block → deny` documented + tested
 
 ## Run mode
