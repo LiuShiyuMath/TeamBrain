@@ -218,7 +218,7 @@ describe("runCalibrationPipeline", () => {
       bus,
       now: () => new Date("2026-04-15T02:00:00Z"),
     });
-    expect(bus.events.filter((e) => e.action === "adjusted")).toHaveLength(2);
+    expect(bus.events.filter((e) => e.kind === "calibrator.adjusted")).toHaveLength(2);
   });
 
   it("archive event emitted at warning severity", async () => {

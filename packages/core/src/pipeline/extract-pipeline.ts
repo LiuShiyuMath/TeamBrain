@@ -122,9 +122,9 @@ export async function runExtractPipeline(
     if (deps.isMomentSeen && deps.isMomentSeen(signature)) {
       result.deduped++;
       emit(deps.bus, {
+        kind: "extractor.deduped",
         source: "extractor",
-        action: "deduped",
-        target: { count: 1 },
+        count: 1,
         severity: "info",
         userFacingValue: `已在历史 run 中处理过（turn ${moment.turnIndex}）`,
         timestamp: isoNow(deps.now),
@@ -141,9 +141,9 @@ export async function runExtractPipeline(
         result.skipped++;
         deps.markMomentSeen?.(signature);
         emit(deps.bus, {
+          kind: "extractor.skipped",
           source: "extractor",
-          action: "skipped",
-          target: { count: 1 },
+          count: 1,
           severity: "info",
           userFacingValue: `纠正信号不足，未提取（turn ${moment.turnIndex}）`,
           timestamp: isoNow(deps.now),
@@ -176,9 +176,10 @@ export async function runExtractPipeline(
             }
           }
           emit(deps.bus, {
+            kind: "extractor.rejected-l0",
             source: "extractor",
-            action: "rejected_l0",
-            target: { id: entry.id, count: 1 },
+            knowledgeId: entry.id,
+            count: 1,
             severity: "info",
             userFacingValue: `L0 拒绝：${l0.failed_checks.join(", ")}`,
             timestamp: isoNow(deps.now),
@@ -195,9 +196,10 @@ export async function runExtractPipeline(
       result.extracted.push(entry);
       deps.markMomentSeen?.(signature);
       emit(deps.bus, {
+        kind: "extractor.extracted",
         source: "extractor",
-        action: "extracted",
-        target: { id: entry.id, count: 1 },
+        knowledgeId: entry.id,
+        count: 1,
         severity: "highlight",
         userFacingValue: `学到：${entry.trigger} → ${entry.correct_pattern}`,
         timestamp: isoNow(deps.now),
@@ -205,9 +207,9 @@ export async function runExtractPipeline(
     } catch (err) {
       result.failed++;
       emit(deps.bus, {
+        kind: "extractor.failed",
         source: "extractor",
-        action: "failed",
-        target: { count: 1 },
+        count: 1,
         severity: "warning",
         userFacingValue: `提取失败（turn ${moment.turnIndex}）: ${String(err).slice(0, 120)}`,
         timestamp: isoNow(deps.now),
@@ -219,17 +221,17 @@ export async function runExtractPipeline(
     try {
       await deps.recompile(deps.store.getActive());
       emit(deps.bus, {
+        kind: "compiler.recompiled",
         source: "compiler",
-        action: "recompiled",
-        target: { count: result.extracted.length },
+        count: result.extracted.length,
         severity: "info",
         userFacingValue: `CLAUDE.md 已按新知识重编译（+${result.extracted.length}）`,
         timestamp: isoNow(deps.now),
       });
     } catch (err) {
       emit(deps.bus, {
+        kind: "compiler.failed",
         source: "compiler",
-        action: "failed",
         severity: "warning",
         userFacingValue: `重编译失败: ${String(err).slice(0, 120)}`,
         timestamp: isoNow(deps.now),

@@ -152,7 +152,7 @@ describe("runCalibrationPipelineV2", () => {
     expect(updatedA.last_validated_at).toBe(NOW.toISOString());
 
     // Bus received events
-    const busEvents = bus.events.filter((e) => e.action === "v2_adjusted");
+    const busEvents = bus.events.filter((e) => e.kind === "calibrator.v2-adjusted");
     expect(busEvents).toHaveLength(2);
   });
 
@@ -209,7 +209,7 @@ describe("runCalibrationPipelineV2", () => {
     expect(store.getById("rule-dry")!.confidence).toBe(0.5);
 
     // Bus still emits events (dry run doesn't suppress events)
-    expect(bus.events.filter((e) => e.action === "v2_adjusted")).toHaveLength(1);
+    expect(bus.events.filter((e) => e.kind === "calibrator.v2-adjusted")).toHaveLength(1);
   });
 
   it("skips archived entries even if observations exist", async () => {
@@ -328,7 +328,7 @@ describe("runCalibrationPipelineV2", () => {
 
     // If there was a blocked promotion, bus should record it
     const blocked = bus.events.filter(
-      (e) => e.source === "validator" && e.action === "blocked_promotion",
+      (e) => e.kind === "validator.blocked-promotion",
     );
     if (result.adjusted.some((a) => a.tier_before !== a.tier_after)) {
       // Should never get here: tier_after should equal tier_before after L1 block
@@ -437,10 +437,10 @@ describe("runCalibrationPipelineV2", () => {
     // If promotion actually happened (calibrator decided to promote), check event
     if (entry.current_tier !== "probation") {
       const skillWriteEvents = bus.events.filter(
-        (e) => e.source === "compile" && e.action === "skill_should_write",
+        (e) => e.kind === "compile.skill-should-write",
       );
       expect(skillWriteEvents.length).toBeGreaterThan(0);
-      expect(skillWriteEvents[0]!.target?.id).toBe("rule-skill-write");
+      expect(skillWriteEvents[0]!.knowledgeId).toBe("rule-skill-write");
     }
   });
 
@@ -480,10 +480,10 @@ describe("runCalibrationPipelineV2", () => {
     // If demotion actually happened, check event
     if (!["stable", "canonical", "enforced"].includes(entry.current_tier)) {
       const skillRemoveEvents = bus.events.filter(
-        (e) => e.source === "compile" && e.action === "skill_should_remove",
+        (e) => e.kind === "compile.skill-should-remove",
       );
       expect(skillRemoveEvents.length).toBeGreaterThan(0);
-      expect(skillRemoveEvents[0]!.target?.id).toBe("rule-skill-remove");
+      expect(skillRemoveEvents[0]!.knowledgeId).toBe("rule-skill-remove");
     }
   });
 
@@ -519,7 +519,7 @@ describe("runCalibrationPipelineV2", () => {
     });
 
     const skillEvents = bus.events.filter(
-      (e) => e.source === "compile" && (e.action === "skill_should_write" || e.action === "skill_should_remove"),
+      (e) => e.kind === "compile.skill-should-write" || e.kind === "compile.skill-should-remove",
     );
     expect(skillEvents).toHaveLength(0);
   });

@@ -214,16 +214,17 @@ export async function executePitfall(
 
   const bus = new InMemoryAttributionBus();
   bus.emit({
+    kind: "pitfall.added",
     source: "pitfall",
-    action: `添加知识条目 ${entry.id} (${entry.category}/${entry.tags[0]})`,
+    knowledgeId: entry.id,
+    category: entry.category,
+    tag: entry.tags[0] ?? entry.category.toLowerCase(),
+    level: entry.scope.level,
+    knowledgeCountBefore: before,
+    knowledgeCountAfter: after,
+    skillMdPath,
     severity: "highlight",
     timestamp: now,
-    target: { file: skillMdPath },
-    before: { knowledgeCount: before },
-    after: {
-      knowledgeCount: after,
-      categoryTag: `${entry.scope.level}/${entry.category}/${entry.tags[0]}`,
-    },
     userFacingValue:
       entry.type === "avoidance"
         ? `AI 遇到 "${entry.wrong_pattern}" 时会改用 "${entry.correct_pattern}"；docs propagation 已调度`

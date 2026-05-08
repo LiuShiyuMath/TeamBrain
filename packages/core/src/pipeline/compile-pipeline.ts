@@ -55,9 +55,10 @@ export async function runCompile(deps: CompilePipelineDeps): Promise<CompilePipe
   const removed = deps.dryRun ? toRemove : (await deps.skillCompiler.cleanup(toRemove)).removed;
 
   deps.bus?.emit({
+    kind: "compile.skills-compiled",
     source: "compile",
-    action: "skills_compiled",
-    target: { id: "skills" },
+    written: written.length,
+    removed: removed.length,
     severity: "info",
     userFacingValue: `Skills written: ${written.length}, removed: ${removed.length}`,
     timestamp: new Date().toISOString(),

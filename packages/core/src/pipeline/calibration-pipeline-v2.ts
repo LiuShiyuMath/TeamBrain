@@ -118,9 +118,13 @@ export async function runCalibrationPipelineV2(
             `l1_blocked: ${l1.reason}`,
           );
           deps.bus?.emit({
+            kind: "validator.blocked-promotion",
             source: "validator",
-            action: "blocked_promotion",
-            target: { id: entry.id },
+            knowledgeId: entry.id,
+            level: "l1",
+            fromTier: entry.current_tier,
+            toTier: proposedTier,
+            reason: l1.reason,
             severity: "info",
             userFacingValue: `L1 blocked ${entry.current_tier} → ${proposedTier}: ${l1.reason}`,
             timestamp: now.toISOString(),
@@ -169,9 +173,13 @@ export async function runCalibrationPipelineV2(
             `l2_blocked: ${l2.reason}`,
           );
           deps.bus?.emit({
+            kind: "validator.blocked-promotion",
             source: "validator",
-            action: "blocked_promotion",
-            target: { id: entry.id },
+            knowledgeId: entry.id,
+            level: "l2",
+            fromTier: entry.current_tier,
+            toTier: proposedTier,
+            reason: l2.reason,
             severity: "info",
             userFacingValue: `L2 blocked ${entry.current_tier} → ${proposedTier}: ${l2.reason}`,
             timestamp: now.toISOString(),
@@ -191,18 +199,22 @@ export async function runCalibrationPipelineV2(
       const isStablePlus = STABLE_PLUS.has(result.tier_after);
       if (!wasStablePlus && isStablePlus) {
         deps.bus?.emit({
+          kind: "compile.skill-should-write",
           source: "compile",
-          action: "skill_should_write",
-          target: { id: entry.id },
+          knowledgeId: entry.id,
+          tierBefore: result.tier_before,
+          tierAfter: result.tier_after,
           severity: "info",
           userFacingValue: `tier ${result.tier_before} → ${result.tier_after}，将导出 skill`,
           timestamp: now.toISOString(),
         });
       } else if (wasStablePlus && !isStablePlus) {
         deps.bus?.emit({
+          kind: "compile.skill-should-remove",
           source: "compile",
-          action: "skill_should_remove",
-          target: { id: entry.id },
+          knowledgeId: entry.id,
+          tierBefore: result.tier_before,
+          tierAfter: result.tier_after,
           severity: "info",
           userFacingValue: `tier ${result.tier_before} → ${result.tier_after}，将移除 skill`,
           timestamp: now.toISOString(),
@@ -244,11 +256,15 @@ export async function runCalibrationPipelineV2(
     });
 
     deps.bus?.emit({
+      kind: "calibrator.v2-adjusted",
       source: "calibrator",
-      action: "v2_adjusted",
-      target: { id: entry.id },
-      before: { confidence: entry.confidence, tier: entry.current_tier, demerit: entry.demerit },
-      after: { confidence: result.confidence, tier: result.tier_after, demerit: result.demerit },
+      knowledgeId: entry.id,
+      confidenceBefore: entry.confidence,
+      confidenceAfter: result.confidence,
+      tierBefore: result.tier_before,
+      tierAfter: result.tier_after,
+      demeritBefore: entry.demerit,
+      demeritAfter: result.demerit,
       severity: result.tier_after === "dormant" ? "warning" : "info",
       userFacingValue:
         result.tier_transition

@@ -1,18 +1,44 @@
 #!/usr/bin/env node
 /**
- * Stop Hook entry point (M2.10+ with incremental scanning + dedup).
+ * Stop Hook entry point — HookShell migration (final M6 fused-PR bin).
  *
  * stdin: StopHookInput { session_id, transcript_path, cwd, hook_event_name }
  *
  * Mode selection:
- *   - sync (legacy default): run analyze→calibrate→Skill export, write progress to stderr
- *   - async (recommended): spawn detached subprocess and return immediately
+ *   - sync (legacy default): runHook handler awaits runStopPipeline, then exits
+ *   - async (recommended):    foreground handler spawns a detached child of self
+ *                              and returns immediately; the child re-enters via
+ *                              escape.detached and runs the pipeline
  *
  * Incremental vs full:
  *   - Stop hook: incremental (uses .teamagent/scan-cursor.json)
  *   - SessionEnd / PreCompact (via runStopPipeline({fullRescan:true})): full
  *
- * NEVER exits non-zero — must not block session close.
+ * NEVER exits non-zero — runAdvancedHook always exits 0.
+ *
+ * 走 `runAdvancedHook` 的原因：
+ *   1. detached self-spawn — 用 `escape.detached` 注入 argv 探针 + tmp-file
+ *      reader，让 HookShell 在父子两条路径上各自取到正确的 input。
+ *   2. `manualResources: true` — pipeline 内部按 step 自己 open/close DB
+ *      （DualLayerStore + SqliteEventLog），HookShell 不该自动开 DB。
+ *   3. `pipelineTimeoutMs` — 240s 上限，避免 harness 300s 强杀前没法清理。
+ *      lock 文件仍由 `runStopPipeline` 自身 mkdir/写入/清理，不走 escape.lock：
+ *      bin-stop.test.ts 在 `runStopPipeline` 直接调用层断言 lock 行为，shell
+ *      escape.lock 只在 main 进入 handler 时持有，会 break 这些测试。
+ *
+ * 12+ 条 user-visible `process.stderr.write("TeamAgent: ...")` 改造：通过
+ * `RunStopPipelineOptions.emit` 注入一个 `(AttributionEvent) => void`。
+ *   - 从 `runAdvancedHook` 进来的调用，emit 绑到 `ctx.bus.emit` —— shell 注入
+ *     的 StdoutRenderer 订阅会按 visibility 渲染到 stderr。
+ *   - 测试 / `runFullRescanPipeline` 等直接调用层不传 emit，落到
+ *     `process.stderr.write` 兜底，行为与迁移前一致。
+ *
+ * 这样三个外部消费点不动：
+ *   - `bin-stop.test.ts`        直接 import { runStopPipeline } 不传 emit
+ *   - `bin-session-end.ts`      调 `runFullRescanPipeline(input)` 不传 emit
+ *   - `bin-pre-compact.ts`      调 `runFullRescanPipeline(input)` 不传 emit
+ *
+ * 这是 M6 fused PR 的最后一个简单 bin 迁移。
  */
 import { spawn } from "node:child_process";
 import { appendFileSync, mkdirSync, writeFileSync, existsSync, unlinkSync, readFileSync } from "node:fs";
@@ -28,7 +54,8 @@ import {
   SqliteSemanticRetriever,
 } from "@teamagent/adapters";
 import type { LLMClient } from "@teamagent/ports";
-import { momentSignature, parseSessionFile, semanticMatch, buildSemanticDescriptions } from "@teamagent/core";
+import type { AttributionEvent } from "@teamagent/types";
+import { parseSessionFile, semanticMatch, buildSemanticDescriptions } from "@teamagent/core";
 import { executeAnalyze, type AnalyzeMeta } from "./commands/analyze.js";
 import { executeCalibrate } from "./commands/calibrate.js";
 import { executeCompile } from "./commands/compile.js";
@@ -39,6 +66,28 @@ import { appendHarvest } from "./harvest-writer.js";
 import { makeFallbackLLMClient } from "./llm-with-fallback.js";
 import { runStopNarrativeScan, readLastInjected, lastInjectedFilePath } from "./stop-narrative-scan.js";
 import { rotateIfTooLarge } from "./log-rotate.js";
+import { runAdvancedHook } from "./hook-shell/index.js";
+import type { AdvancedHookOptions } from "./hook-shell/index.js";
+
+/**
+ * 用户可见进度事件的注入入口。
+ *
+ * `runAdvancedHook` 路径会传 `(e) => ctx.bus.emit(e)`；其它直接调用方（测试、
+ * `runFullRescanPipeline` 经由 bin-session-end / bin-pre-compact）不传，落到
+ * stderr 兜底。这样既不破坏既有 stderr 输出契约，bin-stop 自己的 cjs entry
+ * 又能把同样的进度事件走 AttributionBus → StdoutRenderer 渲染。
+ */
+type EmitFn = (event: AttributionEvent) => void;
+
+function emitWithFallback(emit: EmitFn | undefined, event: AttributionEvent, fallbackText: string): void {
+  if (emit) {
+    emit(event);
+    return;
+  }
+  try { process.stderr.write(fallbackText); } catch { /* best-effort */ }
+}
+
+function nowIso(): string { return new Date().toISOString(); }
 
 // ---- Lazy singleton for semantic embedder (shared across Stop calls in same process) ----
 let _stopEmbedder: XenovaRuleEmbedder | null = null;
@@ -48,7 +97,12 @@ function getStopEmbedder(): XenovaRuleEmbedder {
 }
 
 /** 每次 Stop 补全最多 BATCH 条缺向量的规则（fire-and-forget，不阻塞主流程）。 */
-async function catchUpVectorization(projectDbPath: string, embedder: XenovaRuleEmbedder, batch = 15): Promise<void> {
+async function catchUpVectorization(
+  projectDbPath: string,
+  embedder: XenovaRuleEmbedder,
+  emit: EmitFn | undefined,
+  batch = 15,
+): Promise<void> {
   const vdb = openDb(projectDbPath);
   try {
     const rows = (vdb.prepare(
@@ -75,7 +129,17 @@ async function catchUpVectorization(projectDbPath: string, embedder: XenovaRuleE
         syncRuleVectors(vdb, r.id, new Float32Array(tv), new Float32Array(pv));
       }
     }
-    process.stderr.write(`TeamAgent: 向量化补全 ${rows.length} 条规则\n`);
+    emitWithFallback(
+      emit,
+      {
+        kind: "hook-stop.rules-vectorized",
+        source: "hook-stop",
+        severity: "info",
+        timestamp: nowIso(),
+        count: rows.length,
+      },
+      `TeamAgent: 向量化补全 ${rows.length} 条规则\n`,
+    );
   } finally {
     vdb.close();
   }
@@ -93,6 +157,11 @@ export interface RunStopPipelineOptions {
   fullRescan?: boolean;
   /** 模式标签,仅用于 harvest md 记录 */
   modeTag?: "incremental" | "full";
+  /**
+   * 用户可见进度事件 sink。HookShell 路径传 `ctx.bus.emit` 让 StdoutRenderer
+   * 渲染；测试 / 其它 bin 直接调用时不传，stderr 兜底。
+   */
+  emit?: EmitFn;
 }
 
 /** Pipeline hard timeout. Harness kills us at its own timeout (~300s); we guard below. */
@@ -155,6 +224,7 @@ export async function runStopPipeline(
   const cwd = input.cwd;
   const fullRescan = opts.fullRescan === true;
   const modeTag = opts.modeTag ?? (fullRescan ? "full" : "incremental");
+  const emit = opts.emit;
   const lockPath = writeStopLock(cwd);
   try {
 
@@ -175,7 +245,17 @@ export async function runStopPipeline(
   // spam. Fast-path: if transcript_path is set but doesn't exist after the
   // initial wait, skip analyze entirely (calibrate/compile still run).
   try {
-    process.stderr.write(`TeamAgent: 分析会话中 (${modeTag})...\n`);
+    emitWithFallback(
+      emit,
+      {
+        kind: "hook-stop.analyze-started",
+        source: "hook-stop",
+        severity: "info",
+        timestamp: nowIso(),
+        modeTag,
+      },
+      `TeamAgent: 分析会话中 (${modeTag})...\n`,
+    );
     // Small initial wait: Claude Code may still hold the transcript file lock
     // when Stop fires on Windows.
     await new Promise((r) => setTimeout(r, 300));
@@ -183,7 +263,15 @@ export async function runStopPipeline(
     if (input.transcript_path && !existsSync(input.transcript_path)) {
       // Subagent or vitest session — transcript will never appear. Skip
       // quietly (info-level stderr, no stop-errors.log entry).
-      process.stderr.write(
+      emitWithFallback(
+        emit,
+        {
+          kind: "hook-stop.analyze-skipped",
+          source: "hook-stop",
+          severity: "info",
+          timestamp: nowIso(),
+          reason: "transcript 未落盘，可能是子任务/测试 session",
+        },
         `TeamAgent: 跳过 analyze (transcript 未落盘，可能是子任务/测试 session)\n`,
       );
     } else {
@@ -204,7 +292,17 @@ export async function runStopPipeline(
             embedder: getStopEmbedder(),
           });
           const firstLine = result.split("\n")[0] ?? "分析完成";
-          process.stderr.write(`TeamAgent: ${firstLine}\n`);
+          emitWithFallback(
+            emit,
+            {
+              kind: "hook-stop.analyze-finished",
+              source: "hook-stop",
+              severity: "info",
+              timestamp: nowIso(),
+              firstLine,
+            },
+            `TeamAgent: ${firstLine}\n`,
+          );
           analyzed = true;
           break;
         } catch (e) {
@@ -233,18 +331,53 @@ export async function runStopPipeline(
 
   // Step 2: calibrate
   try {
-    process.stderr.write("TeamAgent: 校准置信度中...\n");
+    emitWithFallback(
+      emit,
+      {
+        kind: "hook-stop.calibration-started",
+        source: "hook-stop",
+        severity: "info",
+        timestamp: nowIso(),
+      },
+      "TeamAgent: 校准置信度中...\n",
+    );
     await executeCalibrate({ cwd });
-    process.stderr.write("TeamAgent: 校准完成\n");
+    emitWithFallback(
+      emit,
+      {
+        kind: "hook-stop.calibration-finished",
+        source: "hook-stop",
+        severity: "info",
+        timestamp: nowIso(),
+      },
+      "TeamAgent: 校准完成\n",
+    );
   } catch (e) {
     logError(cwd, "calibrate", e);
   }
 
   // Step 3: Skill export
   try {
-    process.stderr.write("TeamAgent: 更新 Skills 中...\n");
+    emitWithFallback(
+      emit,
+      {
+        kind: "hook-stop.skills-updating",
+        source: "hook-stop",
+        severity: "info",
+        timestamp: nowIso(),
+      },
+      "TeamAgent: 更新 Skills 中...\n",
+    );
     const r = await executeCompile({ cwd, legacyClaudeMd: false });
-    process.stderr.write(
+    emitWithFallback(
+      emit,
+      {
+        kind: "hook-stop.skills-exported",
+        source: "hook-stop",
+        severity: "info",
+        timestamp: nowIso(),
+        count: r.skills.written.length,
+      },
       `TeamAgent: Skills 导出 ${r.skills.written.length} 条；docs propagation 由新增规则调度\n`,
     );
     try {
@@ -284,7 +417,7 @@ export async function runStopPipeline(
   // Step 4.5: catch-up vectorization —补全缺向量的老规则（fire-and-forget，最多 15 条/次）
   const catchUpDbPath = path.join(cwd, ".teamagent", "knowledge.db");
   if (existsSync(catchUpDbPath)) {
-    catchUpVectorization(catchUpDbPath, getStopEmbedder()).catch(() => {/* best-effort */});
+    catchUpVectorization(catchUpDbPath, getStopEmbedder(), emit).catch(() => {/* best-effort */});
   }
 
   // Step 5: scan-errors → candidates.db (opt-out via config). Runs last so
@@ -293,7 +426,16 @@ export async function runStopPipeline(
   const stopScanCfg = readTeamAgentConfig(cwd);
   if (stopScanCfg.stop_scan_errors) {
     try {
-      process.stderr.write("TeamAgent: 扫描工具失败信号 (scan-errors)...\n");
+      emitWithFallback(
+        emit,
+        {
+          kind: "hook-stop.scan-errors-started",
+          source: "hook-stop",
+          severity: "info",
+          timestamp: nowIso(),
+        },
+        "TeamAgent: 扫描工具失败信号 (scan-errors)...\n",
+      );
       const scanTimeoutMs = stopScanCfg.stop_scan_errors_timeout_ms;
       const scanLlm = buildLLMClient();
       const out = await Promise.race<string | null>([
@@ -307,12 +449,32 @@ export async function runStopPipeline(
         new Promise<null>((resolve) => setTimeout(() => resolve(null), scanTimeoutMs)),
       ]);
       if (out === null) {
-        process.stderr.write(
+        emitWithFallback(
+          emit,
+          {
+            kind: "hook-stop.scan-errors-timeout",
+            source: "hook-stop",
+            severity: "info",
+            timestamp: nowIso(),
+            timeoutMs: scanTimeoutMs,
+          },
           `TeamAgent: scan-errors 超时 (>${scanTimeoutMs}ms)，跳过\n`,
         );
       } else {
         const lastLine = out.trim().split("\n").filter(Boolean).pop() ?? "";
-        if (lastLine) process.stderr.write(`TeamAgent: scan-errors ${lastLine}\n`);
+        if (lastLine) {
+          emitWithFallback(
+            emit,
+            {
+              kind: "hook-stop.scan-errors-progress",
+              source: "hook-stop",
+              severity: "info",
+              timestamp: nowIso(),
+              lastLine,
+            },
+            `TeamAgent: scan-errors ${lastLine}\n`,
+          );
+        }
       }
     } catch (e) {
       logError(cwd, "scan-errors", e);
@@ -420,7 +582,15 @@ export async function runStopPipeline(
                     schema_version: 1,
                   });
                 }
-                process.stderr.write(
+                emitWithFallback(
+                  emit,
+                  {
+                    kind: "hook-stop.semantic-scan-hit",
+                    source: "hook-stop",
+                    severity: "info",
+                    timestamp: nowIso(),
+                    count: semanticHits.length,
+                  },
                   `TeamAgent: semantic-scan 命中 ${semanticHits.length} 条规则\n`,
                 );
               } finally {
@@ -479,14 +649,27 @@ function logError(cwd: string, step: string, err: unknown): void {
   }
 }
 
-function isValidStopHookInput(v: unknown): v is StopHookInput {
-  return (
-    typeof v === "object" &&
-    v !== null &&
-    typeof (v as StopHookInput).session_id === "string" &&
-    typeof (v as StopHookInput).transcript_path === "string" &&
-    typeof (v as StopHookInput).cwd === "string"
-  );
+/** Validator + normalizer used by HookShell.parseInput.
+ *
+ * Accepts inputs missing `transcript_path` (subagent / vitest sessions) by
+ * normalizing to "" so the downstream `existsSync` skip in `runStopPipeline`
+ * still kicks in. Mirrors bin-session-end's `normalizeStopHookInput`.
+ */
+function normalizeStopHookInput(v: unknown): StopHookInput | null {
+  if (typeof v !== "object" || v === null) return null;
+  const obj = v as Record<string, unknown>;
+  if (typeof obj.session_id !== "string") return null;
+  if (typeof obj.cwd !== "string") return null;
+  const transcript_path =
+    typeof obj.transcript_path === "string" ? obj.transcript_path : "";
+  const hook_event_name =
+    typeof obj.hook_event_name === "string" ? obj.hook_event_name : "Stop";
+  return {
+    session_id: obj.session_id,
+    transcript_path,
+    cwd: obj.cwd,
+    hook_event_name,
+  };
 }
 
 /**
@@ -513,107 +696,97 @@ export function isDetachedPipelineInvocation(
   return true;
 }
 
+/** Read + unlink the tmp-file argv input. Returns null on any IO/parse error. */
+function readDetachedInput(argv: readonly string[]): unknown {
+  const arg = argv[2];
+  if (!arg) return null;
+  let text: string;
+  try { text = readFileSync(arg, "utf-8"); } catch { return null; }
+  try { unlinkSync(arg); } catch { /* ignore cleanup failure */ }
+  try { return JSON.parse(text); } catch { return null; }
+}
+
 async function main(): Promise<void> {
-  // Genuine detached pipeline subprocess: env flag + valid tmp-file argv[2].
-  if (isDetachedPipelineInvocation(process.env, process.argv)) {
-    const arg = process.argv[2]!;
-    let parsed: unknown;
-    try {
-      const raw = readFileSync(arg, "utf-8");
-      try { unlinkSync(arg); } catch { /* ignore cleanup failure */ }
-      parsed = JSON.parse(raw);
-    } catch (e) {
-      logError(process.cwd(), "main", new Error(`detached spawn JSON parse failed: ${arg}`));
-      return;
-    }
-    if (!isValidStopHookInput(parsed)) {
-      logError(
-        process.cwd(),
-        "main",
-        new Error(`detached spawn received invalid input: ${arg}`),
-      );
-      return;
-    }
-    await runStopPipeline(parsed);
-    return;
-  }
+  await runAdvancedHook<StopHookInput, void, AdvancedHookOptions<StopHookInput, void>>({
+    channel: "Stop",
+    parseInput: normalizeStopHookInput,
+    handler: async (ctx) => {
+      const emit: EmitFn = (event) => ctx.bus.emit(event);
 
-  // Normal Stop hook entry: read from stdin
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-  const raw = Buffer.concat(chunks).toString("utf-8").trim();
-  if (!raw) return;
+      // Genuine detached child: env flag + valid tmp-file argv[2]. Run the
+      // pipeline directly (sync mode below converges to same call). Pipeline
+      // is unbounded — escape.pipelineTimeoutMs caps the handler at 240s.
+      if (isDetachedPipelineInvocation(process.env, process.argv)) {
+        await runStopPipeline(ctx.input, { emit });
+        return;
+      }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (e) {
-    // B-053: malformed stdin JSON — log and exit cleanly (never block session close)
-    logError(process.cwd(), "stdin-json-parse", e);
-    return;
-  }
-  if (!isValidStopHookInput(parsed)) {
-    logError(
-      process.cwd(),
-      "main",
-      new Error(`stdin payload missing required fields: ${raw.slice(0, 200)}`),
-    );
-    return;
-  }
-  const input = parsed;
-  const cwd = input.cwd;
-  const config = readTeamAgentConfig(cwd);
+      // Normal Stop hook entry. Branch on configured mode.
+      const config = readTeamAgentConfig(ctx.cwd);
 
-  if (config.stop_mode === "async") {
-    const selfPath = process.argv[1];
-    if (!selfPath) {
-      logError(cwd, "main", new Error("process.argv[1] missing — cannot self-spawn"));
-      return;
-    }
-    // Write JSON payload to a temp file instead of passing via argv[2].
-    // Windows CreateProcess command-line quoting of JSON strings containing
-    // backslashes and double-quotes is fragile; a temp file is unambiguous.
-    const tmpFile = path.join(os.tmpdir(), `teamagent-stop-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
-    try {
-      writeFileSync(tmpFile, JSON.stringify(input), "utf-8");
-    } catch (e) {
-      logError(cwd, "write-tmp", e);
-      return;
-    }
-    const child = spawn(process.execPath, [selfPath, tmpFile], {
-      detached: true,
-      stdio: "ignore",
-      cwd,
-      env: { ...process.env, TEAMAGENT_STOP_PIPELINE: "1" },
-      // CRITICAL on Windows: without this, every detached spawn opens a new
-      // console window. In async mode that fires on every session close, so
-      // users see a flurry of popups. Must hide.
-      windowsHide: true,
-    });
-    // Catch spawn errors (e.g. ENOENT when node path resolution fails on
-    // Windows with spaces or when running under tsx with .ts argv[1]); log
-    // and exit cleanly rather than crash with an unhandled 'error' event.
-    child.on("error", (err) => {
-      logError(cwd, "spawn-detached", err);
-      try { unlinkSync(tmpFile); } catch { /* ignore */ }
-    });
-    child.unref();
-    return;
-  }
+      if (config.stop_mode === "async") {
+        const selfPath = process.argv[1];
+        if (!selfPath) {
+          ctx.logError("self-path", new Error("process.argv[1] missing — cannot self-spawn"));
+          return;
+        }
+        // Write JSON payload to a temp file instead of passing via argv[2].
+        // Windows CreateProcess command-line quoting of JSON strings containing
+        // backslashes and double-quotes is fragile; a temp file is unambiguous.
+        const tmpFile = path.join(
+          os.tmpdir(),
+          `teamagent-stop-${Date.now()}-${Math.random().toString(36).slice(2)}.json`,
+        );
+        try {
+          writeFileSync(tmpFile, JSON.stringify(ctx.input), "utf-8");
+        } catch (err) {
+          ctx.logError("write-tmp", err);
+          return;
+        }
+        const child = spawn(process.execPath, [selfPath, tmpFile], {
+          detached: true,
+          stdio: "ignore",
+          cwd: ctx.cwd,
+          env: { ...process.env, TEAMAGENT_STOP_PIPELINE: "1" },
+          // CRITICAL on Windows: without this, every detached spawn opens a
+          // new console window. In async mode that fires on every session
+          // close, so users see a flurry of popups. Must hide.
+          windowsHide: true,
+        });
+        child.on("error", (err) => {
+          ctx.logError("spawn-detached", err);
+          try { if (existsSync(tmpFile)) unlinkSync(tmpFile); } catch { /* ignore */ }
+        });
+        child.unref();
+        return;
+      }
 
-  // sync mode: wait with timeout
-  await Promise.race([
-    runStopPipeline(input),
-    new Promise<void>((resolve) => setTimeout(resolve, PIPELINE_TIMEOUT_MS)),
-  ]);
+      // sync mode: run pipeline inline. escape.pipelineTimeoutMs caps duration.
+      await runStopPipeline(ctx.input, { emit });
+    },
+    escape: {
+      // pipeline opens its own DBs per-step (DualLayerStore + SqliteEventLog
+      // for narrative-scan, openDb for vectorization, etc). HookShell should
+      // not auto-open and force handlers to share resources.
+      manualResources: true,
+      // Pipeline duration cap — harness kills us at its own ~300s timeout if
+      // we don't return first. Override via TEAMAGENT_STOP_TIMEOUT_MS.
+      pipelineTimeoutMs: PIPELINE_TIMEOUT_MS,
+      detached: {
+        isDetachedInvocation: (env, argv) => isDetachedPipelineInvocation(env, argv),
+        readArgvInput: (argv) => readDetachedInput(argv),
+      },
+    },
+  });
 }
 
 // Guard: only auto-invoke main() when this bundle IS the entry point.
-// bin-session-end.ts imports runFullRescanPipeline from this module, which
-// causes tsup to inline all of bin-stop.ts (including this top-level call)
-// into bin-session-end.cjs. Without this guard both bundles call main(),
-// consuming stdin inside bin-session-end.cjs and making the real SessionEnd
-// main() see empty stdin. Check argv[1] to distinguish.
+// bin-session-end.ts and bin-pre-compact.ts import runFullRescanPipeline /
+// isDetachedPipelineInvocation from this module, which causes tsup to inline
+// all of bin-stop.ts (including this top-level call) into their .cjs bundles.
+// Without this guard both bundles call main(), consuming stdin inside
+// bin-session-end.cjs / bin-pre-compact.cjs and making their real main()
+// see empty stdin. Check argv[1] to distinguish.
 if (path.basename(process.argv[1] ?? "").startsWith("bin-stop")) {
   main().catch((e) => {
     try {
@@ -627,6 +800,9 @@ if (path.basename(process.argv[1] ?? "").startsWith("bin-stop")) {
         "utf-8",
       );
     } catch { /* silent */ }
+    // Defensive — runAdvancedHook already does process.exit(0), but if main
+    // throws synchronously before reaching the shell we still want exit 0.
     process.exit(0); // never block session close
   });
 }
+

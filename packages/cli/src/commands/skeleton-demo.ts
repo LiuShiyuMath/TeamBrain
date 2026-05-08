@@ -66,13 +66,14 @@ export async function runSkeletonDemo(
   const lineCount = block.split("\n").length;
 
   bus.emit({
+    kind: "skeleton.knowledge-added",
     source: "skeleton",
-    action: "[skeleton] 添加模拟知识 + legacy markdown 预览",
+    knowledgeId: entry.id,
+    knowledgeCountBefore: 0,
+    knowledgeCountAfter: store.count(),
+    blockLines: lineCount,
     severity: "highlight",
     timestamp: now,
-    target: { id: entry.id, count: store.count() },
-    before: { knowledgeCount: 0 },
-    after: { knowledgeCount: store.count(), blockLines: lineCount },
     userFacingValue: `模拟知识条目可生成 ${lineCount} 行 legacy/internal markdown 预览；普通命令不再写入 CLAUDE.md 规则块`,
     counterfactual: "没有 Walking Skeleton 的骨架贯通，后续 Milestone 没有落脚点",
   });
@@ -93,11 +94,13 @@ export async function runSkeletonDemo(
     projectStack: ["ts"],
   });
   bus.emit({
-    source: "validator",
-    action: "[skeleton] L0 拒绝演示",
+    kind: "skeleton.l0-validation",
+    source: "skeleton",
+    knowledgeId: "skeleton-demo-bad",
+    ok: l0.ok,
+    failedChecks: l0.failed_checks,
     severity: l0.ok ? "info" : "warning",
     timestamp: now,
-    target: { id: "skeleton-demo-bad" },
     userFacingValue: l0.ok
       ? "（出乎意料：L0 门口没拦住这条坏条目）"
       : `L0 如预期拦下：${l0.failed_checks.join(", ")}`,
@@ -153,8 +156,10 @@ export async function runSkeletonDemo(
   });
 
   bus.emit({
-    source: "compile",
-    action: "[skeleton] Skills 编译演示",
+    kind: "skeleton.skills-compiled",
+    source: "skeleton",
+    written: compileResult.skills.written,
+    legacyDisabled: true,
     severity: "highlight",
     timestamp: now,
     userFacingValue: [

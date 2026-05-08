@@ -1,87 +1,50 @@
+/**
+ * Thin adapter wrapper around `createPostToolUseHandler` from `@teamagent/core`.
+ *
+ * The pure handler lives in `packages/core/src/hook/post-tool-use-handler.ts`
+ * (FCIS: Functional Core, Imperative Shell — see ADR-0008 and the matching
+ * sweep for `pre-tool-use-handler.ts` in commit 2). This module binds
+ * production impurities — `crypto.randomUUID()` and `new Date().toISOString()`
+ * — and accepts the SDK-typed input so existing callers don't change.
+ */
 import type { PostToolUseHookInput } from "@anthropic-ai/claude-agent-sdk";
 import {
-  detectIgnoredSignals,
-  detectBlockedCircumventedSignals,
-  type OverrideSignalEvent,
+  createPostToolUseHandler as createPostToolUseHandlerCore,
+  inferToolSuccess as inferToolSuccessCore,
+  type PostToolUseDeps as CorePostToolUseDeps,
 } from "@teamagent/core";
 
-export interface PostToolUseDeps {
-  eventLog: {
-    append(e: any): void;
-    readLast(n: number): any[];
-  };
-}
+/**
+ * Caller-facing deps. Excludes the two injectable purity points
+ * (`idGen` / `now`) that the wrapper binds to production impurities. Existing
+ * call sites in `bin-post-tool-use.ts` keep their current shape.
+ */
+export type PostToolUseDeps = Omit<CorePostToolUseDeps, "idGen" | "now">;
 
 export function createPostToolUseHandler(deps: PostToolUseDeps) {
-  return async (input: PostToolUseHookInput): Promise<Record<string, never>> => {
-    const tool_use_id = input.tool_use_id ?? crypto.randomUUID();
-    const { tool_response } = input;
-    const now = new Date().toISOString();
-    const success = inferToolSuccess(tool_response);
-
-    // 找本 tool_use_id 对应的 Pre 事件
-    const recent = deps.eventLog.readLast(50);
-    const preEvents = recent.filter(
-      (e: any) => e.tool_use_id === tool_use_id && e.kind.startsWith("hook-pre."),
-    );
-
-    for (const pre of preEvents) {
-      if (!pre.knowledge_id) continue;
-      deps.eventLog.append({
-        id: `e-post-${tool_use_id}-${pre.knowledge_id}`,
-        kind: "hook-post.result",
-        knowledge_id: pre.knowledge_id,
-        tool_use_id,
-        timestamp: now,
-        schema_version: 1,
-        payload: { success, source_pre_kind: pre.kind },
-      });
-    }
-
-    // M2.5: detect ignored signals
-    const ignoredList = detectIgnoredSignals(tool_use_id, recent as OverrideSignalEvent[]);
-    for (const ig of ignoredList) {
-      deps.eventLog.append({
-        id: `e-override-ignored-${tool_use_id}-${ig.knowledge_id}`,
-        kind: "ai.override.ignored",
-        knowledge_id: ig.knowledge_id,
-        tool_use_id,
-        timestamp: now,
-        schema_version: 1,
-      });
-    }
-
-    // M3: detect block-circumvention — only when tool succeeded
-    const toolName = (input as { tool_name?: string }).tool_name;
-    if (success && toolName) {
-      const circumList = detectBlockedCircumventedSignals(
-        toolName,
-        recent as OverrideSignalEvent[],
-        new Date(now),
-      );
-      for (const c of circumList) {
-        deps.eventLog.append({
-          id: `e-override-circum-${tool_use_id}-${c.knowledge_id}`,
-          kind: "ai.override.blocked_circumvented",
-          knowledge_id: c.knowledge_id,
-          tool_use_id,
-          timestamp: now,
-          schema_version: 1,
-        });
-      }
-    }
-
-    return {};
-  };
+  // Build the core deps object with descriptor-preserving property forwarding
+  // (mirrors the Object.create() pattern used in pre-tool-use-sdk so any
+  // future caller-side getters keep their late-bound semantics — spread
+  // `{...deps}` would freeze accessor-derived values at construction time).
+  const coreDeps = Object.create(deps as object) as CorePostToolUseDeps;
+  Object.defineProperties(coreDeps, {
+    idGen: { value: () => crypto.randomUUID(), enumerable: true },
+    now: { value: () => new Date().toISOString(), enumerable: true },
+  });
+  const handler = createPostToolUseHandlerCore(coreDeps);
+  // Adapter accepts the real SDK type and forwards.
+  return (input: PostToolUseHookInput) =>
+    handler({
+      tool_use_id: input.tool_use_id,
+      tool_name: (input as { tool_name?: string }).tool_name,
+      tool_input: input.tool_input,
+      tool_response: input.tool_response,
+    });
 }
 
-export function inferToolSuccess(toolResponse: unknown): boolean {
-  if (toolResponse === null || toolResponse === undefined) return true;
-  if (typeof toolResponse !== "object") return true;
-  const r = toolResponse as Record<string, unknown>;
-  // B-057: use truthy check instead of === true to catch is_error="true" or is_error=1
-  if (r.is_error && r.is_error !== false && r.is_error !== 0) return false;
-  if (r.error) return false;
-  if (typeof r.exit_code === "number" && r.exit_code !== 0) return false;
-  return true;
-}
+/**
+ * Re-export `inferToolSuccess` from core so backward-compatible callers in
+ * the adapter test (and any external users that import it from the adapter
+ * subpath) keep working without import path churn.
+ */
+export const inferToolSuccess = inferToolSuccessCore;

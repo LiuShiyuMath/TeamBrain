@@ -59,8 +59,8 @@ export async function structureRuleTextsBatch(
       if (partial === null) {
         result.skipped++;
         opts.bus?.emit({
+          kind: "importer.skipped",
           source: "importer",
-          action: "skipped",
           severity: "info",
           userFacingValue: `规则文本无法结构化: ${truncate(trimmed, 60)}`,
           timestamp: now().toISOString(),
@@ -68,8 +68,8 @@ export async function structureRuleTextsBatch(
       } else {
         result.structured.push({ sourceText: trimmed, partial });
         opts.bus?.emit({
+          kind: "importer.structured",
           source: "importer",
-          action: "structured",
           severity: "highlight",
           userFacingValue: `已导入: ${truncate(trimmed, 60)}`,
           timestamp: now().toISOString(),
@@ -78,8 +78,8 @@ export async function structureRuleTextsBatch(
     } catch (err) {
       result.failed++;
       opts.bus?.emit({
+        kind: "importer.failed",
         source: "importer",
-        action: "failed",
         severity: "warning",
         userFacingValue: `导入失败 (${String(err).slice(0, 80)}): ${truncate(trimmed, 40)}`,
         timestamp: now().toISOString(),

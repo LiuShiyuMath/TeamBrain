@@ -59,9 +59,9 @@ export async function runIngestPipeline(
     } catch {
       failed += 1;
       emit(deps.bus, {
+        kind: "ingest.failed",
         source: "ingest",
-        action: "failed",
-        target: { count: 1 },
+        count: 1,
         severity: "warning",
         userFacingValue: `提取失败（kind=${input.kind}）`,
         timestamp: deps.now().toISOString(),
@@ -71,9 +71,9 @@ export async function runIngestPipeline(
     if (!partial) {
       skipped += 1;
       emit(deps.bus, {
+        kind: "ingest.skipped",
         source: "ingest",
-        action: "skipped",
-        target: { count: 1 },
+        count: 1,
         severity: "info",
         userFacingValue: `信号不足，未提取（kind=${input.kind}）`,
         timestamp: deps.now().toISOString(),
@@ -97,9 +97,9 @@ export async function runIngestPipeline(
     if (!l0.ok) {
       rejected.push({ entry, reasons: l0.failed_checks });
       emit(deps.bus, {
+        kind: "ingest.rejected-l0",
         source: "ingest",
-        action: "rejected_l0",
-        target: { id: entry.id },
+        knowledgeId: entry.id,
         severity: "info",
         userFacingValue: `L0 拒绝：${l0.failed_checks.join(", ")}`,
         timestamp: deps.now().toISOString(),
@@ -116,9 +116,9 @@ export async function runIngestPipeline(
     }
     accepted.push(entry);
     emit(deps.bus, {
+      kind: "ingest.accepted",
       source: "ingest",
-      action: "accepted",
-      target: { id: entry.id },
+      knowledgeId: entry.id,
       severity: "highlight",
       userFacingValue: `入库：${entry.trigger}`,
       timestamp: deps.now().toISOString(),

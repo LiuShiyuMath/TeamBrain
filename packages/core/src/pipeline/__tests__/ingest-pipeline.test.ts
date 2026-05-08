@@ -230,9 +230,9 @@ describe("runIngestPipeline", () => {
       bus,
     });
     await runIngestPipeline(deps);
-    const actions = bus.events.map((e) => e.action);
-    expect(actions).toContain("accepted");
-    expect(actions).toContain("rejected_l0");
+    const kinds = bus.events.map((e) => e.kind);
+    expect(kinds).toContain("ingest.accepted");
+    expect(kinds).toContain("ingest.rejected-l0");
   });
 
   it("tags accepted entries with source from deps (e.g. 'ingested')", async () => {

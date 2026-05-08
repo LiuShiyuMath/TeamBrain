@@ -132,9 +132,9 @@ describe("structureRuleTextsBatch", () => {
       return "null";
     };
     await structureRuleTextsBatch(["a", "b"], callLLM, { bus });
-    const actions = bus.events.map((e) => e.action);
-    expect(actions).toContain("structured");
-    expect(actions).toContain("skipped");
+    const kinds = bus.events.map((e) => e.kind);
+    expect(kinds).toContain("importer.structured");
+    expect(kinds).toContain("importer.skipped");
   });
 
   it("empty input list → zero everything", async () => {

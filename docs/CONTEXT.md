@@ -102,6 +102,24 @@ _Avoid_: deprecated（暗示还能用、即将删；archived 是已经下线）
 _Avoid_: legacy port（暗示老但还在跑；archived 不再 export）
 _Avoid_: dead code（暗示无用应被 git rm；archived 是有意保留作 design history）
 
+### Integration & shell（hook channel 集成与共享 imperative shell）
+
+**Hook channel**:
+Claude Code 与 TeamBrain 的集成通道。M6 时点共 8 个：`PreToolUse` / `PostToolUse` / `UserPromptSubmit` / `Stop` / `PreCompact` / `SessionStart` / `SessionEnd` / `Updater`（per `docs/features/multi-tool.md`）。每个 channel 有独立的 input/output schema、stdout envelope、timeout 约束，且**永远不阻断**——异常一律 exit 0。MCP / Cursor channel 适配 NOT YET。
+_Avoid_: hook（无修饰，太泛）, tool integration（不区分 input/output 方向）, SDK channel（与 `@anthropic-ai/claude-agent-sdk` 概念混淆）
+
+**HookShell**:
+8 个 Hook channel 共享的 imperative shell module（`packages/cli/src/hook-shell/`）。两层 API：`runHook` 默认层（`bin-post-tool-use` / `bin-pre-tool-use` / `bin-user-prompt-submit` 等不需要 spawn detached / lock 的 channel 用，~30 行 boilerplate）+ `runAdvancedHook` 进阶层（`bin-stop` / `bin-session-end` / `bin-pre-compact` / `bin-session-start` 这种需要 spawn detached self / lock file / pipeline timeout / lazy resources 的 channel 用，opt-in via `escape: { detached?, lock?, pipelineTimeoutMs?, manualResources? }`）。TS conditional type `RequireAtLeastOneEscape` 强制进阶层必须传至少一个 `escape.*` 字段才编译，机械化简单-vs-复杂的 layer 选择。HookShell 持有 `DualLayerStore` / `SqliteEventLog` / `AttributionBus` 三件套的 lifecycle，并自动 wire `StdoutRenderer` 订阅 bus 让 `bus.emit({...})` 自动镜像 stderr per `TEAMAGENT_VISIBILITY`。详见 ADR-0008。
+_Avoid_: hook framework（错位的 plugin/middleware 联想）, hook runner（runner 通常暗示长进程，hook 是短进程）, shell（无修饰，太泛）
+
+**Hook handler**:
+单个 Hook channel 的 channel-specific 业务函数，运行在 HookShell 的 `handler(ctx)` 槽位。位于 `packages/core/src/hook/`（自 ADR-0008 起；之前的 `createPreToolUseHandler` / `createPostToolUseHandler` 在 `packages/adapters/`，违反 FCIS 元约束）。每个 handler 是纯函数 + 注入 deps（`idGen` / `now` / `formatStyle` 等），通过 `bus.emit({ kind, ... })` 发 user-visible 系统事件，**不**直接 `process.stderr.write`。adapter 端保留 thin wrapper 绑生产 deps 让旧 caller 0 改动。
+_Avoid_: handler（无修饰）, hook function（与 React hooks 联想冲突）, hook callback（暗示同步触发链）
+
+**Delivery mode**:
+单条 `AttributionEvent` 的「audience + blocking」复合标签，三档枚举：`log | context | block`，加在 `AttributionEventBase` 上 optional 默认 `"log"`。`log` 仅给用户看；`context` 暗示 Claude 应消费此事件作 context（用于 future PostToolUse / UserPromptSubmit exit 2 退码反馈）；`block` 暗示这是阻断性归因（用于 future PreToolUse exit 2 + block 副作用）。**当前是 metadata only**——`HookShell.runHook` / `runAdvancedHook` 始终 exit 0（per ADR-0008 的 "never block harness" 保证），delivery 字段不映射到退码，仅供 Renderer 未来按 delivery 做装饰渲染（如 context 事件加 `[→Claude]` 前缀）+ grep 检索点 + future ADR 在已有字段上扩展退码聚合。详见 ADR-0009。
+_Avoid_: severity（描述事件响度 info/highlight/warning，与 delivery 正交，不要混用）
+_Avoid_: audience（仅描述谁看不描述阻止；delivery 同时承载两个维度，单字段收窄到 3 种实际有意义组合）
 ### Review & PR workflow（开 PR 到 merge 之间的 review 链；ADR-0007 设定 `/review` skill 为权威 gate）
 
 **POSTPR loop**:
@@ -138,6 +156,8 @@ _Avoid_: "fix plan", "follow-up issue"
 - 一条规则同时持有 **Confidence**（自动、连续）和 **Tier**（外部、离散）两条独立轴；前者由 `RuleBasedCalibrator` 自动推进，后者由 **Calibration subagent** 或人类通过 `teamagent set-tier` 推进，**Calibration source** 字段忠实记账谁推的
 - **Tier ≥ stable** 是 `pnpm teamagent compile` 写 Skills 的门槛；因此 **Tier** 决定 compile gate，**Confidence** 不直接决定
 - **Calibration subagent** 走 git-backed transport / cross-machine **无关** —— 它是 host agent 进程内的本地行为，输出落到 L1 还是 L2 由所改 rule 自身的 scope 决定
+- 每个 **Hook channel** 的 imperative shell 都走 **HookShell** 的两层 API；channel-specific 业务在 **Hook handler** 内（住 core，纯函数）；user-visible 副作用全部通过 `ctx.bus.emit` 走 **AttributionBus** + StdoutRenderer，禁止 `process.stderr.write`（per ADR-0008 + lint rule `scripts/check-bin-stderr.sh`）
+- 每条 **AttributionEvent** 携带可选 **Delivery mode** 标签描述意图；当前 **HookShell** 始终 exit 0 不读此字段，但 **Renderer** 可读它做 future 装饰；该字段是 audience+blocking 维度的 architectural future-proof（详见 ADR-0009）
 - **POSTPR loop** 终止 = **`/review` skill** PASS + CI green + 无 merge 冲突；不再以 **Codex review** 为终止 signal（ADR-0007）
 - **PR-PLAN** 在 **POSTPR loop** 命中 issue 时写；走 **TEAMWORK** 执行；不允许 follow-up issue 替代
 - **Self-discipline-via-matcher** 是 enforcement primitive；**Negative-space platform layer** 是它在 GitHub 层的可观察后果，不是独立机制
@@ -166,6 +186,8 @@ _Avoid_: "fix plan", "follow-up issue"
 - **"Calibrator v1 / v2"** — 历史上有两套 Calibrator port + impl 并存（`packages/ports/src/calibrator.ts` + `calibrator-v2.ts`）；v2 引入了 Wilson LB / `Observation` / 自动 Tier 状态机，但 callers 全程 hardcode v1；解决：见 ADR-0004，v2 整套删掉，**RuleBasedCalibrator (=v1)** 是 in-process 唯一 calibrator，仅动 **Confidence**；**Tier** 改由外部写
 - **"5-tier vs 6-tier"** — CLAUDE.md「TeamAgent 经验」第 4 条与设计文档曾写 5-tier；实际枚举 6 档（含 `dormant`）；解决：6-tier 为 canonical，文档在 ADR-0004 实现 PR 中对齐
 - **"AgenticCalibrator"** — 在 grilling 过程中曾被提出作为 TeamBrain 内部模块名；解决：拒绝；TeamBrain 不内嵌 LLM，agentic 判断由 host 端的 **Calibration subagent** 完成
+- **"5 handler factories" vs "2 handler factories"** — ADR-0008 + 早期 plan.md 假设 5 个 hook handler factory 要从 adapters 搬到 core；实际 inventory 只有 2 个（`pre-tool-use-sdk.ts` + `post-tool-use-sdk.ts`）。其他 hook channel（user-prompt-submit / stop / session-* / pre-compact / updater）已经直接以 `bin-*.ts` 形态在 `packages/cli/src/`，没有 `createXxxHandler(deps)` factory 模式可搬。**实际 sweep = 2 个 factory**，per commit 2 (PreToolUse) + commit 3 (PostToolUse)
+- **"audience vs delivery" / "exit 2 vs metadata"** — 候选 2 grilling (2026-05-08) 中曾考虑给 `AttributionEvent` 加 `audience: "user" | "claude" | "both"` + `blocking: bool` 两个独立字段，并让 delivery=context/block 触发 hook 退 2 让 Claude 拿 stderr 当 context；解决：单字段 `delivery: "log" | "context" | "block"` 收窄到 3 种实际有意义组合，且 α2 决议保留 ADR-0008 的 always-exit-0 保证——delivery 当前是 metadata 字段不映射退码；详见 ADR-0009
 - **"review"** — 既被用来指 **Codex review**（已弃用 cloud bot）也被用来指 **`/review` skill**（当前本地 gate）；解决：ADR-0007 之后 bare "review" 默认指 **`/review` skill**；Codex review 必须显式带 "Codex" 前缀
 - **"纪律软 / soft discipline"** — CEO-mode summary 用语，描述 GitHub 层缺自动化；解决：这是 **negative-space platform layer**（deliberate），不是 discipline gap；CEO 文案此后须改用后者
 - **"PR-PLAN scope"** — `docs/PR-PLAN.md` 当前 scope 是 post-PR；grilling 中有用户把 issue → PR-PLAN 视为 pre-PR 流程；解决：post-PR 为 canonical；pre-PR plans 走 `docs/HOWTO-PLAN-PR.md`，未来若要扩 PR-PLAN 到 pre-PR 须独立 ADR

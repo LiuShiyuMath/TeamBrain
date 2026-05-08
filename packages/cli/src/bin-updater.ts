@@ -1,7 +1,44 @@
 #!/usr/bin/env node
 /**
- * Updater 子进程 entry. Detached spawn 后由 SessionStart 调起.
- * 永远不阻塞主进程, 失败静默, 退出码恒为 0.
+ * Updater 子进程 entry — HookShell migration (M6 fused PR).
+ *
+ * 这个 bin 与其它 7 个 hook channel 形态略有不同：
+ *
+ *   1. **不接收 stdin payload** —— SessionStart 用 `spawn(..., { stdio: "ignore" })`
+ *      把它 detached fire-and-forget 出去，子进程的 stdin 是关闭的。
+ *      `runHook` 的 `readStdinJson` 对空 stdin 返回 `null`，所以 `parseInput`
+ *      必须把 `null` 也转成一个非空 sentinel（这里用 `{}`），否则 shell 会
+ *      在调用 handler 之前 fast-exit、永远跑不到 updater 逻辑。
+ *
+ *   2. **完全静默对外** —— 永不 stderr / stdout，全部细节进 `~/.teamagent/update.log`。
+ *      因此 handler 不调用 `ctx.bus.emit` —— `AttributionEvent` 当前没有
+ *      `Updater` 相关 kind（commit 4 已冻结），而且 updater 的设计就是不要
+ *      打扰用户；要给用户看的 banner（`✨ TeamAgent: 已自动更新 …`）由
+ *      `session-start-logic.ts` 的 `maybeShowPendingBanner` 在下一次 SessionStart
+ *      读取 `pending_banner` 时打印，这条路径不在本 bin 内。
+ *
+ *   3. **store / eventLog 完全不开** —— Codex review on PR #152 (P1) 指出：
+ *      默认的 `runHook` layer 会无条件 open `DualLayerStore` 和
+ *      `SqliteEventLog`，而 `DualLayerStore` 的 ctor 会**创建**
+ *      `<cwd>/.teamagent/knowledge.db`（即使无写入）。后果：updater 在后台跑
+ *      时会副作用地为当前 cwd 建出 `knowledge.db`，下一次 SessionStart 的
+ *      `decideAction` 检测到该文件，直接 `skip-already-initialized`，
+ *      把"应该 auto-init 的新项目"误判成"已初始化"。
+ *
+ *      因此本 bin **必须**走 `runAdvancedHook` + `escape.manualResources: true`
+ *      —— shell 只提供 lazy resource getter，handler 不调用 `ctx.store()` /
+ *      `ctx.eventLog()`，sqlite 句柄就完全不开、`knowledge.db` 不被创建。
+ *      与 bin-session-start 同形（SessionStart 也用 manualResources 处理同样
+ *      的 detection-vs-creation 时序问题）。
+ *
+ *   4. **HTTP / npm install / migrate 子进程逻辑全部留在 handler 内** ——
+ *      shell 只管 lifecycle（stdin parse、resource open/close、exit 0），
+ *      实际的 fetchRemoteSha / runNpmInstall / runMigrateAuto / backup / lock
+ *      原样保留，由 `runUpdater(deps)` 串联。
+ *
+ *   5. CJS bundle 不支持 top-level await，用 `async main()` + `void main()`，
+ *      与 bin-post-tool-use canary 同形。runHook 内部 try/finally 保证不抛
+ *      （任何异常都被 logFallback 吞掉再 exit 0），所以 main 不需要 .catch。
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -15,6 +52,7 @@ import {
 } from "@teamagent/core";
 import { runUpdater } from "./updater-logic.js";
 import { fetchRemoteSha } from "./github-api.js";
+import { runAdvancedHook } from "./hook-shell/index.js";
 
 function teamagentHome(): string {
   return process.env["TEAMAGENT_HOME"] ?? path.join(os.homedir(), ".teamagent");
@@ -196,22 +234,49 @@ function runMigrateAuto(): Promise<{ ok: boolean; error?: string }> {
 }
 
 async function main(): Promise<void> {
-  log("updater started");
-  await runUpdater({
-    fetchRemoteSha: () => fetchRemoteSha({ owner: REPO_OWNER, repo: REPO_NAME, branch: REPO_BRANCH }),
-    runNpmInstall,
-    runMigrateAuto,
-    backupCurrentInstall,
-    restoreFromBackup,
-    pruneOldBackups,
-    readState,
-    writeState,
-    log,
-    now: () => Date.now(),
-    acquireLock,
-    releaseLock,
+  // Use `Record<string, never>` for input (no payload) and `undefined` for the
+  // stdout return type. `parseInput` ignores stdin entirely and returns `{}` so
+  // the shell never fast-exits before invoking the handler — see file header
+  // note 1.
+  //
+  // `escape.manualResources: true` (Codex P1 fix on PR #152): updater is
+  // stdout/stderr-silent and does not write sqlite. The default `runHook`
+  // layer eagerly opens `DualLayerStore` + `SqliteEventLog` which has the
+  // side effect of creating `<cwd>/.teamagent/knowledge.db`, which would
+  // flip later `SessionStart.decideAction` to `skip-already-initialized`
+  // (because that decision keys off `knowledge.db` existence). With
+  // manualResources the shell never opens sqlite handles unless the
+  // handler explicitly calls `ctx.store()` / `ctx.eventLog()` — which the
+  // updater handler does not. Same shape as bin-session-start.
+  await runAdvancedHook<Record<string, never>, undefined, {
+    channel: "Updater";
+    parseInput: () => Record<string, never>;
+    escape: { manualResources: true };
+    handler: () => Promise<undefined>;
+  }>({
+    channel: "Updater",
+    parseInput: () => ({}),
+    escape: { manualResources: true },
+    handler: async () => {
+      log("updater started");
+      await runUpdater({
+        fetchRemoteSha: () => fetchRemoteSha({ owner: REPO_OWNER, repo: REPO_NAME, branch: REPO_BRANCH }),
+        runNpmInstall,
+        runMigrateAuto,
+        backupCurrentInstall,
+        restoreFromBackup,
+        pruneOldBackups,
+        readState,
+        writeState,
+        log,
+        now: () => Date.now(),
+        acquireLock,
+        releaseLock,
+      });
+      log("updater exit");
+      return undefined;
+    },
   });
-  log("updater exit");
 }
 
-main().catch((e) => log(`updater crash: ${(e as Error).message}`));
+void main();

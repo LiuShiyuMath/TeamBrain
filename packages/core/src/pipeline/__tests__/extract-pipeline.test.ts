@@ -275,10 +275,10 @@ describe("runExtractPipeline", () => {
       bus,
     });
     await runExtractPipeline(makeSession(), deps);
-    const actions = bus.events.map((e) => e.action);
-    expect(actions).toContain("extracted");
-    expect(actions).toContain("skipped");
-    const extracted = bus.events.find((e) => e.action === "extracted")!;
+    const kinds = bus.events.map((e) => e.kind);
+    expect(kinds).toContain("extractor.extracted");
+    expect(kinds).toContain("extractor.skipped");
+    const extracted = bus.events.find((e) => e.kind === "extractor.extracted")!;
     expect(extracted.userFacingValue).toContain("学到");
   });
 
@@ -496,7 +496,7 @@ describe("runExtractPipeline", () => {
     expect(store.entries).toHaveLength(1);
     expect(rejectionLog).toHaveLength(2);
     expect(rejectionLog[0]!.reason).toContain("wrong_pattern_not_in_source");
-    const rejectedEvents = bus.events.filter((e) => e.action === "rejected_l0");
+    const rejectedEvents = bus.events.filter((e) => e.kind === "extractor.rejected-l0");
     expect(rejectedEvents).toHaveLength(2);
   });
 

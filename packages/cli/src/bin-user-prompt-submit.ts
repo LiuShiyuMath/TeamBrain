@@ -1,19 +1,41 @@
 #!/usr/bin/env node
 /**
- * UserPromptSubmit Hook entry point (M2.7)
+ * UserPromptSubmit Hook entry point — HookShell migration (M6 fused PR).
  *
- * stdin JSON { prompt: string }
- * → keyword extract → embed → sqlite-vec query → stdout injection text
+ * stdin JSON `{ prompt, session_id, cwd? }` → drain pending narrative warnings,
+ * scan user prompt against `user-input` rules, run rule semantic retrieval and
+ * recording-memory retrieval → write Claude Code injection envelope to stdout.
  *
- * Any error: exit 0 (never block user input)
+ * After this commit, the imperative shell — stdin parse, sqlite open/close,
+ * bus subscription, exit lifecycle — is owned by `runHook`. The bin only
+ * declares (a) the channel-specific `parseInput` narrowing and (b) the
+ * handler closure that fans out to the M4-A injection helpers, the rule
+ * retriever, and the recording-memory retriever, then assembles the
+ * `hookSpecificOutput` envelope.
+ *
+ * User-visible side effects move from raw `process.stderr.write` to
+ * `ctx.bus.emit({ kind: "user-prompt.injected" | "user-prompt.flagged" })`.
+ * The HookShell's wired `StdoutRenderer` turns those into stderr lines per
+ * `TEAMAGENT_VISIBILITY`. The `terminalSummary` (rule retriever output) is
+ * mirrored to stderr via `ctx.mirrorSystemMessage` so it still honors the
+ * `TEAMAGENT_HOOK_STDERR=0` opt-out.
+ *
+ * Persisted events (`ai.narrative.injected`, `ai.user_input.flagged`,
+ * `calibrator.user_reject`) keep going through `eventLog.append` —
+ * AttributionEvent is the user-visible bus, PersistedEvent is the audit
+ * sink, they don't collapse into one. Cast `ctx.eventLog` to
+ * `SqliteEventLog` because HookShell's minimal type only exposes `close()`.
+ *
+ * Any error: shell catches and exits 0 (never block user input).
  */
 import path from "node:path";
-import os from "node:os";
-import { openDb } from "@teamagent/adapters/storage/sqlite/schema";
-import { normalizeCwd } from "@teamagent/adapters/util/normalize-cwd";
+import type {
+  AttributionEvent,
+  KnowledgeEntry,
+} from "@teamagent/types";
 import {
-  DualLayerStore,
-  SqliteEventLog,
+  type DualLayerStore,
+  type SqliteEventLog,
 } from "@teamagent/adapters";
 import {
   buildInjectionFromPending,
@@ -32,184 +54,226 @@ import {
   readSessionInjected,
   touchSessionInjected,
 } from "./session-rule-injected.js";
+import { runHook } from "./hook-shell/index.js";
 
 const HOOK_TIMEOUT_MS = 5_000;
 
-async function main(): Promise<void> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-  const raw = Buffer.concat(chunks).toString("utf8").trim();
-  if (!raw) return;
-
-  const input = JSON.parse(raw) as { prompt?: string; session_id?: string };
-  const prompt = input.prompt ?? "";
-  if (!prompt) return;
-
-  const cwd = normalizeCwd(
-    process.env["CLAUDE_PROJECT_DIR"] ?? process.cwd(),
-  );
-  const dbPath = path.join(cwd, ".teamagent", "knowledge.db");
-  const blocks: string[] = [];
-
-  // M4-A: narrative warnings + user-input flag (fast path, runs first)
-  try {
-    const sessionId = input.session_id ?? "";
-    if (sessionId) {
-      const sessionsDir = path.join(os.homedir(), ".teamagent", "sessions");
-      const { text: injText, injectedIds } = buildInjectionFromPending({
-        sessionsDir,
-        sessionId,
-      });
-      if (injText) blocks.push(injText);
-
-      // user-input channel scan — use store to read rules
-      const globalDbPath = path.join(os.homedir(), ".teamagent", "global.db");
-      const store = new DualLayerStore({ projectDbPath: dbPath, userGlobalDbPath: globalDbPath });
-      const rules = store.findActive();
-      const userHits = scanUserInput(prompt, rules);
-      const flagText = formatUserInputFlag(userHits);
-      if (flagText) blocks.push(flagText);
-      store.close();
-
-      // Persist injected ids for next Stop to classify recurrence/compliance
-      persistLastInjected(sessionsDir, sessionId, injectedIds);
-
-      // Emit events
-      if (injectedIds.length > 0 || userHits.length > 0) {
-        const eventsDbPath = path.join(os.homedir(), ".teamagent", "events.db");
-        const eventLog = new SqliteEventLog(openDb(eventsDbPath));
-        const now = new Date().toISOString();
-        // Base time + short random suffix: prevents millisecond collisions when
-        // the hook re-fires rapidly (harness retry, parallel agents, etc).
-        const stamp = () =>
-          `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        if (injectedIds.length > 0) {
-          eventLog.append({
-            id: `e-inject-${sessionId}-${stamp()}`,
-            kind: "ai.narrative.injected",
-            knowledge_ids: injectedIds,
-            session_id: sessionId,
-            timestamp: now,
-            schema_version: 1,
-          });
-        }
-        for (const h of userHits) {
-          eventLog.append({
-            id: `e-uflag-${sessionId}-${h.knowledge_id}-${stamp()}`,
-            kind: "ai.user_input.flagged",
-            knowledge_id: h.knowledge_id,
-            session_id: sessionId,
-            timestamp: now,
-            schema_version: 1,
-          });
-          // Wire calibrator.user_reject: user typed the avoidance rule's wrong_pattern
-          // → negative reinforcement signal consumed by v2 demerit engine.
-          eventLog.append({
-            id: `e-ureject-${sessionId}-${h.knowledge_id}-${stamp()}`,
-            kind: "calibrator.user_reject",
-            knowledge_id: h.knowledge_id,
-            session_id: sessionId,
-            timestamp: now,
-            schema_version: 1,
-          });
-        }
-        eventLog.close();
-      }
-    }
-  } catch {
-    // M4-A injection is best-effort — never block user input
-  }
-
-  // Rule semantic retrieval (Tier-1 / Tier-2)
-  let matchedTier1: import("@teamagent/types").KnowledgeEntry[] = [];
-  let matchedTier2: import("@teamagent/types").KnowledgeEntry[] = [];
-  try {
-    const sessionId = input.session_id ?? "";
-    if (sessionId && prompt) {
-      const sessionsDir = path.join(os.homedir(), ".teamagent", "sessions");
-      const globalDbPath = path.join(os.homedir(), ".teamagent", "global.db");
-      const firstPrompt = isFirstPrompt(sessionsDir, sessionId);
-      const seenIds = readSessionInjected(sessionsDir, sessionId);
-
-      const ruleResult = await Promise.race([
-        retrieveRulesForPrompt({
-          userMessage: prompt,
-          cwd,
-          projectDbPath: dbPath,
-          globalDbPath,
-          sessionSeenIds: seenIds,
-          isFirstPrompt: firstPrompt,
-        }),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), HOOK_TIMEOUT_MS)),
-      ]);
-
-      if (ruleResult) {
-        if (ruleResult.injectionText) {
-          blocks.push(ruleResult.injectionText);
-        }
-        matchedTier1 = ruleResult.tier1Rules;
-        matchedTier2 = ruleResult.tier2Rules;
-        if (ruleResult.allInjectedIds.length > 0) {
-          appendSessionInjected(sessionsDir, sessionId, ruleResult.allInjectedIds);
-        } else if (firstPrompt) {
-          // Even when no rules were found on the first prompt, touch the session
-          // file so Tier-1 doesn't re-trigger on subsequent prompts.
-          touchSessionInjected(sessionsDir, sessionId);
-        }
-      }
-    }
-  } catch {
-    // rule retrieval is best-effort — never block user input
-  }
-
-  // Recording Memory retrieval: source-cited, small-by-default context.
-  try {
-    const sessionId = input.session_id ?? "";
-    if (sessionId && prompt) {
-      const sessionsDir = path.join(os.homedir(), ".teamagent", "sessions");
-      const seenIds = readSessionInjected(sessionsDir, sessionId);
-      const recordingResult = await Promise.race([
-        retrieveRecordingMemoriesForPrompt({
-          userMessage: prompt,
-          cwd,
-          homeDir: os.homedir(),
-          sessionSeenIds: seenIds,
-        }),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), HOOK_TIMEOUT_MS)),
-      ]);
-      if (recordingResult?.injectionText) {
-        blocks.push(recordingResult.injectionText);
-      }
-      if (recordingResult && recordingResult.injectedIds.length > 0) {
-        appendSessionInjected(sessionsDir, sessionId, recordingResult.injectedIds);
-      }
-    }
-  } catch {
-    // recording memory retrieval is best-effort — never block user input
-  }
-
-  if (blocks.length > 0) {
-    const injectionText = blocks.join("\n\n");
-    const rawVis = (process.env.TEAMAGENT_VISIBILITY ?? "verbose").toLowerCase();
-    const terminalSummary =
-      rawVis !== "silent" ? buildTerminalSummary(matchedTier1, matchedTier2) : "";
-
-    const output: Record<string, unknown> = {
-      hookSpecificOutput: {
-        hookEventName: "UserPromptSubmit",
-        additionalContext: injectionText,
-      },
-    };
-    if (terminalSummary) output.systemMessage = terminalSummary;
-
-    // CC 2.1.x systemMessage UI 渲染回归 (issue #50542): 终端不再显示 hook 的
-    // systemMessage。镜像到 stderr 作为 workaround。可用 TEAMAGENT_HOOK_STDERR=0 关闭。
-    if (terminalSummary && process.env.TEAMAGENT_HOOK_STDERR !== "0") {
-      process.stderr.write(`${terminalSummary}\n`);
-    }
-
-    process.stdout.write(JSON.stringify(output));
-  }
+interface UserPromptInput {
+  readonly prompt: string;
+  readonly session_id?: string;
 }
 
-main().catch(() => process.exit(0));
+interface UserPromptOutput {
+  readonly hookSpecificOutput: {
+    readonly hookEventName: "UserPromptSubmit";
+    readonly additionalContext: string;
+  };
+  readonly systemMessage?: string;
+}
+
+// Base time + short random suffix prevents millisecond collisions when the
+// hook re-fires rapidly (harness retry, parallel agents, etc).
+function stamp(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function main(): Promise<void> {
+  await runHook<UserPromptInput, UserPromptOutput>({
+    channel: "UserPromptSubmit",
+    parseInput: (raw) => {
+      if (!raw || typeof raw !== "object") return null;
+      const obj = raw as { prompt?: unknown; session_id?: unknown };
+      const prompt = typeof obj.prompt === "string" ? obj.prompt : "";
+      if (!prompt) return null;
+      const sessionId = typeof obj.session_id === "string" ? obj.session_id : undefined;
+      return { prompt, session_id: sessionId };
+    },
+    handler: async (ctx) => {
+      const { input, cwd, home, env, paths, bus } = ctx;
+      const prompt = input.prompt;
+      const sessionId = input.session_id ?? "";
+      const sessionsDir = path.join(home, ".teamagent", "sessions");
+      const eventLog = ctx.eventLog as unknown as SqliteEventLog;
+      const store = ctx.store as unknown as DualLayerStore;
+
+      const blocks: string[] = [];
+
+      // M4-A: narrative warnings + user-input flag (fast path, runs first).
+      if (sessionId) {
+        try {
+          const { text: injText, injectedIds } = buildInjectionFromPending({
+            sessionsDir,
+            sessionId,
+          });
+          if (injText) blocks.push(injText);
+
+          const rules = store.findActive();
+          const userHits = scanUserInput(prompt, rules);
+          const flagText = formatUserInputFlag(userHits);
+          if (flagText) blocks.push(flagText);
+
+          // Persist injected ids for next Stop to classify recurrence/compliance.
+          persistLastInjected(sessionsDir, sessionId, injectedIds);
+
+          // PersistedEvent audit sink + AttributionEvent user-visible bus.
+          if (injectedIds.length > 0 || userHits.length > 0) {
+            const now = new Date().toISOString();
+            if (injectedIds.length > 0) {
+              eventLog.append({
+                id: `e-inject-${sessionId}-${stamp()}`,
+                kind: "ai.narrative.injected",
+                knowledge_ids: injectedIds,
+                session_id: sessionId,
+                timestamp: now,
+                schema_version: 1,
+              });
+              const event: AttributionEvent = {
+                kind: "user-prompt.injected",
+                source: "hook-user-prompt",
+                injectedIds,
+                severity: "info",
+                timestamp: now,
+              };
+              bus.emit(event);
+            }
+            for (const h of userHits) {
+              eventLog.append({
+                id: `e-uflag-${sessionId}-${h.knowledge_id}-${stamp()}`,
+                kind: "ai.user_input.flagged",
+                knowledge_id: h.knowledge_id,
+                session_id: sessionId,
+                timestamp: now,
+                schema_version: 1,
+              });
+              // Wire calibrator.user_reject: user typed the avoidance rule's
+              // wrong_pattern → negative reinforcement signal consumed by the
+              // v2 demerit engine.
+              eventLog.append({
+                id: `e-ureject-${sessionId}-${h.knowledge_id}-${stamp()}`,
+                kind: "calibrator.user_reject",
+                knowledge_id: h.knowledge_id,
+                session_id: sessionId,
+                timestamp: now,
+                schema_version: 1,
+              });
+              const event: AttributionEvent = {
+                kind: "user-prompt.flagged",
+                source: "hook-user-prompt",
+                ruleId: h.knowledge_id,
+                severity: "warning",
+                timestamp: now,
+              };
+              bus.emit(event);
+            }
+          }
+        } catch {
+          // M4-A injection is best-effort — never block user input.
+        }
+      }
+
+      // Rule semantic retrieval (Tier-1 / Tier-2).
+      let matchedTier1: KnowledgeEntry[] = [];
+      let matchedTier2: KnowledgeEntry[] = [];
+      if (sessionId && prompt) {
+        try {
+          const seenIds = readSessionInjected(sessionsDir, sessionId);
+          const firstPrompt = isFirstPrompt(sessionsDir, sessionId);
+          const ruleResult = await Promise.race([
+            retrieveRulesForPrompt({
+              userMessage: prompt,
+              cwd,
+              projectDbPath: paths.projectDbPath,
+              globalDbPath: paths.globalDbPath,
+              sessionSeenIds: seenIds,
+              isFirstPrompt: firstPrompt,
+            }),
+            new Promise<null>((resolve) =>
+              setTimeout(() => resolve(null), HOOK_TIMEOUT_MS),
+            ),
+          ]);
+
+          if (ruleResult) {
+            if (ruleResult.injectionText) {
+              blocks.push(ruleResult.injectionText);
+            }
+            matchedTier1 = ruleResult.tier1Rules;
+            matchedTier2 = ruleResult.tier2Rules;
+            if (ruleResult.allInjectedIds.length > 0) {
+              appendSessionInjected(
+                sessionsDir,
+                sessionId,
+                ruleResult.allInjectedIds,
+              );
+            } else if (firstPrompt) {
+              // Even when no rules were found on the first prompt, touch the
+              // session file so Tier-1 doesn't re-trigger on subsequent prompts.
+              touchSessionInjected(sessionsDir, sessionId);
+            }
+          }
+        } catch {
+          // Rule retrieval is best-effort — never block user input.
+        }
+      }
+
+      // Recording Memory retrieval: source-cited, small-by-default context.
+      if (sessionId && prompt) {
+        try {
+          const seenIds = readSessionInjected(sessionsDir, sessionId);
+          const recordingResult = await Promise.race([
+            retrieveRecordingMemoriesForPrompt({
+              userMessage: prompt,
+              cwd,
+              homeDir: home,
+              sessionSeenIds: seenIds,
+            }),
+            new Promise<null>((resolve) =>
+              setTimeout(() => resolve(null), HOOK_TIMEOUT_MS),
+            ),
+          ]);
+          if (recordingResult?.injectionText) {
+            blocks.push(recordingResult.injectionText);
+          }
+          if (recordingResult && recordingResult.injectedIds.length > 0) {
+            appendSessionInjected(
+              sessionsDir,
+              sessionId,
+              recordingResult.injectedIds,
+            );
+          }
+        } catch {
+          // Recording memory retrieval is best-effort — never block user input.
+        }
+      }
+
+      if (blocks.length === 0) return undefined;
+
+      const injectionText = blocks.join("\n\n");
+      const rawVis = (env.TEAMAGENT_VISIBILITY ?? "verbose").toLowerCase();
+      const terminalSummary =
+        rawVis !== "silent" ? buildTerminalSummary(matchedTier1, matchedTier2) : "";
+
+      // CC 2.1.x systemMessage UI regression (issue #50542): the terminal no
+      // longer renders hook systemMessage. Mirror to stderr as the workaround
+      // — `ctx.mirrorSystemMessage` honors `TEAMAGENT_HOOK_STDERR=0`.
+      if (terminalSummary) ctx.mirrorSystemMessage(terminalSummary);
+
+      const out: UserPromptOutput = terminalSummary
+        ? {
+            hookSpecificOutput: {
+              hookEventName: "UserPromptSubmit",
+              additionalContext: injectionText,
+            },
+            systemMessage: terminalSummary,
+          }
+        : {
+            hookSpecificOutput: {
+              hookEventName: "UserPromptSubmit",
+              additionalContext: injectionText,
+            },
+          };
+      return out;
+    },
+  });
+}
+
+void main();

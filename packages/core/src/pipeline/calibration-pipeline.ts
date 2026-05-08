@@ -82,11 +82,13 @@ export async function runCalibrationPipeline(
     }
 
     deps.bus?.emit({
+      kind: "calibrator.adjusted",
       source: "calibrator",
-      action: "adjusted",
-      target: { id: entry.id },
-      before: { confidence: entry.confidence, status: entry.status },
-      after: { confidence: result.confidence, status: result.status },
+      knowledgeId: entry.id,
+      confidenceBefore: entry.confidence,
+      confidenceAfter: result.confidence,
+      statusBefore: entry.status,
+      statusAfter: result.status,
       severity: result.status === "archived" && entry.status === "active" ? "warning" : "info",
       userFacingValue:
         result.status === "archived" && entry.status === "active"
