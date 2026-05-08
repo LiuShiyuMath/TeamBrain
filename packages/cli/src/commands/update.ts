@@ -41,7 +41,12 @@ export function writeState(s: UpdateState): void {
 
 export function findUpdaterBinary(baseUrl = import.meta.url): string | null {
   const here = path.dirname(fileURLToPath(baseUrl));
+  // issue #151: published artifacts (npm flat dist, monorepo packages/cli/dist)
+  // keep update-*.js and bin-updater.cjs as siblings; the legacy candidates
+  // jumped out of dist/ and never matched any real install layout. Prepend the
+  // sibling path; keep legacy entries as fallback for unforeseen layouts.
   const candidates = [
+    path.resolve(here, "bin-updater.cjs"),
     path.resolve(here, "..", "bin-updater.cjs"),
     path.resolve(here, "..", "..", "dist", "bin-updater.cjs"),
   ];

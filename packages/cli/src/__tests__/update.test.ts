@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   findUpdaterBinary,
   runUpdateCommand,
@@ -69,5 +70,56 @@ describe("update command", () => {
     const r = await runUpdateCommand("rollback", []);
     expect(r.ok).toBe(false);
     expect(r.output).toContain("no backups");
+  });
+});
+
+// Issue #151: findUpdaterBinary returned null in every real install layout
+// because both candidate paths jumped out of dist/, but published artifacts
+// keep update-*.js and bin-updater.cjs as siblings inside dist/. Regression
+// guard for the three layouts the function must support.
+describe("findUpdaterBinary install layouts (issue #151)", () => {
+  let tmpRoot: string;
+
+  beforeEach(() => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tg-find-updater-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  it("npm flat dist layout: locates sibling bin-updater.cjs", () => {
+    // npm published artifact: <root>/dist/update-XXX.js + <root>/dist/bin-updater.cjs
+    const dist = path.join(tmpRoot, "teamagent", "dist");
+    fs.mkdirSync(dist, { recursive: true });
+    const updaterFile = path.join(dist, "bin-updater.cjs");
+    fs.writeFileSync(updaterFile, "// stub");
+    const updateModule = path.join(dist, "update-NPMFLAT.js");
+    fs.writeFileSync(updateModule, "// stub");
+
+    const found = findUpdaterBinary(pathToFileURL(updateModule).href);
+    expect(found).toBe(updaterFile);
+  });
+
+  it("monorepo dev tree (packages/cli/dist): locates sibling bin-updater.cjs", () => {
+    const cliDist = path.join(tmpRoot, "packages", "cli", "dist");
+    fs.mkdirSync(cliDist, { recursive: true });
+    const updaterFile = path.join(cliDist, "bin-updater.cjs");
+    fs.writeFileSync(updaterFile, "// stub");
+    const updateModule = path.join(cliDist, "update-MONOREPO.js");
+    fs.writeFileSync(updateModule, "// stub");
+
+    const found = findUpdaterBinary(pathToFileURL(updateModule).href);
+    expect(found).toBe(updaterFile);
+  });
+
+  it("returns null when bin-updater.cjs is absent", () => {
+    const dist = path.join(tmpRoot, "teamagent", "dist");
+    fs.mkdirSync(dist, { recursive: true });
+    const updateModule = path.join(dist, "update-MISSING.js");
+    fs.writeFileSync(updateModule, "// stub");
+
+    const found = findUpdaterBinary(pathToFileURL(updateModule).href);
+    expect(found).toBeNull();
   });
 });
