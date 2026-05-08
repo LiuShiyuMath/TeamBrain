@@ -15,7 +15,7 @@
     header { padding: 80px 0 60px; text-align: center; }
     h1 { font-size: clamp(1.75rem, 5vw, 2.5rem); font-weight: 700; margin-bottom: 20px; line-height: 1.25; }
     .sub { font-size: 1.125rem; color: #555; max-width: 540px; margin: 0 auto; }
-    .gif-placeholder { aspect-ratio: 16/9; background: #f0f0f0; display: flex; align-items: center; justify-content: center; border-radius: 8px; margin: 40px 0; font-size: 0.9rem; color: #888; border: 1px solid #e0e0e0; }
+    .hero-gif { aspect-ratio: 16/9; display: block; width: 100%; border-radius: 8px; margin: 40px 0; border: 1px solid #e0e0e0; }
     .install-box { background: #f5f5f5; border: 1px solid #e0e0e0; border-radius: 6px; padding: 20px 24px; margin: 32px 0; }
     .install-box pre { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.875rem; background: #ffffff; border: 1px solid #e0e0e0; border-radius: 4px; padding: 12px 16px; overflow-x: auto; margin-bottom: 8px; }
     .install-box pre:last-child { margin-bottom: 0; }
@@ -50,7 +50,7 @@
       <p class="sub">不是 CLAUDE.md。是会自己进化的活规则库。</p>
     </header>
 
-    <div class="gif-placeholder">demo GIF placeholder</div>
+    <img class="hero-gif" src="double-moment.gif" alt="TeamAgent CLI running pnpm teamagent skeleton-demo: attribution panel fires, L0 gate rejects bad entry, Skills compiled 2 written" loading="eager" width="800" height="450" fetchpriority="high" />
 
     <div class="install-box">
       <pre>curl -fsSL https://raw.githubusercontent.com/libz-renlab-ai/TeamBrain/release/install.sh | sh</pre>

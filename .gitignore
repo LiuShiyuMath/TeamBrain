@@ -72,3 +72,6 @@ docs/gstack-bin/.last-verify.out
 docs/gstack-bin/.last-judge.out
 docs/gstack-bin/.last-judge.json
 docs/gstack-bin/.last-judge-prompt.txt
+
+# Judge harness evidence dirs (timestamped, regenerated per run; paired with docs/plans/<issue>/judge.md).
+.judge/
