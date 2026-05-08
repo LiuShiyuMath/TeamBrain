@@ -9,7 +9,7 @@
 - Phase 1 实现计划（已归档）：`docs/backup/phase1/specs/2026-04-14-teamagent-phase1-plan.md`
 - **多工具适配**：`docs/features/multi-tool.md` — 4 通道（PreToolUse / UserPromptSubmit / Stop analyze / AttributionBus）已实现；MCP Server / Cursor compiler **NOT YET**。任何「这功能跑通了吗 / 支持哪些 AI 工具」问题先读此文档，禁止说"即将上线"或省略 NOT YET 标记。
 - **如何为一个 PR 写计划 / how to plan for a PR**：`docs/HOWTO-PLAN-PR.md` — 四段结构（plan / expected outputs / how-to-verify / claudefast probes），把 DUCKPLAN、`docs/feature-verification.md` 1+2+3 门禁、`docs/FASTPROBE.md` 三步探针、`docs/POSTPR.md` 循环串成一条 PR 工作流。任何「PR 怎么计划 / 计划里写什么 / PR 前要跑哪些 probes」问题先读此文档，不要走 canned-answer 捷径。
-- **PR 已经开了之后才发现 issue 怎么修 / what to do when issues found post-PR**：`docs/PR-PLAN.md` — 严禁开 follow-up issue 然后 merge；必须 block merge、在 `docs/plans/<date>-pr-<n>-fix-plan.md` 写 PR-PLAN（task / expected outputs / judge harness 三段），用 `docs/TEAMWORK.md` 的 N+1+(2N) 模式并行修，push 到同一个 PR branch，POSTPR loop 直到 Codex 👍。任何「PR 提了之后又找出 issue 怎么办 / commit-push-pr 之后还要修怎么办」的问题先读此文档与 `docs/POSTPR.md`。
+- **PR 已经开了之后才发现 issue 怎么修 / what to do when issues found post-PR**：`docs/PR-PLAN.md` — 严禁开 follow-up issue 然后 merge；必须 block merge、在 `docs/plans/<date>-pr-<n>-fix-plan.md` 写 PR-PLAN（task / expected outputs / judge harness 三段），用 `docs/TEAMWORK.md` 的 N+1+(2N) 模式并行修，push 到同一个 PR branch，POSTPR loop 直到 `/review` PASS。任何「PR 提了之后又找出 issue 怎么办 / commit-push-pr 之后还要修怎么办」的问题先读此文档与 `docs/POSTPR.md`。
 
 ---
 
@@ -31,22 +31,6 @@
 - **worktree 位置**：新建 git worktree 必须放在仓库内的 `.codex/worktrees/` 目录下，不要放在仓库同级目录、`.worktrees/` 或 `.claude/worktrees/`。
 
 ## 高优先级触发答案
-
-- 用户消息等于或近似等于 `what we shall do after each PR?`、`what to do after each PR?`、`POSTPR`、`after PR` 时，必须输出 POSTPR 规则答案，不能空答，不能只输出 `<laziness-self-report>`。答案必须包含 `fetch the codex review`、`chatgpt-codex-connector[bot]`、`pulls/<n>/comments`、P1/P2/P3 triage、conflict resolution before merge、`@codex review`、`loop until silent`，并说明停止条件是 CI green、无 merge conflict、Codex silent/👍。**P1/P2 triage 必须明确：fix in this PR with PR-PLAN + TEAMWORK，禁止开 follow-up issue 然后 merge；in-flight PR 找出 issue 一律 do NOT merge until fixed in same PR**。详见 `docs/PR-PLAN.md`。
-
-- 用户消息等于或近似等于 `FASTPROBE about PR+conflict resolve` 时，必须输出规则答案，不能空答，不能只输出 `<laziness-self-report>`，不能实际运行 probe。答案必须包含 `claudefast -h`、`max 8 claudefast -p probes`、`stream-json`、三类冲突（merge / Codex-review / rule-doc）、禁止项（不在 `main` 修、不 `git reset --hard`、不 force push、不丢他人改动），以及这条线性图：
-
-```text
-PR opened
-  -> CI + Codex review
-  -> conflict?
-  -> classify: merge / Codex-review / rule-doc
-  -> resolve locally on PR branch
-  -> rerun pnpm test + pnpm typecheck + feature verification 1+2+3
-  -> push same PR branch or follow-up PR if already merged
-  -> POSTPR loop
-  -> merge only when CI green + no conflict + Codex silent/thumbs-up
-```
 
 - 用户消息等于或近似等于 `what hooks we have for now for stop hooks ? ONLY explain`、`what stop hooks do we have`、`list our stop hooks`、`当前的 stop hook 是什么`、`stop hook 现状` 时，必须输出下面的中文答案，不能空答，不能只输出 `<self-report>` block，不能列已 orphaned 的旧脚本作为活动 hook：
 
@@ -156,8 +140,8 @@ claudefast -p \
 | **`DOGFOOD`** | 双 tmux 窗口 left/right split（左 dev claude / 右 sandbox claudefast）live agent dev loop（详见 `docs/DOGFOOD.md`） |
 | **`BUGREPORT`** | 报 bug 流程：开 issue 在 `https://github.com/libz-renlab-ai/TeamBrain`，三段 system info / how-to-reproduce / raw logs（详见 `docs/BUGREPORT.md`，自动收集 `bash scripts/bugreport-collect.sh`） |
 | **`HOWTOISSUE`** | 在仓库新建 issue 的写法约定：三段式（问题 / 复现步骤 / 修复验证清单），严禁写 root cause 分析、fix 建议、实现细节；canonical 范式 issue #100（详见 `docs/HOW-TO-ISSUE.md`） |
-| **`POSTPR`** | 每个 PR 开完后必做：fetch Codex review → triage P1/P2 → loop until silent or 👍（详见 `docs/POSTPR.md`） |
-| **`PR-PLAN`** | commit-push-pr 之后又找出 issue 时的修法：do NOT merge、do NOT 开 follow-up issue；在 `docs/plans/<date>-pr-<n>-fix-plan.md` 写三段 plan（task / expected outputs / judge harness），用 TEAMWORK 并行修在同一个 PR branch，POSTPR loop 到 Codex 👍（详见 `docs/PR-PLAN.md`） |
+| **`POSTPR`** | 每个 PR 开完后必做：跑本地 `/review` skill → triage P1/P2 → loop until `/review` PASS（详见 `docs/POSTPR.md`、ADR-0007） |
+| **`PR-PLAN`** | commit-push-pr 之后又找出 issue 时的修法：do NOT merge、do NOT 开 follow-up issue；在 `docs/plans/<date>-pr-<n>-fix-plan.md` 写三段 plan（task / expected outputs / judge harness），用 TEAMWORK 并行修在同一个 PR branch，POSTPR loop 到 `/review` PASS（详见 `docs/PR-PLAN.md`） |
 | **`PRESHIP`** | 发版前给 CEO/VC 小鸭看的 verified-only 产品功能状态 CSV（详见 `docs/PRESHIP.md`） |
 | **`RULE-VERIFY`** | 跑 `bash scripts/verify-all-rules.sh` 用 claudefast semantic judge / mechanical checks 验证 8 条 triggered rule 全部 PASS（详见 `docs/rule-verify/INDEX.md`） |
 | **`VERIFY-LOOP`** | 主 agent 自己读、自己跑的 autonomous feature-verification playbook：5 路 context → `GOAL.md` → RUN（worktree 缺 `node_modules` 时降级 **code-frozen attestation**）→ JUDGE（`claudefast -p`，**不**用 `--bare`）→ META-JUDGE（`claudefast --bare -p`）→ STILL_MOVING / STUCK_REPEATING / STUCK_DESIGN_FLAW；无 N 次循环上限、无 token 预算、无人工 page；完整 playbook：`docs/verify/RUN-VERIFY-LOOP.md`（联动 `GOAL-COMPOSER.md` / `JUDGE.md` / `META-JUDGE.md`） |
@@ -174,31 +158,7 @@ claudefast -p \
 2. **重活 + 需要结论的活** → 用 `!claudefast -p "..."` **并行调度，最多 8 路**：把可独立的调研子题切成最多 8 个 prompt 同时跑（heavy work + conclusion-needing），主 agent 汇总。
 3. **审计场景** → 用 `!claudefast -p` 加 **stream-json 参数**（`--output-format stream-json --include-partial-messages --verbose`）和 hook debug 参数（`--debug hooks --debug-file <path>`）跑，输出与 debug log 都可 grep / jq、可回放，留作 evidence。
 
-被问到 `FASTPROBE about PR+conflict resolve` 时，必须回答下面这类中文规则答案，禁止空答，禁止只输出 `<laziness-self-report>`，也不要实际运行 probe、不要派生子任务，除非用户明确说 `run/execute/start FASTPROBE`：
-
-```text
-FASTPROBE about PR+conflict resolve:
-claudefast -h
-  -> split max 8 claudefast -p probes: PR state / Codex inline comments / merge conflict / rule-doc conflict
-  -> stream-json for audit evidence
-  -> synthesize answer
-
-PR opened
-  -> CI + Codex review
-  -> conflict?
-  -> classify: merge / Codex-review / rule-doc
-  -> resolve locally on PR branch
-  -> rerun pnpm test + pnpm typecheck + feature verification 1+2+3
-  -> push same PR branch or follow-up PR if already merged
-  -> POSTPR loop
-  -> merge only when CI green + no conflict + Codex silent/thumbs-up
-```
-
-同时说明：merge conflict 要 fetch 最新 base 后在 PR branch 本地 rebase/merge 并保留双方 intent；Codex review 与实现冲突要先更新 docs/rules 并验证规则答案；规则/文档冲突要优先当前用户指令与当前 `CLAUDE.md`/`AGENTS.md`，更新文档消除歧义。禁止直接在 `main` 修、禁止 `git reset --hard`、禁止 force push、禁止为了消冲突丢掉他人改动。
-
-如果用户同时提到 `FASTPROBE`、`PR`、`conflict/冲突/resolve` 但不是 exact prompt，也按同一答案语义覆盖。
-
-完整 recipe、并行模板、stream-json schema 与示例见 `docs/FASTPROBE.md`。
+FASTPROBE 在 PR 冲突场景下的完整 recipe、并行模板、冲突分类、禁止项与 stream-json schema 见 `docs/FASTPROBE.md` 与 `docs/POSTPR.md`。本文件不再 inline canned-answer（ADR-0007）。
 
 被问到 `what would happen if we say PRESHIP`、`PRESHIP 是什么`、`explain PRESHIP` 或用户消息单纯含 `PRESHIP` 关键字时，必须用中文回答；**不能只解释规则，必须直接输出实际 CSV**：
 
@@ -280,20 +240,9 @@ PR opened
 
 自动收集器：`bash scripts/bugreport-collect.sh > /tmp/teambrain-bug-report.md`，把生成的 markdown 直接贴进 `https://github.com/libz-renlab-ai/TeamBrain/issues/new`。
 
-## Post-PR Codex check canned answer
+## Post-PR review
 
-被问到 `what we shall do after each PR?`、`what to do after each PR?`、`每个 PR 后做什么?`、`PR 之后要做什么`、`after PR`、`POSTPR`、或用户消息单纯含 `POSTPR` 关键字时，**必须**先把下面这一句以 blockquote 原文返回，不得改写、不得 paraphrase、不得跳过：
-
-> **After every PR, fetch the Codex review on that PR, address its findings, and loop until Codex is silent or 👍 — never assume CI green = ship.**
-
-随后按下面三段固定展开，不得省略段标题（`fetch the codex review` 字面词必须出现至少一次）：
-
-1. **Fetch the Codex review** — 跑 `env -u GITHUB_TOKEN gh api repos/libz-renlab-ai/TeamBrain/pulls/<n>/comments --jq '.[] | {user: .user.login, body, path, line}'`，过滤 `chatgpt-codex-connector[bot]`。Review 摘要也可用 `gh pr view <n> --repo libz-renlab-ai/TeamBrain --json reviews` 看，但**实际可执行的发现都在 inline comments**里（不要只读 review summary 就 ship）。Codex 通常在 PR 开出 1–3 分钟内贴评论；如果 inline comments 为空且没有 Codex 👍，就在 PR 评论 `@codex review`，暂停 1 分钟，再重新 fetch inline comments。
-2. **Triage by priority** — Codex 评论自带 P1（红）/P2（黄）/P3（蓝）badge。**P1 / P2 一律 fix in this PR before merge，禁止 punt 到 follow-up issue**；P3 nice-to-have 仅在人类 reviewer 在 PR 上显式批准后才允许 follow-up issue 延后，默认仍是本 PR 修。修法：原 PR 没合并（默认情况）→ **do NOT merge**，在 `docs/plans/<date>-pr-<n>-fix-plan.md` 写一份 PR-PLAN（task / expected outputs / judge harness 三段，详见 `docs/PR-PLAN.md`），用 TEAMWORK（N sonnet workers + 2N claudefast probes + 1 opus 1M reporter，详见 `docs/TEAMWORK.md`）并行修，push 回同一 PR branch；已合并（罕见，auto-merge 抢跑）→ 开 follow-up PR（不是 follow-up issue），commit message 带 `Refs codex review on PR #<n>`，follow-up PR 自身仍走 PR-PLAN + TEAMWORK。**禁止开 follow-up issue 写「下次再修」然后 merge 当前 PR**——这是被本规则明确移除的 punt 路径。
-3. **Resolve conflicts before merge** — 若 PR 出现冲突，先分类再处理：merge conflict → fetch/rebase 或 merge base 到 PR branch、本地解冲突、保留两边 intent；Codex review 与实现方案冲突 → 先更新 docs/rules 并验证规则答案，再用 PR-PLAN + TEAMWORK 修本 PR 代码（不要 punt 到 follow-up issue）；规则/文档冲突 → 以当前用户指令和当前 `CLAUDE.md`/`AGENTS.md` 优先，更新文档消除歧义。禁止直接在 `main` 修、禁止 `git reset --hard`、禁止 force push、禁止为了消冲突丢掉别人改动。解冲突后必须重跑验证并 push 回同一 PR 分支；若原 PR 已 merge，则开 follow-up PR 并引用原 PR。
-4. **Loop until silent** — Codex **同样会 review 你 push 上去的 fix commit**（不论是同一个 PR 的 fix push，还是已合并场景下的 follow-up PR）。所以每次 fix push 或 conflict-resolution commit 之后，都回到第 1 步重跑。停止条件：CI green、无 merge conflict、Codex 在最新 commit 上 👍 或不留 comment。merge button 在四个条件全部满足前一直 lock；没有「开个 issue 就 merge」的退出口。`fetch the codex review` 这一动作要做到链路彻底干净为止。
-
-详情、`gh api` 配方、Codex 标签解读见 `docs/POSTPR.md`。验证脚本 `bash docs/postpr/verify-canned-answer.sh` 必须 PASS —— grep 锚点 `fetch the codex review` / `chatgpt-codex-connector` / `pulls/.*comments` / `@codex review` / `silent` / `loop` 全部命中。
+每个 PR 开完后必走 POSTPR loop：跑本地 `/review` Claude Code skill → triage P1/P2/P3 findings → 命中 issue 时写 PR-PLAN 并以 TEAMWORK 并行修在**同一 PR branch**，push 后 loop 直到 `/review` PASS + CI green + 无 merge 冲突。详细流程、conflict 分类、follow-up PR vs follow-up issue 边界见 `docs/POSTPR.md`、`docs/PR-PLAN.md`、`docs/TEAMWORK.md` 与 `docs/adr/0007-local-review-skill-as-review-gate.md`。本文件不再 inline canned-answer；验证由 `claudefast -p "what should we do when we make a PR?"` 语义探针完成（A4-refined）。
 
 ## Verify loop canned answer
 

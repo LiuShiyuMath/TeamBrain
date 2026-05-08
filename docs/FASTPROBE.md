@@ -34,7 +34,7 @@ the FASTPROBE probe plan plus the PR conflict-resolution line below.
 ```text
 FASTPROBE
   -> claudefast -h
-  -> split probes: PR state / Codex inline comments / merge conflict / rule conflict
+  -> split probes: PR state / /review findings / merge conflict / rule conflict
   -> run up to 8 claudefast -p probes in parallel
   -> use stream-json for audit evidence
   -> synthesize PR conflict path
@@ -44,14 +44,14 @@ FASTPROBE
 
 ```text
 PR opened
-  -> CI + Codex review
+  -> CI + /review
   -> conflict?
-  -> classify: merge / Codex-review / rule-doc
+  -> classify: merge / review-finding / rule-doc
   -> resolve locally on PR branch
   -> rerun pnpm test + pnpm typecheck + feature verification 1+2+3
   -> push same PR branch or follow-up PR if already merged
   -> POSTPR loop
-  -> merge only when CI green + no conflict + Codex silent/thumbs-up
+  -> merge only when CI green + no conflict + /review PASS
 ```
 
 禁止项必须说清：不要直接在 `main` 修，不要 `git reset --hard`，不要

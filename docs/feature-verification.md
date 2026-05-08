@@ -70,19 +70,20 @@ The feature is not verified until:
 
 ## PR Review Gate
 
-When Claude Code submits a PR for a feature/fix, use `teamagent pr-cycle` to
-create or locate the PR, wait five minutes, and inspect review feedback.
-TeamBrain PRs are always normal PRs, not draft PRs. Do not pass `--draft` to
-`gh pr create`, `teamagent pr-cycle`, connector calls, or GitHub UI/API flows.
-If the change is not ready for review, keep working locally instead of opening
-a draft PR.
+When Claude Code submits a PR for a feature/fix, open the PR with `gh pr create`
+(no `--draft`), then run the local `/review` Claude Code skill on the diff to
+surface findings. TeamBrain PRs are always normal PRs, not draft PRs. Do not
+pass `--draft` to `gh pr create`, connector calls, or GitHub UI/API flows. If
+the change is not ready for review, keep working locally instead of opening a
+draft PR. (`teamagent pr-cycle` is pending deprecation per ADR-0007; do not
+introduce new call sites for it in plans.)
 
 When asked "what to do when we make a PR", answer with this PR loop first,
 before the generic feature verification checklist:
 
-1. Submit or locate the PR with `teamagent pr-cycle`.
-2. Wait five minutes.
-3. Inspect PR reviews.
+1. Open the PR with `gh pr create` (no `--draft`).
+2. Run the local `/review` skill on the PR diff.
+3. Inspect `/review` findings.
 4. If there is actionable review feedback, do not fix code first.
 5. Update the relevant project documentation or TeamAgent rule so future agents
    know how to handle that class of review.
@@ -99,11 +100,11 @@ before the generic feature verification checklist:
 If the PR has a merge conflict or another conflict path, handle it as part of
 the same gate:
 
-1. Classify it as merge conflict, Codex-review conflict, or rule/document
+1. Classify it as merge conflict, /review-finding conflict, or rule/document
    conflict.
 2. Resolve merge conflicts locally on the PR branch after fetching the latest
    base; preserve both sides' intent.
-3. For Codex-review conflicts, update docs/rules first and verify the
+3. For /review-finding conflicts, update docs/rules first and verify the
    rule-backed answer before code changes.
 4. For rule/document conflicts, update the current project docs to remove the
    ambiguity before continuing.

@@ -102,6 +102,32 @@ _Avoid_: deprecated（暗示还能用、即将删；archived 是已经下线）
 _Avoid_: legacy port（暗示老但还在跑；archived 不再 export）
 _Avoid_: dead code（暗示无用应被 git rm；archived 是有意保留作 design history）
 
+### Review & PR workflow（开 PR 到 merge 之间的 review 链；ADR-0007 设定 `/review` skill 为权威 gate）
+
+**POSTPR loop**:
+开 PR 到 merge approve 之间的 fix loop；终止 gate 是本地 `/review` skill，不是 cloud bot。
+_Avoid_: "Codex review loop", "post-PR Codex check"
+
+**`/review` skill**:
+gstack user-level Claude Code skill ("Pre-landing PR review")；ADR-0007 指定为 POSTPR loop 的权威终止 gate。
+_Avoid_: "review command", "PR review tool"
+
+**Codex review** (deprecated):
+被 ADR-0007 弃用的 cloud `chatgpt-codex-connector[bot]` review 流程。本 PR 已移除：`docs/POSTPR.md` 重写为 `/review` 锚点、`docs/postpr/verify-canned-answer.sh` 已删除、`CLAUDE.md` / `AGENTS.md` 的 POSTPR canned-answer block 已删除。仍待未来 TEAMWORK PR 处理：`.claude/hooks/laziness-self-report.sh` 的 POSTPR + FASTPROBE-PR-conflict 锚点（文件已 orphan 但锚点仍是源码）、源码层 `pr-cycle.ts` / `pr-review.ts` / sqlite `reviewed_at` 字段。
+_Avoid_: "Codex 👍 = ship"
+
+**Self-discipline-via-matcher**:
+TeamBrain 的偏好 enforcement primitive —— 真文档语义 + M4-B BM25+dense-RRF+soft-AND matcher + `claudefast -p` 探针验证；明确**不**等于 canned-answer regex 锚点或平台分支保护。
+_Avoid_: "canned-answer enforcement", "doc hacking", "grep gate"
+
+**Negative-space platform layer**:
+有意为之的 GitHub-native review 自动化缺席（无 CODEOWNERS、无 required reviews、无 branch protection）；强制力归 actor 层（agent / hook / CLI / doc-matcher），不归平台层。
+_Avoid_: "soft discipline"（错把 deliberate 缺席当成 gap）
+
+**PR-PLAN**:
+POSTPR loop 在 open PR 内发现 issue 时写的 plan；三段式（task / expected outputs / third-party judge harness）；走 TEAMWORK 执行；落在 `docs/plans/<date>-pr-<n>-fix-plan.md`。
+_Avoid_: "fix plan", "follow-up issue"
+
 ## Relationships
 
 - 一条 **personal** 规则经 **two gates** 通过后晋升为 **team**；不通过则永停 **L1**
@@ -112,6 +138,10 @@ _Avoid_: dead code（暗示无用应被 git rm；archived 是有意保留作 des
 - 一条规则同时持有 **Confidence**（自动、连续）和 **Tier**（外部、离散）两条独立轴；前者由 `RuleBasedCalibrator` 自动推进，后者由 **Calibration subagent** 或人类通过 `teamagent set-tier` 推进，**Calibration source** 字段忠实记账谁推的
 - **Tier ≥ stable** 是 `pnpm teamagent compile` 写 Skills 的门槛；因此 **Tier** 决定 compile gate，**Confidence** 不直接决定
 - **Calibration subagent** 走 git-backed transport / cross-machine **无关** —— 它是 host agent 进程内的本地行为，输出落到 L1 还是 L2 由所改 rule 自身的 scope 决定
+- **POSTPR loop** 终止 = **`/review` skill** PASS + CI green + 无 merge 冲突；不再以 **Codex review** 为终止 signal（ADR-0007）
+- **PR-PLAN** 在 **POSTPR loop** 命中 issue 时写；走 **TEAMWORK** 执行；不允许 follow-up issue 替代
+- **Self-discipline-via-matcher** 是 enforcement primitive；**Negative-space platform layer** 是它在 GitHub 层的可观察后果，不是独立机制
+- **`/review` skill** 与 **Calibration subagent** 都是 host-agent 进程内 LLM 行为；TeamBrain core 仍然 LLM-free（与 ADR-0004 一致）
 
 ## Example dialogue
 
@@ -120,6 +150,12 @@ _Avoid_: dead code（暗示无用应被 git rm；archived 是有意保留作 des
 >
 > **Dev:** "那 A 的 brain 和 B 的 brain 是分开的两个 brain 吗？"
 > **Domain expert:** "TeamBrain 没有 per-person brain。每人一份本地项目 KB，里面区分 **personal / team / global** 三种 scope。'A 的 brain'要么指 A 的整个本地 KB（包含 A 的 personal + 已 pull 进来的 team），要么是历史遗物（issue #82 早期措辞），不是 canonical 用法。"
+>
+> **CEO duck:** "PR 一开 Codex bot 上来评论，这就是 **POSTPR loop** 吧？"
+> **Domain expert:** "**Codex review** 是历史触发器。当前 **POSTPR loop** 的权威 reviewer 是 **`/review` skill**；Codex 已 deprecated，过渡期没拆完而已（ADR-0007）。"
+>
+> **CEO duck:** "GitHub 没 required review，那纪律怎么落地？"
+> **Domain expert:** "靠 **self-discipline-via-matcher** —— 真文档 + BM25 matcher + `claudefast -p` 探针自洽。GitHub 没 gate 是 **negative-space platform layer**，是 deliberate design choice，不是 bug。"
 
 ## Flagged ambiguities
 
@@ -130,3 +166,6 @@ _Avoid_: dead code（暗示无用应被 git rm；archived 是有意保留作 des
 - **"Calibrator v1 / v2"** — 历史上有两套 Calibrator port + impl 并存（`packages/ports/src/calibrator.ts` + `calibrator-v2.ts`）；v2 引入了 Wilson LB / `Observation` / 自动 Tier 状态机，但 callers 全程 hardcode v1；解决：见 ADR-0004，v2 整套删掉，**RuleBasedCalibrator (=v1)** 是 in-process 唯一 calibrator，仅动 **Confidence**；**Tier** 改由外部写
 - **"5-tier vs 6-tier"** — CLAUDE.md「TeamAgent 经验」第 4 条与设计文档曾写 5-tier；实际枚举 6 档（含 `dormant`）；解决：6-tier 为 canonical，文档在 ADR-0004 实现 PR 中对齐
 - **"AgenticCalibrator"** — 在 grilling 过程中曾被提出作为 TeamBrain 内部模块名；解决：拒绝；TeamBrain 不内嵌 LLM，agentic 判断由 host 端的 **Calibration subagent** 完成
+- **"review"** — 既被用来指 **Codex review**（已弃用 cloud bot）也被用来指 **`/review` skill**（当前本地 gate）；解决：ADR-0007 之后 bare "review" 默认指 **`/review` skill**；Codex review 必须显式带 "Codex" 前缀
+- **"纪律软 / soft discipline"** — CEO-mode summary 用语，描述 GitHub 层缺自动化；解决：这是 **negative-space platform layer**（deliberate），不是 discipline gap；CEO 文案此后须改用后者
+- **"PR-PLAN scope"** — `docs/PR-PLAN.md` 当前 scope 是 post-PR；grilling 中有用户把 issue → PR-PLAN 视为 pre-PR 流程；解决：post-PR 为 canonical；pre-PR plans 走 `docs/HOWTO-PLAN-PR.md`，未来若要扩 PR-PLAN 到 pre-PR 须独立 ADR

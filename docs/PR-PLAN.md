@@ -2,7 +2,7 @@
                     PR-PLAN — fix issues inside the open PR
                     ========================================
 
-   commit-push-pr ──► CI / Codex / human review ──► issues found?
+   commit-push-pr ──► CI / /review / human review ──► issues found?
                                                          │
                                                          ▼
                           ┌────────────────────────────────────────┐
@@ -31,7 +31,7 @@
                                                          │
                                                          ▼
                               POSTPR loop on the same PR until
-                              CI green + no conflict + Codex 👍
+                              CI green + no conflict + /review PASS
 ```
 
 # PR-PLAN — Fix Issues Inside the Open PR
@@ -39,9 +39,9 @@
 ## What it is
 
 `PR-PLAN` is the project's name for the plan document you write **after**
-opening a PR, **when** review (CI, Codex, a human, or your own audit)
-surfaces issues that need fixing, **so that** the fix lands inside the
-**same PR** — never via a follow-up issue.
+opening a PR, **when** review (CI, the local `/review` skill, a human, or
+your own audit) surfaces issues that need fixing, **so that** the fix lands
+inside the **same PR** — never via a follow-up issue.
 
 It is the post-PR sibling of `docs/HOWTO-PLAN-PR.md` (which covers the
 plan written *before* opening a PR) and the trigger for the `TEAMWORK`
@@ -54,7 +54,7 @@ Write one whenever **all** of the following hold:
 1. A PR is **open** (`commit-push-pr` has run).
 2. The PR has **not yet merged**.
 3. Review surfaced one or more issues that need fixing — CI failure,
-   Codex inline P1 / P2 / P3 comment, human reviewer comment, or a
+   `/review` skill finding (P1 / P2 / P3), human reviewer comment, or a
    self-audit finding from a `POSTPR` loop iteration.
 
 ## Why not a follow-up GitHub issue?
@@ -65,8 +65,8 @@ reasons:
 - **Follow-up issues let the merge happen with a known defect.** Once
   merged, the defect is on `main` and the promised "we'll fix it next
   PR" frequently slips across context switches.
-- **Follow-up issues hide the fix from the PR's review history.** Codex
-  reviews each PR independently; the fix in a separate PR no longer
+- **Follow-up issues hide the fix from the PR's review history.** `/review`
+  treats each diff independently; the fix in a separate PR no longer
   ties back to the original P1/P2 finding.
 - **Follow-up issues split context.** PR-PLAN keeps the finding, the
   plan, and the fix in one PR thread.
@@ -95,7 +95,7 @@ A reviewer-checkable list of artefacts:
 - Files edited (paths + line ranges).
 - New regression tests covering the findings.
 - CI on the PR branch: green.
-- Codex re-review on the latest commit: 👍 or no inline comments.
+- `/review` re-run on the latest commit: PASS (no actionable findings).
 
 ### ③ Judge harness (third-party, JSON-emitting)
 
@@ -137,7 +137,7 @@ docs/plans/<YYYY-MM-DD>-pr-<n>-fix-plan.md
 ```
 
 A companion `<...>-fix-report.md` is written when the loop terminates
-with Codex 👍, recording what actually shipped, any deltas vs. the
+with `/review` PASS, recording what actually shipped, any deltas vs. the
 plan, and any P3 deferred to a follow-up issue (only if a human
 reviewer approved it). `research.md` is optional.
 
@@ -148,13 +148,13 @@ reviewer approved it). `research.md` is optional.
 | **Open a follow-up issue and merge anyway** | The merge lands the defect on `main`; the issue often slips. Removed by this rule. |
 | **Skip the PR-PLAN and just push fix commits** | No third-party judge harness means the fix is graded by the agent that wrote it. |
 | **Write the PR-PLAN but execute solo when N>1** | TEAMWORK's parallel workers + opus reporter are the cross-validation layer. |
-| **Force-push to overwrite PR history** | `git reset --hard` / `--force` wipe the trail Codex used to compare. Push fix commits *on top*. |
+| **Force-push to overwrite PR history** | `git reset --hard` / `--force` wipe the trail `/review` used to compare. Push fix commits *on top*. |
 | **Branch off `main` for the fix** | Creates a sibling PR. Fix has to land on the PR's branch. |
 | **Treat P3 deferrals as the default** | P3 deferral requires explicit human reviewer approval. Default is still fix-in-this-PR. |
 
 ## See also
 
-- `docs/POSTPR.md` — the post-PR Codex-review loop; PR-PLAN is the
+- `docs/POSTPR.md` — the post-PR `/review` loop; PR-PLAN is the
   fix-planning step inside that loop.
 - `docs/TEAMWORK.md` — N+1+(2N) parallel execution pattern; PR-PLAN is
   the input it runs against.

@@ -21,7 +21,7 @@
                                                 ▼
                                           open normal PR
                                                 ▼
-                                         POSTPR loop until 👍
+                                         POSTPR loop until /review PASS
 ```
 
 # How to Plan for a PR
@@ -40,10 +40,10 @@ It pulls together rules that already live in this repo:
 - `docs/feature-verification.md` — the 1+2+3 feature-verification gate.
 - `docs/FASTPROBE.md` — the `claudefast -h` → parallel `-p` → stream-json
   audit recipe.
-- `docs/POSTPR.md` — the post-merge Codex review loop.
+- `docs/POSTPR.md` — the post-PR `/review` loop.
 
 When in doubt, follow the four sections below in order. Skipping one of them
-is the most common cause of a PR getting bounced by Codex review or sliding
+is the most common cause of a PR getting bounced by `/review` or sliding
 into draft-mode limbo.
 
 ## ① Plan — write `plan.md`
@@ -78,8 +78,8 @@ nest worktrees inside `.claude/worktrees/` or alongside the repo.
 ## ② Expected outputs — list what reviewers will check off
 
 The expected-outputs section turns the plan into a checklist the PR can be
-graded against. Each item must be something a reviewer (human or Codex) can
-verify exists. Good shapes:
+graded against. Each item must be something a reviewer (human or `/review`
+skill) can verify exists. Good shapes:
 
 - **Files**: paths that will be added/edited (e.g.
   `docs/HOWTO-PLAN-PR.md`, `packages/cli/src/commands/foo.ts`).
@@ -148,7 +148,7 @@ fixed three-step is `FASTPROBE` (`docs/FASTPROBE.md`):
    - "Does behaviour X already exist? List call sites with line numbers."
    - "What does `pnpm teamagent <cmd> --help` print today?"
    - "Read `docs/<related-doc>.md` and summarise constraints in 5 bullets."
-   - "Search Codex's last 3 reviews on this area and list recurring P1/P2
+   - "Search the last 3 `/review` runs on this area and list recurring P1/P2
      findings."
 3. **Audit-grade evidence** — when the probe output will be cited in the PR
    body or the judge harness, run it through stream-json:
@@ -177,7 +177,7 @@ Hard rules for probes:
   scrub it as `[redacted]`.
 - Conflict-resolution probes follow `FASTPROBE about PR+conflict resolve`
   (`docs/FASTPROBE.md` + `docs/POSTPR.md`): classify conflicts as
-  merge / Codex-review / rule-doc, fix on the PR branch, never reset/force
+  merge / review-finding / rule-doc, fix on the PR branch, never reset/force
   on `main`.
 
 ## After the PR opens — `POSTPR` loop + `PR-PLAN` for any fixes
@@ -188,23 +188,22 @@ while the PR is open, do **not** open a follow-up GitHub issue and merge
 anyway. P1 / P2 must be fixed in this PR via PR-PLAN + TEAMWORK; a P3
 nice-to-have may be deferred to a follow-up issue only with explicit
 human reviewer approval. The only legitimate follow-up artefact is a
-follow-up *PR* in the rare auto-merge-raced-Codex case.
+follow-up *PR* in the rare auto-merge-raced-`/review` case.
 
 ```
-PR opened → CI + Codex review → issues found?
+PR opened → CI + /review → issues found?
    → block the merge
    → write PR-PLAN at docs/plans/<date>-pr-<n>-fix-plan.md
      (task / expected outputs / judge harness)
    → execute with TEAMWORK (N workers + 2N probes + 1 opus reporter)
    → push fix commits to the SAME PR branch
    → rerun pnpm test + pnpm typecheck + verification 1+2+3
-   → re-fetch Codex review
-   → stop only when CI green + no conflict + Codex 👍 or silent
+   → re-run /review on the new diff
+   → stop only when CI green + no conflict + /review PASS
 ```
 
 Plan for at least one POSTPR iteration in the schedule; PRs that "merge
-on first green CI" usually skip the Codex inline-comment fetch and miss
-P1s.
+on first green CI" usually skip the `/review` pass and miss P1s.
 
 ## Quick checklist (paste into the PR description)
 
@@ -219,7 +218,7 @@ P1s.
 - [ ] claudefast probes run before coding:
       (a) -h orient   (b) parallel -p ≤ 8   (c) stream-json audit logs
 - [ ] PR opened as a normal PR (not --draft)
-- [ ] POSTPR loop scheduled — fetch Codex inline comments after CI green
+- [ ] POSTPR loop scheduled — run `/review` after CI green
 - [ ] PR-PLAN ready to be written if review surfaces issues
       (no follow-up-issue punt)
 - [ ] report.md drafted alongside the implementation
@@ -233,7 +232,7 @@ P1s.
 - `docs/feature-verification.md` — the 1+2+3 gate, full flag list, tmux
   `/export` recipe.
 - `docs/FASTPROBE.md` — full probe recipe and PR+conflict-resolve variant.
-- `docs/POSTPR.md` — Codex review fetch + triage + loop.
+- `docs/POSTPR.md` — `/review` skill + triage + loop.
 - `docs/PR-PLAN.md` — fix-issues-in-this-PR planning doc; no follow-up
   issues for in-flight PRs.
 - `docs/TEAMWORK.md` — N+1+(2N) parallel execution pattern used by PR-PLAN.
