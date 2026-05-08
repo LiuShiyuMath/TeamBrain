@@ -1,4 +1,4 @@
-import type { AttributionEvent, VisibilityMode } from "@teamagent/types";
+import { sanitizeUserFacingText, type AttributionEvent, type VisibilityMode } from "@teamagent/types";
 import type { Renderer } from "@teamagent/ports";
 
 const DIVIDER = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
@@ -149,19 +149,24 @@ export class StdoutRenderer implements Renderer {
     const lines: string[] = [DIVIDER, HEADER, DIVIDER];
 
     for (const e of visible) {
-      lines.push(`▸ 做了什么: ${describeAction(e)}`);
+      lines.push(`▸ 做了什么: ${sanitizeUserFacingText(describeAction(e))}`);
 
       const change = describeKnowledgeChange(e);
-      if (change) lines.push(`▸ 知识库变化: ${change}`);
+      if (change) lines.push(`▸ 知识库变化: ${sanitizeUserFacingText(change)}`);
 
       const target = describeTarget(e);
-      if (target) lines.push(`▸ 传播到: ${target}`);
+      if (target) lines.push(`▸ 传播到: ${sanitizeUserFacingText(target)}`);
 
+      // sanitize before stderr write — security-specialist /review on PR #152
+      // (B-126/B-130 cousin): rule content can carry ANSI escapes / surrogate
+      // halves / control bytes that would otherwise hijack the user's terminal.
+      // pre-tool-use-handler.ts already sanitizes its rendered systemMessage;
+      // this path covers all 8 hook channels' AttributionEvent renders.
       if (e.userFacingValue) {
-        lines.push(`▸ 下次体验: ${e.userFacingValue}`);
+        lines.push(`▸ 下次体验: ${sanitizeUserFacingText(e.userFacingValue)}`);
       }
       if (mode === "verbose" && e.counterfactual) {
-        lines.push(`▸ 如果没有 TeamAgent: ${e.counterfactual}`);
+        lines.push(`▸ 如果没有 TeamAgent: ${sanitizeUserFacingText(e.counterfactual)}`);
       }
     }
 
@@ -170,7 +175,12 @@ export class StdoutRenderer implements Renderer {
     if (mode === "verbose") {
       lines.push("");
       lines.push("--- raw events ---");
-      lines.push(JSON.stringify(events, null, 2));
+      // sanitize the raw JSON dump too — `JSON.stringify` does not escape
+      // C1 bytes (`\x80-\x9f`), so an event field carrying 8-bit CSI / OSC
+      // sequences emits them as raw bytes here even though the per-line
+      // call sites above are sanitized. Belt-and-suspenders for the
+      // verbose mode every-byte audit dump.
+      lines.push(sanitizeUserFacingText(JSON.stringify(events, null, 2)));
     }
 
     return lines.join("\n");

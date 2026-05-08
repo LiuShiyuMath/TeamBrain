@@ -182,16 +182,20 @@ export async function runHook<TInput, TOutput>(
 
   const rt = resolveRuntime(pickRawCwd(raw));
 
+  // Lazy resources — opened only when handler actually reads ctx.store /
+  // ctx.eventLog. Handlers that don't touch them incur zero sqlite cost.
+  // Always closed in finally iff opened (null check inside closeIfPresent).
   let store: DualLayerStore | null = null;
   let eventLog: SqliteEventLog | null = null;
-  try {
-    ensureDirsForPaths(rt.paths);
-    store = new DualLayerStore({
-      projectDbPath: rt.paths.projectDbPath,
-      userGlobalDbPath: rt.paths.globalDbPath,
-    });
-    eventLog = new SqliteEventLog(openDb(rt.paths.eventsDbPath));
+  let dirsEnsured = false;
 
+  const ensureDirsOnce = (): void => {
+    if (dirsEnsured) return;
+    ensureDirsForPaths(rt.paths);
+    dirsEnsured = true;
+  };
+
+  try {
     const bus = new InMemoryAttributionBus();
     const visibility = parseVisibility(rt.env);
     const mirror = makeMirror(rt.env);
@@ -209,18 +213,51 @@ export async function runHook<TInput, TOutput>(
       }
     });
 
-    const ctx: DefaultHookContext<TInput> = {
+    // Build ctx with lazy accessor properties for store and eventLog.
+    // Property API is preserved (ctx.store / ctx.eventLog, not functions),
+    // so existing callers like `ctx.store as unknown as DualLayerStore` work
+    // unchanged. The getter memoises: second read returns same instance.
+    // Cast through unknown: the store/eventLog properties are defined below
+    // via Object.defineProperty; the literal itself omits them intentionally.
+    const ctx = {
       input,
       cwd: rt.cwd,
       home: rt.home,
       env: rt.env,
       paths: rt.paths,
-      store: store as HookKnowledgeStore,
-      eventLog: eventLog as HookEventLog,
       bus,
       visibility,
       mirrorSystemMessage: mirror,
-    };
+    } as unknown as DefaultHookContext<TInput>;
+
+    // non-enumerable: prevents accidental eager-open via {...ctx} spread / JSON.stringify
+    Object.defineProperty(ctx, "store", {
+      enumerable: false,
+      configurable: false,
+      get(): HookKnowledgeStore {
+        if (store === null) {
+          ensureDirsOnce();
+          store = new DualLayerStore({
+            projectDbPath: rt.paths.projectDbPath,
+            userGlobalDbPath: rt.paths.globalDbPath,
+          });
+        }
+        return store as DualLayerStore;
+      },
+    });
+
+    // non-enumerable: prevents accidental eager-open via {...ctx} spread / JSON.stringify
+    Object.defineProperty(ctx, "eventLog", {
+      enumerable: false,
+      configurable: false,
+      get(): HookEventLog {
+        if (eventLog === null) {
+          ensureDirsOnce();
+          eventLog = new SqliteEventLog(openDb(rt.paths.eventsDbPath));
+        }
+        return eventLog as SqliteEventLog;
+      },
+    });
 
     try {
       const out = await opts.handler(ctx);
@@ -290,11 +327,23 @@ export async function runAdvancedHook<
   //    / ctx.eventLog(). Always closed in finally if opened.
   let store: DualLayerStore | null = null;
   let eventLog: SqliteEventLog | null = null;
+  let dirsEnsured = false;
   const manual = advOpts.escape.manualResources === true;
+
+  // Hoist ensureDirsForPaths into a single guarded call (perf-specialist
+  // /review on PR #152): previously each lazy getter called it
+  // independently, so an eager-open caller incurred 6 mkdirSync syscalls
+  // (3 paths × 2 getters) when 3 would suffice. With manualResources the
+  // helper still defers correctly: it only runs if either getter fires.
+  const ensureDirsOnce = (): void => {
+    if (dirsEnsured) return;
+    ensureDirsForPaths(rt.paths);
+    dirsEnsured = true;
+  };
 
   const lazyStore = (): HookKnowledgeStore => {
     if (store === null) {
-      ensureDirsForPaths(rt.paths);
+      ensureDirsOnce();
       store = new DualLayerStore({
         projectDbPath: rt.paths.projectDbPath,
         userGlobalDbPath: rt.paths.globalDbPath,
@@ -305,7 +354,7 @@ export async function runAdvancedHook<
   };
   const lazyEventLog = (): HookEventLog => {
     if (eventLog === null) {
-      ensureDirsForPaths(rt.paths);
+      ensureDirsOnce();
       eventLog = new SqliteEventLog(openDb(rt.paths.eventsDbPath));
     }
     return eventLog as SqliteEventLog;
