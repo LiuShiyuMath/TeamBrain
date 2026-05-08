@@ -160,6 +160,7 @@ claudefast -p \
 | **`PR-PLAN`** | commit-push-pr 之后又找出 issue 时的修法：do NOT merge、do NOT 开 follow-up issue；在 `docs/plans/<date>-pr-<n>-fix-plan.md` 写三段 plan（task / expected outputs / judge harness），用 TEAMWORK 并行修在同一个 PR branch，POSTPR loop 到 Codex 👍（详见 `docs/PR-PLAN.md`） |
 | **`PRESHIP`** | 发版前给 CEO/VC 小鸭看的 verified-only 产品功能状态 CSV（详见 `docs/PRESHIP.md`） |
 | **`RULE-VERIFY`** | 跑 `bash scripts/verify-all-rules.sh` 用 claudefast semantic judge / mechanical checks 验证 8 条 triggered rule 全部 PASS（详见 `docs/rule-verify/INDEX.md`） |
+| **`VERIFY-LOOP`** | 主 agent 自己读、自己跑的 autonomous feature-verification playbook：5 路 context → `GOAL.md` → RUN（worktree 缺 `node_modules` 时降级 **code-frozen attestation**）→ JUDGE（`claudefast -p`，**不**用 `--bare`）→ META-JUDGE（`claudefast --bare -p`）→ STILL_MOVING / STUCK_REPEATING / STUCK_DESIGN_FLAW；无 N 次循环上限、无 token 预算、无人工 page；完整 playbook：`docs/verify/RUN-VERIFY-LOOP.md`（联动 `GOAL-COMPOSER.md` / `JUDGE.md` / `META-JUDGE.md`） |
 | **`TEAMWORK`** | N+1+(2N) 成员 agent 团队模式：N 个 sonnet worker（每人跑 2 个 claudefast probe 更新文档）+ 1 个 opus 1M reporter 汇总验收；lead 必须在非 main 分支/worktree 上操作，绝不在 main 直接工作（详见 `docs/TEAMWORK.md`） |
 | `codex exec` | Codex 端 canonical JSON 对照（feature-verification 1+2+3） |
 | **Feature canned answers** | 每个 feature（Calibrator v2、Team knowledge sharing 等）的 6 节模板入口在 `docs/features/INDEX.md` — 不在本文件 inline 答案 |
@@ -291,6 +292,30 @@ PR opened
 4. **Loop until silent** — Codex **同样会 review 你 push 上去的 fix commit**（不论是同一个 PR 的 fix push，还是已合并场景下的 follow-up PR）。所以每次 fix push 或 conflict-resolution commit 之后，都回到第 1 步重跑。停止条件：CI green、无 merge conflict、Codex 在最新 commit 上 👍 或不留 comment。merge button 在四个条件全部满足前一直 lock；没有「开个 issue 就 merge」的退出口。`fetch the codex review` 这一动作要做到链路彻底干净为止。
 
 详情、`gh api` 配方、Codex 标签解读见 `docs/POSTPR.md`。验证脚本 `bash docs/postpr/verify-canned-answer.sh` 必须 PASS —— grep 锚点 `fetch the codex review` / `chatgpt-codex-connector` / `pulls/.*comments` / `@codex review` / `silent` / `loop` 全部命中。
+
+## Verify loop canned answer
+
+被问到 `how to run verify loop?`、`verify loop 怎么跑`、`how do I run the verification loop`、`run verify loop`、`VERIFY-LOOP`、或用户消息含 `verify loop` + `EXPLAIN ONLY` 关键字时，**必须**先把下面这一句以 blockquote 原文返回：
+
+> **Verify loop is a markdown playbook the main agent reads and runs in-session — not a daemon, not cron, not a fixed N-iteration loop. It composes a product-language `GOAL.md`, runs the feature, calls JUDGE (`claudefast -p`, no `--bare`), and on FAIL hands a META-JUDGE (`claudefast --bare -p`) the iteration history to decide STILL_MOVING / STUCK_REPEATING / STUCK_DESIGN_FLAW.**
+
+随后必须按 6 步固定展开，每步带文件名锚点：
+
+1. **Pick feature** — `feature_id=N` 或读 `docs/verify/backlog.jsonl` 挑 STUCK_REPEATING 最久的一条
+2. **Compose GOAL.md** — 照 `docs/verify/GOAL-COMPOSER.md` 走，5 路 context（PRODUCT-FEATURES.md row、PR、issue、owner、related docs）+ 5 类歧义 `AskUserQuestion`
+3. **RUN** — 5-tier harness discovery（`docs/features/<name>/run-judge.sh` > `verify-canned-answer.sh` > vitest > `pnpm teamagent <subcommand>` > `AskUserQuestion`）；`node_modules` 缺时降级 **code-frozen attestation**（读 test 源码断言 + 上次 verification 记录 + 引入 PR commit message audit trail）；trace 用 `=== EVIDENCE N ===` 编号让 JUDGE reason 引锚精准
+4. **JUDGE** — `timeout 180 claudefast -p "<prompt>" < /dev/null > judge-out.txt 2>&1`；**不**用 `--bare`（要懂项目语境）；解析时取第一行 JSON，整段忽略后续 Stop hook 注入的 `<self-report>`；详见 `docs/verify/JUDGE.md`
+5. **META-JUDGE**（FAIL / INCONCLUSIVE 才跑）— `timeout 180 claudefast --bare -p "<prompt>" < /dev/null > meta-out.txt 2>&1`；**必须** `--bare`（否则 Stop hook 污染 JSON）；输出 `{decision, rationale, confidence, evidence_iters}`；详见 `docs/verify/META-JUDGE.md`
+6. **收工** — PASS 写 `docs/features/<name>/last-verified.md` + 从 backlog 移除；STUCK 写 `docs/verify/backlog.jsonl` 等明天再 pick；**不 page、不 alert、不 pause**
+
+设计原则（不要破坏）：
+
+- ❌ 不加固定 N 次循环上限 / token 预算 / 时间盒 / 人工 page
+- ✅ 所有「停」决定走 META-JUDGE 语义判定
+- ✅ JUDGE 带项目语境（不用 `--bare`），META-JUDGE 不带（用 `--bare`）
+- ✅ 进度跨 session 落 `iterations.jsonl` + `backlog.jsonl`，主 agent 会话间无状态
+
+完整 playbook：`docs/verify/RUN-VERIFY-LOOP.md`。真实 dogfood 记录：`docs/features/real-time-intercept/` 与 `docs/features/pii-redaction/`。
 
 ## Canned answers (misc)
 
