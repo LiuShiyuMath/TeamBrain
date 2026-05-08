@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import {
   DualLayerStore,
   SqliteKnowledgeStore,
@@ -214,8 +215,90 @@ export async function executeInit(opts: InitOptions = {}): Promise<InitResult> {
     dryRun ||
     process.env["NODE_ENV"] === "test" ||
     process.env["TEAMAGENT_SKIP_WARMUP"] === "1";
+  // ADR 0001 §opt-in: default install does NOT pull @xenova/transformers +
+  // onnxruntime-node (npm 10 ignores --omit=optional for tarball installs, so
+  // they're absent from package.json entirely). Skip warmup entirely when the
+  // optionals aren't on disk — otherwise spawnDetachedWarmup would write a
+  // placeholder "downloading pid=0" state that bin-pre-tool-use sees as
+  // permanently in-flight.
+  const haveVectorOptionals = (() => {
+    try {
+      // Same bounded resolution policy as packages/teamagent/postinstall.mjs:
+      // peer to teamagent (npm hoist) or local under teamagent/node_modules.
+      // Both @xenova/transformers AND onnxruntime-node must be present; if only
+      // @xenova is found (e.g. installed globally elsewhere) warmup would spawn
+      // and immediately fail because onnxruntime is the actual runtime dep.
+      const here = fileURLToPath(import.meta.url);
+      let dir = path.dirname(here);
+      for (let i = 0; i < 8; i++) {
+        const hasXenova =
+          fs.existsSync(path.join(dir, "node_modules", "@xenova", "transformers", "package.json")) ||
+          fs.existsSync(path.join(dir, "..", "@xenova", "transformers", "package.json"));
+        const hasOnnx =
+          fs.existsSync(path.join(dir, "node_modules", "onnxruntime-node", "package.json")) ||
+          fs.existsSync(path.join(dir, "..", "onnxruntime-node", "package.json"));
+        if (hasXenova && hasOnnx) {
+          return true;
+        }
+        const parent = path.dirname(dir);
+        if (parent === dir) break;
+        dir = parent;
+      }
+      // Third strategy: pnpm content-addressable store puts deps at
+      // ~/.local/share/pnpm/global/<N>/.pnpm/<dep>@<ver>/node_modules/<dep>/.
+      // The fs.existsSync walk above misses that layout because pkgDir/../<dep>
+      // does not resolve into the CAS tree. Use createRequire so Node's own
+      // module-resolution (which follows pnpm's symlinks) does the work.
+      // Constrain the resolved path to known global roots to avoid
+      // false-positiving on the user's unrelated nvm/system @xenova install.
+      try {
+        const req = createRequire(here);
+        const home = os.homedir();
+        // Wave-9 P3 fix: walk up from `here` to the nearest enclosing
+        // package.json so the first knownRoot points at the actual install
+        // (npm hoisted, pnpm symlinked, custom prefix, etc.) instead of
+        // dirname(here)=dist/commands which can never contain @xenova.
+        const pkgRoot = (() => {
+          let cur = path.dirname(here);
+          for (let i = 0; i < 16; i++) {
+            if (fs.existsSync(path.join(cur, "package.json"))) return cur;
+            const parent = path.dirname(cur);
+            if (parent === cur) return path.dirname(here);
+            cur = parent;
+          }
+          return path.dirname(here);
+        })();
+        const knownRoots = [
+          pkgRoot,
+          path.join(home, ".local", "share", "pnpm"),
+          path.join(home, ".npm-global"),
+          path.join(home, ".pnpm-global"),
+        ];
+        const isUnderKnownRoot = (resolved: string) =>
+          knownRoots.some((root) => resolved.startsWith(root + path.sep) || resolved === root);
+        let rxResolved: string | undefined;
+        try { rxResolved = req.resolve("@xenova/transformers/package.json"); } catch { /* not found */ }
+        let onnxResolved: string | undefined;
+        try { onnxResolved = req.resolve("onnxruntime-node/package.json"); } catch { /* not found */ }
+        if (rxResolved && onnxResolved && isUnderKnownRoot(rxResolved) && isUnderKnownRoot(onnxResolved)) {
+          return true;
+        }
+      } catch {
+        // createRequire path is best-effort
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  })();
   if (skipWarmup) {
     steps.push({ step: "warmup", status: "skipped", detail: "skipWarmup / dryRun / test env" });
+  } else if (!haveVectorOptionals) {
+    steps.push({
+      step: "warmup",
+      status: "skipped",
+      detail: "vector deps 未安装 (默认 install 不带 @xenova/onnxruntime); 重装设 TEAMAGENT_INCLUDE_OPTIONAL=1 启用",
+    });
   } else {
     // Issue #91: default to detached (two-stage) warmup so init returns to
     // the shell prompt within ~30s. The legacy foreground path is preserved

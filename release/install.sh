@@ -9,6 +9,13 @@
 #   11 node major version < 22 (or unparseable)
 #   20 neither npm nor pnpm on PATH
 #   30 install command (npm/pnpm) failed
+#
+# Default install skips optional deps (onnxruntime-node + @xenova/transformers,
+# ~70MB combined) so wall-clock fits the ADR 0001 30-second-hook promise.
+# Substring matcher (legacy) is fully functional from first interception.
+# To opt-in to vector matcher (BM25+dense RRF, smarter on paraphrases):
+#   TEAMAGENT_INCLUDE_OPTIONAL=1 sh -c "$(curl -fsSL ...install.sh)"
+# or after-the-fact: `npm install -g @xenova/transformers@^2.17.0 onnxruntime-node@1.14.0`.
 
 set -eu
 
@@ -51,17 +58,46 @@ else
 fi
 info "using ${INSTALLER} for install."
 
-# 4. install (idempotent — re-runs upgrade in place over the tarball)
+# 4. install (idempotent — re-runs upgrade in place over the tarball).
+#    Default: only the teamagent tarball. @xenova/transformers + onnxruntime-node
+#    (~70MB combined) are NOT in package.json so they aren't installed → install
+#    fits under 30 seconds (ADR 0001).
+#    Set TEAMAGENT_INCLUDE_OPTIONAL=1 to install vector matcher deps alongside.
+#    NB: npm 10 ignores `--omit=optional` / `--include=optional` for tarball
+#    installs; explicit `npm install -g <tarball> <opt-pkg>...` is the only
+#    reliable way to add vector deps in the same command.
+INCLUDE_VECTOR=0
+if [ "${TEAMAGENT_INCLUDE_OPTIONAL:-0}" = "1" ]; then
+  INCLUDE_VECTOR=1
+  info "TEAMAGENT_INCLUDE_OPTIONAL=1: also installing @xenova/transformers + onnxruntime-node (~70MB)."
+else
+  info "default install: substring matcher only. set TEAMAGENT_INCLUDE_OPTIONAL=1 for vector matcher."
+fi
+
 info "installing teamagent from ${TARBALL_URL}..."
 if [ "${INSTALLER}" = "npm" ]; then
-  if ! npm install -g "${TARBALL_URL}"; then
-    err "npm install -g failed."
-    exit 30
+  if [ "${INCLUDE_VECTOR}" = "1" ]; then
+    if ! npm install -g "${TARBALL_URL}" "@xenova/transformers@^2.17.0" "onnxruntime-node@1.14.0"; then
+      err "npm install -g failed."
+      exit 30
+    fi
+  else
+    if ! npm install -g "${TARBALL_URL}"; then
+      err "npm install -g failed."
+      exit 30
+    fi
   fi
 else
-  if ! pnpm add -g "${TARBALL_URL}"; then
-    err "pnpm add -g failed."
-    exit 30
+  if [ "${INCLUDE_VECTOR}" = "1" ]; then
+    if ! pnpm add -g "${TARBALL_URL}" "@xenova/transformers@^2.17.0" "onnxruntime-node@1.14.0"; then
+      err "pnpm add -g failed."
+      exit 30
+    fi
+  else
+    if ! pnpm add -g "${TARBALL_URL}"; then
+      err "pnpm add -g failed."
+      exit 30
+    fi
   fi
 fi
 
