@@ -56,7 +56,7 @@
 | 路径 | 内容 |
 |---|---|
 | `docs/features/team-sharing-probe/README.md` | 怎么跑 / 前置 / env 变量 / GitHub repo 创建步骤 |
-| `docs/features/team-sharing-probe/run-judge.sh` | T3a + C3-hybrid orchestrator：建/重置 probe repo → alice pitfall + push → bob pull → 25 prompts → 抓 stream-json → 写 judge.json → exit code |
+| `docs/plans/docs--features--team-sharing-probe--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/team-sharing-probe/run-judge.sh`) | T3a + C3-hybrid orchestrator：建/重置 probe repo → alice pitfall + push → bob pull → 25 prompts → 抓 stream-json → 写 judge.json → exit code |
 | `docs/features/team-sharing-probe/prompts/scenario-designer.md` | blind 协议 prompt：仅 input trigger_phrase，output 25 prompts JSON |
 | `docs/features/team-sharing-probe/prompts/judge.md` | judge LLM prompt：仅看 raw artifacts，不看 rule body |
 
@@ -120,7 +120,7 @@ Judge LLM (claudefast 独立 session) 接到的 prompt 只允许引用上述 raw
 
 - `pnpm typecheck`（无新代码 — 只新增 docs / shell；非阻塞）
 - `pnpm test`（无新单元测试，预期不变）
-- `bash -n docs/features/team-sharing-probe/run-judge.sh`（语法）
+- `bash -n docs/legacy/judge-scripts/docs/features/team-sharing-probe/run-judge.sh`（语法检查，脚本已归档）
 - `bash docs/features/team-sharing-probe/README.md` 内的 dry-run 块（**只跑 mock 模式 — 不真碰 GitHub**）
 
 ### 4.2 1+2+3 三段验证（本 PR 内交付物：scaffold；执行交付物：judge.json）
@@ -129,11 +129,11 @@ Judge LLM (claudefast 独立 session) 接到的 prompt 只允许引用上述 raw
 # 1. claudefast: 问 harness 怎么跑 → 出 JSON
 !claudefast -p --output-format stream-json \
   --include-partial-messages --verbose \
-  "解释 docs/features/team-sharing-probe/run-judge.sh 的入参 / 退出码 / artifact 路径，输出 JSON"
+  "解释 docs/plans/docs--features--team-sharing-probe--run-judge/judge.md 的入参 / 退出码 / artifact 路径，输出 JSON"
 
 # 2. codex: 同样问题，hard-match canonical JSON 字段
 !codex exec --skip-git-repo-check -s read-only \
-  "解释 docs/features/team-sharing-probe/run-judge.sh 的入参 / 退出码 / artifact 路径，输出 JSON"
+  "解释 docs/plans/docs--features--team-sharing-probe--run-judge/judge.md 的入参 / 退出码 / artifact 路径，输出 JSON"
 
 # 3. interactive: tmux 内 claudefast 跑 /export，文件入 PR
 tmux new-session -d -s issue82 \
@@ -146,9 +146,9 @@ tmux new-session -d -s issue82 \
 ```bash
 # 由用户显式授权后执行：
 gh repo create libz-renlab-ai/TeamBrain-team-sharing-probe --public --confirm
-bash docs/features/team-sharing-probe/run-judge.sh --branch-protection=off
+claudefast -p "Follow docs/plans/docs--features--team-sharing-probe--run-judge/judge.md with BRANCH_PROTECTION=off"  # archived: docs/legacy/judge-scripts/docs/features/team-sharing-probe/run-judge.sh
 gh api -X PUT repos/libz-renlab-ai/TeamBrain-team-sharing-probe/branches/main/protection ... # 加保护
-bash docs/features/team-sharing-probe/run-judge.sh --branch-protection=on
+claudefast -p "Follow docs/plans/docs--features--team-sharing-probe--run-judge/judge.md with BRANCH_PROTECTION=on"  # archived: docs/legacy/judge-scripts/docs/features/team-sharing-probe/run-judge.sh
 # 然后写 report.md 收尾
 ```
 

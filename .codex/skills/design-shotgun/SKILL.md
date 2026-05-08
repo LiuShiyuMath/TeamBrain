@@ -30,8 +30,12 @@ allowed-tools:
 _GSTACK_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 if [ -x "$_GSTACK_PROJECT_DIR/.codex/skills/gstack/bin/gstack-config" ]; then
   GSTACK_SKILLS_ROOT="$_GSTACK_PROJECT_DIR/.codex/skills/gstack"
+elif [ -x "$_GSTACK_PROJECT_DIR/.claude/skills/gstack/bin/gstack-config" ]; then
+  GSTACK_SKILLS_ROOT="$_GSTACK_PROJECT_DIR/.claude/skills/gstack"
 elif [ -x "$HOME/.codex/skills/gstack/bin/gstack-config" ]; then
   GSTACK_SKILLS_ROOT="$HOME/.codex/skills/gstack"
+elif [ -x "$HOME/.claude/skills/gstack/bin/gstack-config" ]; then
+  GSTACK_SKILLS_ROOT="$HOME/.claude/skills/gstack"
 else
   GSTACK_SKILLS_ROOT="$_GSTACK_PROJECT_DIR/.codex/skills/gstack"
 fi

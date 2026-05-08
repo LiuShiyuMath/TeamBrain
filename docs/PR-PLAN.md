@@ -17,7 +17,7 @@
                                   │ plan.md — three sections:        │
                                   │  ① task description              │
                                   │  ② expected outputs              │
-                                  │  ③ judge harness (third-party)   │
+                                  │  ③ judge harness — md playbook  │
                                   └─────────────────────────────────┘
                                                          │
                                                          ▼
@@ -34,6 +34,11 @@
                               CI green + no conflict + /review PASS
 ```
 
+> **Hard rule — third-party judge harness forbidden fixed scripts; MUST
+> use md playbook.** The fix harness lives at
+> `docs/plans/<date>-pr-<n>/judge.md`, NOT at `scripts/*.sh` or any
+> fixed shell pipeline. See § ③.
+
 # PR-PLAN — Fix Issues Inside the Open PR
 
 ## What it is
@@ -46,6 +51,28 @@ inside the **same PR** — never via a follow-up issue.
 It is the post-PR sibling of `docs/HOWTO-PLAN-PR.md` (which covers the
 plan written *before* opening a PR) and the trigger for the `TEAMWORK`
 execution pattern (`docs/TEAMWORK.md`).
+
+## Hard rules — non-negotiables
+
+A PR-PLAN is governed by two non-negotiable rules. They are not stylistic
+preferences and § ③ is their long-form expansion, not a relaxation:
+
+1. **Third-party judge harness forbidden fixed scripts.** The fix's judge
+   harness is never a `.sh` script or fixed shell pipeline. A bash judge
+   becomes code that itself needs a judge (recursive "who tests the
+   test?") and reviewers can't grep judgement logic out of `[[ ]]` exit
+   codes.
+2. **MUST use md playbook.** The harness lives at
+   `docs/plans/<date>-pr-<n>/judge.md`. The MAIN agent dispatches the
+   playbook through subagents (TEAMWORK `N+1+(2N)`) or `claudefast -p`
+   probes (FASTPROBE max 8 parallel) — fixed bash can't pick between the
+   two. Failed sections rerun by re-dispatching `§V<n>`, not by editing
+   scripts. § ③ describes the §V1 RUN / §V2 DUMP / §V3 READ structure.
+
+Both phrases — `third-party judge harness forbidden fixed scripts` and
+`MUST use md playbook` — are the load-bearing wording of the rule. The
+anti-patterns table at the bottom of this doc bans `.sh` harnesses
+explicitly.
 
 ## When to write a PR-PLAN
 
@@ -99,13 +126,30 @@ A reviewer-checkable list of artefacts:
 
 ### ③ Judge harness (third-party, JSON-emitting)
 
-The fix is verified by a harness that runs fixed tooling, dumps JSON
-into `.judge/<run_id>/judge.json`, and lets a separate LLM (or
-`claudefast -p`) read **only** the raw JSON + evidence to grade the
-fix. The PR author / executing agent / code-under-test must not be the
-judge. Schema example: `{ "exit_code": <int>, "tests_passed": <int>,
-"tests_failed": <int>, "typecheck_clean": <bool>, "evidence_dir": ...,
-"stdout_path": ... }`. See `~/.claude/docs/rules/testing-judge-harness.md`.
+**Hard rule — third-party judge harness forbidden fixed scripts; MUST use
+md playbook.** The harness lives at
+`docs/plans/<date>-pr-<n>/judge.md`, NOT at `scripts/*.sh` or any fixed
+shell pipeline. The MAIN agent dispatches the playbook through subagents
+(TEAMWORK `N+1+(2N)`) or `claudefast -p` probes (FASTPROBE max 8 parallel)
+— fixed bash can't pick between the two and would itself become code that
+needs a judge.
+
+The playbook documents three sections:
+
+- **§V1 RUN** — fixed tools to invoke (`pnpm test`, `pnpm typecheck`,
+  feature-verification 1+2+3 commands, regression repro). Stdout/stderr
+  captured to `evidence_dir`.
+- **§V2 DUMP** — canonical JSON written to `.judge/<run_id>/judge.json`,
+  schema example `{ "exit_code": <int>, "tests_passed": <int>,
+  "tests_failed": <int>, "typecheck_clean": <bool>, "evidence_dir": ...,
+  "stdout_path": ... }` plus raw stdout/stderr in `evidence_dir`.
+- **§V3 READ** — a separate LLM judge (`claudefast -p` or `codex exec`)
+  reads ONLY the raw JSON + evidence and grades the fix. The PR author,
+  the executing agent, and the code-under-test must never be the judge.
+
+See `~/.claude/docs/rules/testing-judge-harness.md` and user-memory
+`feedback_judge_harness_md_playbook.md`. Failed sections rerun by
+re-dispatching `§V<n>`, not by editing scripts.
 
 ## Execution: TEAMWORK
 
@@ -147,6 +191,7 @@ reviewer approved it). `research.md` is optional.
 |---|---|
 | **Open a follow-up issue and merge anyway** | The merge lands the defect on `main`; the issue often slips. Removed by this rule. |
 | **Skip the PR-PLAN and just push fix commits** | No third-party judge harness means the fix is graded by the agent that wrote it. |
+| **Write the judge harness as a `.sh` / fixed shell pipeline** | The harness becomes code that itself needs a judge — recursive "who tests the test?" problem. Use a `docs/plans/<date>-pr-<n>/judge.md` playbook and let the MAIN agent dispatch it via subagents or `claudefast -p` probes. |
 | **Write the PR-PLAN but execute solo when N>1** | TEAMWORK's parallel workers + opus reporter are the cross-validation layer. |
 | **Force-push to overwrite PR history** | `git reset --hard` / `--force` wipe the trail `/review` used to compare. Push fix commits *on top*. |
 | **Branch off `main` for the fix** | Creates a sibling PR. Fix has to land on the PR's branch. |

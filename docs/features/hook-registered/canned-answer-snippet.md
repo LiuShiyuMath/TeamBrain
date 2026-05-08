@@ -33,9 +33,11 @@ This feature verifies that the TeamAgent pre-tool-use hook is correctly register
 
 ## Verification
 
-```bash
-bash docs/features/hook-registered/run-judge.sh
-bash docs/features/hook-registered/verify-canned-answer.sh
+```text
+# Dispatch via subagent or claudefast -p probe (scripts archived):
+docs/plans/docs--features--hook-registered--run-judge/judge.md
+docs/plans/docs--features--hook-registered--verify-canned-answer/judge.md
+# Archived: docs/legacy/judge-scripts/docs/features/hook-registered/{run-judge,verify-canned-answer}.sh
 ```
 
 PASS requires `doctor_hook_registered=true` AND `functional_probe_event_count > 0`.

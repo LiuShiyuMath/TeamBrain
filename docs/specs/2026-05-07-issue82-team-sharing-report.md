@@ -41,9 +41,9 @@
 | # | 动作 | 命令 | 风险 |
 |---|---|---|---|
 | 1 | 创建专用 probe repo（一次性） | `gh repo create libz-renlab-ai/TeamBrain-team-sharing-probe --public --confirm` | 改 GitHub org 状态；可逆 |
-| 2 | 第一遍 probe（protection=off） | `BRANCH_PROTECTION=off bash docs/features/team-sharing-probe/run-judge.sh --real-run` | 真 push 到 probe repo、真花 claudefast token |
+| 2 | 第一遍 probe（protection=off） | dispatch `docs/plans/docs--features--team-sharing-probe--run-judge/judge.md` with BRANCH_PROTECTION=off (archived: `docs/legacy/judge-scripts/docs/features/team-sharing-probe/run-judge.sh`) | 真 push 到 probe repo、真花 claudefast token |
 | 3 | 给 main 加 protection | `gh api -X PUT repos/.../branches/main/protection --input <branch-protection.json>` | 改 GitHub 设置；可逆 |
-| 4 | 第二遍 probe（protection=on） | `BRANCH_PROTECTION=on bash docs/features/team-sharing-probe/run-judge.sh --real-run` | push 应被 reject；这正是 C deliverable 关键证据 |
+| 4 | 第二遍 probe（protection=on） | dispatch `docs/plans/docs--features--team-sharing-probe--run-judge/judge.md` with BRANCH_PROTECTION=on (archived: `docs/legacy/judge-scripts/docs/features/team-sharing-probe/run-judge.sh`) | push 应被 reject；这正是 C deliverable 关键证据 |
 | 5 | 把 G1..G5 递成 GitHub issue | `/to-issues` skill on `2026-05-07-issue82-m5-gaps-delta.md` | 创建 5 个新 issue；可逆 |
 
 ## 3. 执行后必须补到本文件

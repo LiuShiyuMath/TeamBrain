@@ -100,22 +100,6 @@ Then paste into a new GitHub issue:
 https://github.com/libz-renlab-ai/TeamBrain/issues/new
 ```
 
-## Verification
-
-```bash
-bash docs/bugreport/verify-canned-answer.sh
-```
-
-The verify script runs `claudefast -p "what would happen when user find a bug"` and greps `tool_result.content` for the canonical anchors:
-
-- `github.com/libz-renlab-ai/TeamBrain`
-- `system info`
-- `reproduce`
-- `raw logs`
-- `great detail`
-
-PASS = all five anchors hit. FAIL = at least one missing; iterate the canned-answer wording in `CLAUDE.md` until pass.
-
 ## Anti-patterns
 
 - ❌ Reporting a bug as a chat message instead of an issue — it gets lost.

@@ -6,8 +6,9 @@
  └────────────┘   └──────────────┘   └─────────────┘   └──────────────┘   └────────────────┘
                                                               │
                                                               ▼
-                                                     scripts/verify/
-                                                     tbrain-verify.sh
+                                                     docs/plans/
+                                                     scripts--verify--tbrain-verify/
+                                                     judge.md
 ```
 
 # ONBOARDING.md — 5-minute new-agent onboarding
@@ -24,10 +25,12 @@ You must already be at the repo root:
 
 ```bash
 test -f docs/teambrain/README.md || { echo "wrong cwd"; exit 1; }
-test -x scripts/verify/tbrain-verify.sh || { echo "harness missing"; exit 1; }
+test -f docs/plans/scripts--verify--tbrain-verify/judge.md || { echo "playbook missing"; exit 1; }
 ```
 
 Both checks must print nothing and exit 0. If either fails, stop — the repo is in an unexpected state.
+
+> **Note (PR #148 sweep):** `scripts/verify/tbrain-verify.sh` is archived at `docs/legacy/judge-scripts/scripts/verify/tbrain-verify.sh`. The active harness is now `docs/plans/scripts--verify--tbrain-verify/judge.md`.
 
 ---
 
@@ -79,7 +82,15 @@ If you cannot fill a field, the task is not yet ready — escalate to the task o
 
 ## Step 4 — Run the harness before declaring done (≤ 1 min)
 
-```bash
+Dispatch via md playbook:
+
+```
+claudefast -p "Follow docs/plans/scripts--verify--tbrain-verify/judge.md with RUN_ID=$(date -u +%Y%m%dT%H%M%SZ)-onboarding-demo RECIPE_ID=VERIFY-OPS-001 task_title='Onboarding demo'"
+```
+
+Historical command reference (archived — do not run directly):
+
+```text
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-onboarding-demo"
 RECIPE_ID="VERIFY-OPS-001"
 scripts/verify/tbrain-verify.sh "$RECIPE_ID" "$RUN_ID" --task-title "Onboarding demo"
@@ -110,7 +121,7 @@ printf '{"run_id":"%s","task_title":"Onboarding demo","exit_code":0,"metrics":{}
   "$RUN_ID" "$RUN_ID" "$RUN_ID" "$RUN_ID" "$RUN_ID" > "$ARCHIVE/judge-summary.json"
 
 # 2. Re-run the harness — it must now exit 0 and pass the archive gate:
-scripts/verify/tbrain-verify.sh "$RECIPE_ID" "$RUN_ID" --task-title "Onboarding demo"
+claudefast -p "Follow docs/plans/scripts--verify--tbrain-verify/judge.md with RUN_ID=$RUN_ID RECIPE_ID=$RECIPE_ID task_title='Onboarding demo'"
 test "$?" = 0 || { echo "archive gate failed"; exit 1; }
 
 # 3. Commit (atomic, single-concern — evidence only, not the harness binary):

@@ -24,7 +24,7 @@
 5. 只列 `已验证` 功能。
 6. 不把 `部分验证`、`已声明未验证`、`失败/不稳定`、`文档规划` 项作为 feature rows 列出。
 7. 可以用一句 caveat 说明未验证/失败/规划项被刻意排除，避免过度承诺。
-8. 不要把 `RULE-VERIFY` 或 `bash scripts/verify-all-rules.sh` 说成 PRESHIP 的触发方式；PRESHIP 的触发方式就是用户说 `PRESHIP` 或问 `what would happen if we say PRESHIP`。
+8. 不要把 `RULE-VERIFY` 或 md playbooks under `docs/plans/` (archived: `docs/legacy/judge-scripts/scripts/verify-all-rules.sh`) 说成 PRESHIP 的触发方式；PRESHIP 的触发方式就是用户说 `PRESHIP` 或问 `what would happen if we say PRESHIP`。
 
 推荐 CSV 列：
 

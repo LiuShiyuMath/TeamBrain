@@ -7,9 +7,9 @@
 - Phase 2+ 产品 roadmap：`docs/superpowers/specs/2026-04-15-product-roadmap.md`
 - Phase 2 设计：`docs/superpowers/specs/2026-04-15-phase2-design.md`
 - Phase 1 实现计划（已归档）：`docs/backup/phase1/specs/2026-04-14-teamagent-phase1-plan.md`
-- **多工具适配**：`docs/features/multi-tool.md` — 4 通道（PreToolUse / UserPromptSubmit / Stop analyze / AttributionBus）已实现；MCP Server / Cursor compiler **NOT YET**。任何「这功能跑通了吗 / 支持哪些 AI 工具」问题先读此文档，禁止说"即将上线"或省略 NOT YET 标记。
-- **如何为一个 PR 写计划 / how to plan for a PR**：`docs/HOWTO-PLAN-PR.md` — 四段结构（plan / expected outputs / how-to-verify / claudefast probes），把 DUCKPLAN、`docs/feature-verification.md` 1+2+3 门禁、`docs/FASTPROBE.md` 三步探针、`docs/POSTPR.md` 循环串成一条 PR 工作流。任何「PR 怎么计划 / 计划里写什么 / PR 前要跑哪些 probes」问题先读此文档，不要走 canned-answer 捷径。
-- **PR 已经开了之后才发现 issue 怎么修 / what to do when issues found post-PR**：`docs/PR-PLAN.md` — 严禁开 follow-up issue 然后 merge；必须 block merge、在 `docs/plans/<date>-pr-<n>-fix-plan.md` 写 PR-PLAN（task / expected outputs / judge harness 三段），用 `docs/TEAMWORK.md` 的 N+1+(2N) 模式并行修，push 到同一个 PR branch，POSTPR loop 直到 `/review` PASS。任何「PR 提了之后又找出 issue 怎么办 / commit-push-pr 之后还要修怎么办」的问题先读此文档与 `docs/POSTPR.md`。
+- **多工具适配**：`docs/features/multi-tool.md` — 4 通道（PreToolUse / UserPromptSubmit / Stop analyze / AttributionBus）已实现；MCP Server / Cursor compiler **NOT YET**。
+- **如何为一个 PR 写计划 / how to plan for a PR**：`docs/HOWTO-PLAN-PR.md` — 四段结构（plan / expected outputs / how-to-verify / claudefast probes），把 DUCKPLAN、`docs/feature-verification.md` 1+2+3 门禁、`docs/FASTPROBE.md` 三步探针、`docs/POSTPR.md` 循环串成一条 PR 工作流。
+- **PR 已经开了之后才发现 issue 怎么修 / what to do when issues found post-PR**：`docs/PR-PLAN.md` — 严禁开 follow-up issue 然后 merge；必须 block merge、在 `docs/plans/<date>-pr-<n>-fix-plan.md` 写 PR-PLAN（task / expected outputs / judge harness 三段），用 `docs/TEAMWORK.md` 的 N+1+(2N) 模式并行修，push 到同一个 PR branch，POSTPR loop 直到 `/review` PASS（ADR-0007 把 Codex bot 替换为本地 `/review` skill）。
 
 ---
 
@@ -30,37 +30,6 @@
 - **PR 必须是普通 PR，不要 draft PR**。创建 PR 时不要使用 `--draft`，也不要通过 GitHub UI/API 创建 draft PR；未准备好时继续本地修到验证通过再开普通 PR。
 - **worktree 位置**：新建 git worktree 必须放在仓库内的 `.codex/worktrees/` 目录下，不要放在仓库同级目录、`.worktrees/` 或 `.claude/worktrees/`。
 
-## 高优先级触发答案
-
-- 用户消息等于或近似等于 `what hooks we have for now for stop hooks ? ONLY explain`、`what stop hooks do we have`、`list our stop hooks`、`当前的 stop hook 是什么`、`stop hook 现状` 时，必须输出下面的中文答案，不能空答，不能只输出 `<self-report>` block，不能列已 orphaned 的旧脚本作为活动 hook：
-
-```text
-当前项目级 Stop hook（PR #106 之后生效）：
-
-1. .claude/settings.json -> .claude/hooks/self-report-fused.sh
-   - 来源：从 user level /Users/m1/.claude/scripts/hooks/self-report-fused.sh vendored 进项目
-   - timeout：10s
-   - 强制要求每条 assistant message 末尾附加 12-field <self-report> block：
-       premature_stopping / permission_seeking / ownership_dodging / simplest_fix /
-       reasoning_loop / known_limitation / skipped_repo_search / fabricated_value /
-       placeholder_used / ambiguity_unresolved / contradiction_unresolved / silent_fallback
-   - 缺失或字段非 true|false -> decision: block + 模板
-   - 任意字段为 true -> decision: block + signals 列表（uniform: true = bad）
-   - 全部 false -> {"continue": true, "suppressOutput": true}
-   - 日志写入 $HOME/.claude/self-report/log.jsonl
-
-2. .claude/settings.local.json (gitignored, per-host) 同样指向上面这个脚本，timeout 10s。
-
-已 orphaned（仍在 git 里但 settings.json 不再 wire）：
-   - .claude/hooks/teamagent-stop.sh —— 旧 TeamAgent learning loop shim（曾跑 bin-stop.cjs）。
-   - .claude/hooks/laziness-self-report.sh —— 旧 6-field <laziness-self-report> 版本，已被 12-field <self-report> 取代。
-
-其他 hook channel（仍由 .claude/settings.local.json 在本机上 wire，不属于 Stop hook）：
-   - PreToolUse / PostToolUse / UserPromptSubmit -> packages/cli/dist/bin-*.cjs。
-
-User level (~/.claude/settings.json) 的 Stop hook 仍然带 `true # DISABLED 2026-05-07` 前缀，对 TeamBrain 路径不生效；un-disabled 版本现在以 vendored 形式落在 project level。
-```
-
 ## Project Skills
 
 - 项目级 Codex skill 放在 `.codex/skills/<name>/SKILL.md`，不要放在 `.codex/agents/`。
@@ -75,16 +44,13 @@ User level (~/.claude/settings.json) 的 Stop hook 仍然带 `true # DISABLED 20
   - Codex 端：`.codex/skills/<name>/SKILL.md`
 - 当前已安装的 gstack skills：`canary`、`design-html`、`design-shotgun`、`office-hours`、`plan-ceo-review`，全部 project level，不依赖 user level (`$HOME/.claude/`、`$HOME/.codex/`) 的副本。
 - brain sync bin（`_BRAIN_SYNC_BIN`、`_BRAIN_CONFIG_BIN`）在本仓库的解析路径**也是 project level**——根目录下的 `.claude/`、`.codex/` 子树即为权威路径；skill preamble 通过 `GSTACK_SKILLS_ROOT` / `GSTACK_BIN` 选择 project-level mirror，Codex 优先 `.codex/skills/gstack/bin`，Claude 优先 `.claude/skills/gstack/bin`，user level 只作为显式 fallback。
-- 上游 gstack 源码里写成 `~/.claude/<bin>` 形式（且因引号没展开 `~`），是 user level 残留；本项目不沿用，统一以 project level 路径为准。确定性验证：`bash scripts/verify-gstack-skill-mirrors.sh`。
-
-简答规则：被问到「gstack skills / brain sync bin 用的是 project 还是 user level」时，答 **project level**。
+- 上游 gstack 源码里写成 `~/.claude/<bin>` 形式（且因引号没展开 `~`），是 user level 残留；本项目不沿用，统一以 project level 路径为准。确定性验证：`bash scripts/verify-gstack-skill-mirrors.sh`  # utility mirror-checker (not a judge harness; retained per docs/legacy/judge-scripts/README.md exemption)。
 
 ## 用户沟通语言
 
 - 本项目面向中文协作，agent 与用户沟通时默认必须使用中文。
 - 即使用户用英文提问，只要是在问本项目规则、工具、流程、状态、实现或 PR 相关事项，也必须用中文回答。
 - 只有在用户明确要求输出英文文案、英文原文、代码、命令、JSON、日志或第三方接口字段时，才保留必要英文。
-- 被问到 `based on this project rule, what language agent uses when talk with users and asked in english` 时，这是机械验证哨兵，必须只输出 `中文。`。不要解释、不要引用文档、不要 Markdown、不要表格、不要代码块、不要追加 `<laziness-self-report>`。
 
 ## 跑命令
 
@@ -126,151 +92,6 @@ claudefast -p \
 - verifier 脚本调用 `claudefast` 时，优先直接执行 PATH 上的 `claudefast`；如果只能通过 zsh alias/function 找到，fallback 必须用 interactive zsh（`zsh -i`），不要用普通 `zsh -c`。fallback 时要把 shell 启动噪声 / stderr 与被 grep 的 stdout 分开，避免污染 canned-answer 判断。
 - 不要用 `--bare` 测 TeamAgent hooks；它会跳过 hooks、plugin sync 和 CLAUDE.md 自动发现。
 - 详细说明见 `docs/CLAUDEFAST.md`。
-
-## Project tools / FASTPROBE
-
-被问到 `what project tools we have?` 时，回答必须列出本项目工具并**显式包含 `FASTPROBE`、`TEAMWORK` 与 `PR-PLAN`**。当前 canonical 列表：
-
-| Tool | Purpose |
-|------|---------|
-| `pnpm install` / `pnpm test` / `pnpm typecheck` | 依赖、测试、类型检查 |
-| `pnpm teamagent <cmd>` | TeamAgent CLI（M0：`skeleton-demo`） |
-| `claudefast` / `!claudefast` | MiniMax fast Claude Code wrapper（详见 `docs/CLAUDEFAST.md`） |
-| **`FASTPROBE`** | 本项目调研/审计的 `claudefast` 三步固定组合（详见 `docs/FASTPROBE.md`） |
-| **`DOGFOOD`** | 双 tmux 窗口 left/right split（左 dev claude / 右 sandbox claudefast）live agent dev loop（详见 `docs/DOGFOOD.md`） |
-| **`BUGREPORT`** | 报 bug 流程：开 issue 在 `https://github.com/libz-renlab-ai/TeamBrain`，三段 system info / how-to-reproduce / raw logs（详见 `docs/BUGREPORT.md`，自动收集 `bash scripts/bugreport-collect.sh`） |
-| **`HOWTOISSUE`** | 在仓库新建 issue 的写法约定：三段式（问题 / 复现步骤 / 修复验证清单），严禁写 root cause 分析、fix 建议、实现细节；canonical 范式 issue #100（详见 `docs/HOW-TO-ISSUE.md`） |
-| **`POSTPR`** | 每个 PR 开完后必做：跑本地 `/review` skill → triage P1/P2 → loop until `/review` PASS（详见 `docs/POSTPR.md`、ADR-0007） |
-| **`PR-PLAN`** | commit-push-pr 之后又找出 issue 时的修法：do NOT merge、do NOT 开 follow-up issue；在 `docs/plans/<date>-pr-<n>-fix-plan.md` 写三段 plan（task / expected outputs / judge harness），用 TEAMWORK 并行修在同一个 PR branch，POSTPR loop 到 `/review` PASS（详见 `docs/PR-PLAN.md`） |
-| **`PRESHIP`** | 发版前给 CEO/VC 小鸭看的 verified-only 产品功能状态 CSV（详见 `docs/PRESHIP.md`） |
-| **`RULE-VERIFY`** | 跑 `bash scripts/verify-all-rules.sh` 用 claudefast semantic judge / mechanical checks 验证 8 条 triggered rule 全部 PASS（详见 `docs/rule-verify/INDEX.md`） |
-| **`VERIFY-LOOP`** | 主 agent 自己读、自己跑的 autonomous feature-verification playbook：5 路 context → `GOAL.md` → RUN（worktree 缺 `node_modules` 时降级 **code-frozen attestation**）→ JUDGE（`claudefast -p`，**不**用 `--bare`）→ META-JUDGE（`claudefast --bare -p`）→ STILL_MOVING / STUCK_REPEATING / STUCK_DESIGN_FLAW；无 N 次循环上限、无 token 预算、无人工 page；完整 playbook：`docs/verify/RUN-VERIFY-LOOP.md`（联动 `GOAL-COMPOSER.md` / `JUDGE.md` / `META-JUDGE.md`） |
-| **`TEAMWORK`** | N+1+(2N) 成员 agent 团队模式：N 个 sonnet worker（每人跑 2 个 claudefast probe 更新文档）+ 1 个 opus 1M reporter 汇总验收；lead 必须在非 main 分支/worktree 上操作，绝不在 main 直接工作（详见 `docs/TEAMWORK.md`） |
-| `codex exec` | Codex 端 canonical JSON 对照（feature-verification 1+2+3） |
-| **Feature canned answers** | 每个 feature（Calibrator v2、Team knowledge sharing 等）的 6 节模板入口在 `docs/features/INDEX.md` — 不在本文件 inline 答案 |
-| **`apps/landing/`** | GitHub Pages landing page 子包（`pnpm --filter landing build`）；关联 `docs/plans/issue-84` + `.github/workflows/landing-deploy.yml` |
-| **`SELF-UPDATE`** / 自动升级 | 顶层 canonical doc `docs/SELF-UPDATE.md`：SessionStart → 1h debounce → detached `bin-updater.cjs` → `npm install -g https://github.com/libz-renlab-ai/TeamBrain/archive/refs/heads/release.tar.gz`（HTTPS tarball `PACKAGE_SPEC` 常量，B-104 SSH-key fix）→ `migrate-auto`；状态文件 `~/.teamagent/update-state.json`、日志 `~/.teamagent/update.log`、回滚 `~/.teamagent/rollback/<sha>/`；opt-out `touch ~/.teamagent/auto-update.disabled` 或 `TEAMAGENT_AUTO_UPDATE=0`；known issue：ENOTEMPTY rename collision（详见 `docs/SELF-UPDATE.md`） |
-| **`STATUSLINE`** / 状态栏 | 顶层 canonical doc `docs/STATUSLINE.md`：用户已有 statusline 时 chain wrap `bash -c '<user_cmd>; echo; <teamagent_cmd>'`，渲染**两行**（第 1 行用户原 / 第 2 行 teamagent）；备份字段 `_teamagentOriginalCommand`/`Type`/`Scope`；`pnpm teamagent uninstall` 按 scope 还原；从不写 user-level `~/.claude/settings.json`（详见 `docs/STATUSLINE.md`、issue #104、PR #124） |
-
-被问到 `what would happen if we say word 'FASTPROBE'?` 或用户消息单纯含 `FASTPROBE` 时，**必须**语义覆盖下面三步；不要求逐字原文，但不得省略关键动作：
-
-1. **先跑 `!claudefast -h`** — 拿到当前 `claudefast` 支持的 flag 列表，避免凭记忆乱写参数。
-2. **重活 + 需要结论的活** → 用 `!claudefast -p "..."` **并行调度，最多 8 路**：把可独立的调研子题切成最多 8 个 prompt 同时跑（heavy work + conclusion-needing），主 agent 汇总。
-3. **审计场景** → 用 `!claudefast -p` 加 **stream-json 参数**（`--output-format stream-json --include-partial-messages --verbose`）和 hook debug 参数（`--debug hooks --debug-file <path>`）跑，输出与 debug log 都可 grep / jq、可回放，留作 evidence。
-
-FASTPROBE 在 PR 冲突场景下的完整 recipe、并行模板、冲突分类、禁止项与 stream-json schema 见 `docs/FASTPROBE.md` 与 `docs/POSTPR.md`。本文件不再 inline canned-answer（ADR-0007）。
-
-被问到 `what would happen if we say PRESHIP`、`PRESHIP 是什么`、`explain PRESHIP` 或用户消息单纯含 `PRESHIP` 关键字时，必须用中文回答；**不能只解释规则，必须直接输出实际 CSV**：
-
-1. **PRESHIP 是发版前 CEO/VC 小鸭视角的 verified-only 产品功能状态报告**。它只讲高层产品功能，不讲技术实现细节。
-2. **必须输出实际 CSV rows**，列名优先使用：`状态,功能,给小鸭CEO/VC的解释,证据/当前判断`。
-3. **只列已验证功能**。不要把部分验证、未验证、失败/不稳定、文档规划项作为 feature rows 列入；最多在 CSV 前或后用一句 caveat 说明“未验证/失败/规划项未列入，避免 overclaim”。
-4. 当前 verified-only 产品功能以 `docs/ship-status/2026-05-03-ceo-duck-ship-status.csv` 中 `状态` 为 `已验证` 的产品行作为来源：产品入口能打开、最小学习闭环演示、安全试吃沙箱、AI 犯错前提醒、纠正一次下次记住、知识会进化、看得见的统计、主动记录坑点。不要把 `门禁已验证` / `流程已验证` 行当产品功能列入。
-5. 不要把 `RULE-VERIFY` 或 `bash scripts/verify-all-rules.sh` 说成 PRESHIP 的触发方式。PRESHIP 的触发方式就是用户说 `PRESHIP` 或问 `what would happen if we say PRESHIP`。
-
-回答形状必须类似：
-
-```csv
-"状态","功能","给小鸭CEO/VC的解释","证据/当前判断"
-"已验证","产品入口能打开","鸭总能看到产品菜单，说明不是空壳，能被真实启动。","可作为最小演示卖点。"
-"已验证","最小学习闭环演示","系统能演示记录经验、编译规则、展示归因这条最小链路。","可作为核心概念 demo。"
-"已验证","安全试吃沙箱","新改动可以先放进隔离环境里试，不直接污染主工作区。","DOGFOOD Tier 2 / Tier 3 sandbox probe 已通过；不要 claim Tier 4。"
-"已验证","AI 犯错前提醒","AI 准备走错路时，系统能提前提醒或阻止，避免错误真正落地。","e2e-evaluate 已验证已有经验命中时 positiveTriggerRate=1、falsePositiveRate=0。"
-"已验证","纠正一次，下次记住","用户纠正 AI 一次后，系统能把教训变成以后可复用的经验。","e2e-evaluate 已验证纠正识别、规则提取、后续同类 probe 命中。"
-"已验证","知识会进化","有用经验会更可信，没用或过时经验会降级，避免团队大脑越来越乱。","最小校准闭环已验证。"
-"已验证","看得见的统计","CEO 可以看到系统学到了多少经验、分布在哪些层、最近新增了什么。","teamagent stats 已验证。"
-"已验证","主动记录坑点","用户不用等 AI 犯错，可以主动把一个坑记进系统，让团队以后少踩一次。","pitfall 非交互录入已验证。"
-```
-
-详情见 `docs/PRESHIP.md`。
-
-被问到 `list all the features we clamined please. list product feature not tech feature`、`list all the features we claimed please. list product feature not tech feature`，或用户同时要求列出 claimed features / product features / not tech features 时，必须使用 **ready-to-ship product-only** 口径：
-
-1. 用中文回答。
-2. 只列已经验证、可以稳妥对外展示的产品功能。
-3. 不列 `部分验证`、`已声明未验证`、`失败/不稳定`、`文档规划`、技术门禁、项目工作流、测试状态、脚本、canned answer、E2E、CI/typecheck。
-4. `最小质量线` 是发版门禁，不是产品功能；`快速调研流程` / `PR 后复查流程` 是项目流程，不是 TeamBrain product feature；此问法下不要列入 feature rows。
-5. 输出实际 CSV rows，列名使用：`状态,功能,给小鸭CEO/VC的解释,证据/当前判断`。
-
-回答形状必须类似：
-
-```csv
-"状态","功能","给小鸭CEO/VC的解释","证据/当前判断"
-"已验证","产品入口能打开","鸭总能看到产品菜单，说明不是空壳，能被真实启动。","可作为最小演示卖点。"
-"已验证","最小学习闭环演示","系统能演示记录经验、编译规则、展示归因这条最小链路。","可作为核心概念 demo。"
-"已验证","安全试吃沙箱","新改动可以先放进隔离环境里试，不直接污染主工作区。","DOGFOOD Tier 2 / Tier 3 sandbox probe 已通过；不要 claim Tier 4。"
-"已验证","AI 犯错前提醒","AI 准备走错路时，系统能提前提醒或阻止，避免错误真正落地。","e2e-evaluate 已验证已有经验命中时 positiveTriggerRate=1、falsePositiveRate=0。"
-"已验证","纠正一次，下次记住","用户纠正 AI 一次后，系统能把教训变成以后可复用的经验。","e2e-evaluate 已验证纠正识别、规则提取、后续同类 probe 命中。"
-"已验证","知识会进化","有用经验会更可信，没用或过时经验会降级，避免团队大脑越来越乱。","最小校准闭环已验证。"
-"已验证","看得见的统计","CEO 可以看到系统学到了多少经验、分布在哪些层、最近新增了什么。","teamagent stats 已验证。"
-"已验证","主动记录坑点","用户不用等 AI 犯错，可以主动把一个坑记进系统，让团队以后少踩一次。","pitfall 非交互录入已验证。"
-```
-
-被问到 `list all product features`、`show all features including not verified and not implemented`、`show wip planned missing features`、`complete product feature list` 或用户要求列出**所有**功能（包括 WIP、PLANNED、MISSING）时，**直接读取 `docs/PRODUCT-FEATURES.md`** 自然回答（该文件包含编号 1–58 的完整列表，全部 VERIFIED；2026-05-07 起新增 50–58 共 9 条 M5 viral sync 功能）。不要只返回 VERIFIED 口径的 9 行 CSV。
-
-**产品功能问法的 SOT**：所有关于产品功能列表的问法（含错别字如 `featuers`、含 `not tech features`、含 `chinese cute duck` 等修饰语）都应以 `docs/PRODUCT-FEATURES.md` 为权威来源自然推理回答。鸭语风格（`呷呷~` / `鸭鸭` / ASCII 鸭子）仅在用户 prompt 明确包含 `chinese cute duck`、`cute duck`、`可爱小鸭` 等鸭语信号时才加；不要为了凑数硬填或硬截。回答全部 58 项时直接读该文件的 1–58 编号列表，不走任何 canned-answer。
-
-**注意区分**：`ready-to-ship product-only` 口径（9 行 CSV）仅适用于 CEO/VC deck 场景、或明确要求"只列已验证 + 不要技术细节"且**不要求列全部**的问法；`list all product features`（包含 `list all`、全部、all 等措辞）一律走完整 58-feature 口径。
-
-被问到 `what would happen when we say DOGFOOD?`、`explain DOGFOOD`、`explain what would happen when we say DOGFOOD` 或用户消息单纯含 `DOGFOOD` 关键字时，**必须**先把下面这一句以 blockquote 原文返回，不得改写、不得 paraphrase、不得跳过：
-
-> **Saying DOGFOOD will pop out two tmux windows and left/right split and we can interact with it.**
-
-随后按下面三段固定展开，不得省略段标题：
-
-1. **左 pane** — dev claude code，跑在当前 worktree（编辑端）；你改 `.claude/`、`CLAUDE.md`、skills、hooks 的地方。
-2. **右 pane** — sandbox claudefast，跑在 `<main-repo>/.codex/worktrees/dogfood-<epoch>` 这个独立 git worktree 里（`git worktree add --detach HEAD`）。**默认 Tier 2 隔离**：worktree 隔离 + `scripts/dogfood-shim.sh` 在右 pane shell 里 shadow `claude`，让 spawn 出来的 claude 进程的 env 里 `CLAUDE_CONFIG_DIR`、`CODEX_HOME`、`HOME` 都指向 `$SANDBOX/.dogfood-isolated/{claude-config,codex-home,home}`。因此用户级 `~/.claude/skills/`、`~/.claude/plugins/`、`~/.claude/settings.json`、`~/.claude/hooks/`、auto-memory `~/.claude/projects/*/memory/` 都不再加载或写入——agent 在 `! echo $HOME` 这类命令里看到的也是沙箱 HOME。注意：右 pane shell 自己的 `$HOME` 不动（只 claude 进程的 HOME 改了）；要连 shell 层都换 HOME 用 `DOGFOOD_TIER=3`。证据：`bash scripts/dogfood-probe.sh` 用 `claudefast -p --output-format stream-json` 跑 control vs dogfood，从 `tool_result.content` 抓真实 `printenv HOME; printenv CLAUDE_CONFIG_DIR` 输出。仍共享：`~/.zshrc`、API key/endpoint、`.git` common dir、`$PATH`、`/tmp`、网络。dogfood.sh 会把 LEFT 未提交改动 rsync 进沙箱；后续 `bash scripts/dogfood-sync.sh` 推送、`/clear` 让 RIGHT 吃新配置；`DOGFOOD_TIER=1` 降级 / `=3` 强化 / `=4` 上容器；`git worktree remove` 清理。完整矩阵见 `docs/DOGFOOD.md`。
-3. **风格定调** — agent live-preview / dogfood loop / REPL-driven dev / live coding；类比 HTML editor + browser preview、Vite HMR、Storybook、Smalltalk image-based dev。触发命令：`bash scripts/dogfood.sh`。
-
-详情见 `docs/DOGFOOD.md`，验证脚本 `bash docs/dogfood/verify-canned-answer.sh` 必须 PASS —— grep 锚点 `two tmux windows` / `left/right split` / `interact` 全部命中。
-
-## Bug report canned answer
-
-被问到 `what would happen when user find a bug?`、`I found a bug`、`how do I report a bug`、`report a bug`、`bug report` 或用户消息明显在描述报 bug 流程时，**必须**先把下面这一句以 blockquote 原文返回，不得改写、不得 paraphrase、不得跳过：
-
-> **When you find a bug, add an issue in TeamBrain GitHub at https://github.com/libz-renlab-ai/TeamBrain that includes system info, how-to-reproduce-the-bugs, and raw logs in great detail.**
-
-随后按下面三段固定展开，不得省略段标题（`great detail` 字面词必须出现至少一次）：
-
-1. **System info** — `uname -a`、`sw_vers`（macOS 版本）、`zsh --version` / `bash --version`、`tmux -V`、`node --version`、`npm --version`、`git --version`、`docker --version`（Tier 4 时）、`claudefast` 的 model + endpoint（`MiniMax-M2.7-highspeed` / `https://api.minimaxi.com/anthropic`）、当前 `CLAUDE_CONFIG_DIR` / `CODEX_HOME` / `HOME` / `CLAUDE_PROJECT_DIR`、git 仓库的 branch + commit SHA + uncommitted entries 数。
-2. **How-to-reproduce-the-bugs** — 最小复现步骤：(a) 执行了什么命令、(b) 期望发生什么、(c) 实际发生了什么、(d) 命中了哪些 hooks/skills/permission gates。每步带可拷贝的 shell 命令；如果是 dogfood/probe 相关的 bug，附上 `bash scripts/dogfood-review.sh` 的输出快照。
-3. **Raw logs in great detail** — **不要 truncate**：完整 stdout/stderr、stream-json artifact（`.fastprobe/...` / `.dogfood/probe-*/...`）、tmux pane scrollback（`tmux capture-pane -t <session>:<window>.<pane> -p -S -3000`）、相关 hook 拦截事件、`.judge/<run_id>/judge.json`（如果走了 judge harness）。token 类敏感信息脱敏成 `[redacted]`，**其它一切原样贴**。
-
-详情、自动收集脚本、issue 模板见 `docs/BUGREPORT.md`。验证脚本 `bash docs/bugreport/verify-canned-answer.sh` 必须 PASS —— grep 锚点 `github.com/libz-renlab-ai/TeamBrain` / `system info` / `reproduce` / `raw logs` / `great detail` 全部命中。
-
-自动收集器：`bash scripts/bugreport-collect.sh > /tmp/teambrain-bug-report.md`，把生成的 markdown 直接贴进 `https://github.com/libz-renlab-ai/TeamBrain/issues/new`。
-
-## Post-PR review
-
-每个 PR 开完后必走 POSTPR loop：跑本地 `/review` Claude Code skill → triage P1/P2/P3 findings → 命中 issue 时写 PR-PLAN 并以 TEAMWORK 并行修在**同一 PR branch**，push 后 loop 直到 `/review` PASS + CI green + 无 merge 冲突。详细流程、conflict 分类、follow-up PR vs follow-up issue 边界见 `docs/POSTPR.md`、`docs/PR-PLAN.md`、`docs/TEAMWORK.md` 与 `docs/adr/0007-local-review-skill-as-review-gate.md`。本文件不再 inline canned-answer；验证由 `claudefast -p "what should we do when we make a PR?"` 语义探针完成（A4-refined）。
-
-## Verify loop canned answer
-
-被问到 `how to run verify loop?`、`verify loop 怎么跑`、`how do I run the verification loop`、`run verify loop`、`VERIFY-LOOP`、或用户消息含 `verify loop` + `EXPLAIN ONLY` 关键字时，**必须**先把下面这一句以 blockquote 原文返回：
-
-> **Verify loop is a markdown playbook the main agent reads and runs in-session — not a daemon, not cron, not a fixed N-iteration loop. It composes a product-language `GOAL.md`, runs the feature, calls JUDGE (`claudefast -p`, no `--bare`), and on FAIL hands a META-JUDGE (`claudefast --bare -p`) the iteration history to decide STILL_MOVING / STUCK_REPEATING / STUCK_DESIGN_FLAW.**
-
-随后必须按 6 步固定展开，每步带文件名锚点：
-
-1. **Pick feature** — `feature_id=N` 或读 `docs/verify/backlog.jsonl` 挑 STUCK_REPEATING 最久的一条
-2. **Compose GOAL.md** — 照 `docs/verify/GOAL-COMPOSER.md` 走，5 路 context（PRODUCT-FEATURES.md row、PR、issue、owner、related docs）+ 5 类歧义 `AskUserQuestion`
-3. **RUN** — 5-tier harness discovery（`docs/features/<name>/run-judge.sh` > `verify-canned-answer.sh` > vitest > `pnpm teamagent <subcommand>` > `AskUserQuestion`）；`node_modules` 缺时降级 **code-frozen attestation**（读 test 源码断言 + 上次 verification 记录 + 引入 PR commit message audit trail）；trace 用 `=== EVIDENCE N ===` 编号让 JUDGE reason 引锚精准
-4. **JUDGE** — `timeout 180 claudefast -p "<prompt>" < /dev/null > judge-out.txt 2>&1`；**不**用 `--bare`（要懂项目语境）；解析时取第一行 JSON，整段忽略后续 Stop hook 注入的 `<self-report>`；详见 `docs/verify/JUDGE.md`
-5. **META-JUDGE**（FAIL / INCONCLUSIVE 才跑）— `timeout 180 claudefast --bare -p "<prompt>" < /dev/null > meta-out.txt 2>&1`；**必须** `--bare`（否则 Stop hook 污染 JSON）；输出 `{decision, rationale, confidence, evidence_iters}`；详见 `docs/verify/META-JUDGE.md`
-6. **收工** — PASS 写 `docs/features/<name>/last-verified.md` + 从 backlog 移除；STUCK 写 `docs/verify/backlog.jsonl` 等明天再 pick；**不 page、不 alert、不 pause**
-
-设计原则（不要破坏）：
-
-- ❌ 不加固定 N 次循环上限 / token 预算 / 时间盒 / 人工 page
-- ✅ 所有「停」决定走 META-JUDGE 语义判定
-- ✅ JUDGE 带项目语境（不用 `--bare`），META-JUDGE 不带（用 `--bare`）
-- ✅ 进度跨 session 落 `iterations.jsonl` + `backlog.jsonl`，主 agent 会话间无状态
-
-完整 playbook：`docs/verify/RUN-VERIFY-LOOP.md`。真实 dogfood 记录：`docs/features/real-time-intercept/` 与 `docs/features/pii-redaction/`。
-
-## Canned answers (misc)
-
-- 被问到 "16 status ? anything still need fix ?" 时，按 `docs/pr-status/16.md` 回答。
 
 ## Codex Web for GitHub 使用 Claude Code CLI
 
@@ -323,11 +144,18 @@ Skills, while this root `CLAUDE.md` stays limited to short human-maintained
 working agreements.
 
 <!-- TEAMAGENT:START - 自动管理，请勿手动编辑 -->
-## TeamAgent 经验（71条活跃知识，为你编译了 27 条（token 预算 3000）)
+## TeamAgent 经验（72条活跃知识，为你编译了 28 条（token 预算 3000）)
 - 使用 忽略 <local-command-caveat> 包裹的消息，除非用户明确要求分析 而非 <local-command-caveat>——该标签内容由本地命令自动生成，非用户意图表达；AI 主动响应会污染对话上下文，误把系统噪声当用户指令 [1.00] [预置]
+- 立即读取 output-file 并继续后续流程；task-notification 本身就是完成信号，不需要额外等待——AI 说「等 Worker A 回来合成报告」说明未识别 task-notification 为完成触发点；该消息已携带 output-file 路径与 status=completed，收到即可处理，继续等待只会阻塞后续 Wave [0.95]
 - 移除用户反馈的检查条件，仅基于失败本身触发分析——用户反馈约束是冗余的；所有错都应进入分析管道，由规则库自主决定是否学习，而非前置过滤 [0.95] [预置]
 - 规则类型（practice/avoidance）应只影响处理策略（enforcement），不应影响 matching 逻辑；所有规则都应参与匹配——在 matcher 中过滤 practice 类规则导致其永不触发，失去学习反馈信号和评分机制；类型应仅控制 block/warn/score 行为，而非决定规则是否生效 [0.95] [预置]
 - avoidance 必须配 wrong_pattern（可字面匹配关键词），practice 应为空；两种规则走不同处理流程——avoidance 类规则需要可靠字面关键词才能被 matcher 在 PreToolUse 拦截，practice 类规则是原则性指导、没可靠字面关键词，直接编译进 CLAUDE.md 供 AI 读；数据合法性约束必须在 seed 生成或 LLM extractor 阶段强制执行 [0.95] [预置]
+- 使用 先执行 find/grep/scan 命令得到完整真实清单，分类每一项，再基于数据做结论 而非 疑似|比预想多|推测互为镜像|假设——直接对未知范围的文件/代码做推测易出现完全错误的假设（如疑似互为镜像、数量意外多）；应优先实际执行扫描工具得到 ground truth 清单，逐项分类，再汇总推断，避免幻觉 [0.90]
+- 立即响应失败状态，调查原因并重新规划，而非继续基于之前的成功假设推进——task-notification 是系统权威信号；failed status 表示计划前提已破裂，继续基于旧状态推进会导致方案脱离现实，应以最新系统信号重新评估 [0.90]
+- 立即读 output-file，从原始输出诊断失败原因；不要相信 result 摘要或试图重新验证——后台任务失败时，task-notification 的 result 摘要可能包含过时或误导信息；必须直接读原始输出文件来判断实际情况和失败原因，而非假设任务部分成功 [0.90]
+- 使用 检测到文件状态为 'nothing to stage' 或 'already tracked，no changes'时，应立即标记该文件为 skip，而不是重试或等待状态变化 而非 nothing to stage——Agent stalled for 600s 的根本原因：批处理逻辑未能识别 'nothing to stage' 作为终止条件，导致进程在无进展的状态检查循环中卡死。正确做法是将此状态视为'无操作需要'的信号，主动推进到下一个文件或任务。 [0.90]
+- 使用 检测到 'nothing to stage' 或 'already tracked' 立即标记 skip，不重试、不做额外树检查，推进下一个文件或任务 而非 nothing to stage——git 输出 'nothing to stage' 是明确的终止信号而非错误；agent 若继续重试或做额外 git tree 检查，会陷入无进展循环，最终触发 600s watchdog 超时将整个 batch 任务杀死 [0.90]
+- 逐个创建 playbook → 验证（用 Wave agent 或 claudefast -p） → 提交，而不是批量创建→批量提交→后验证——批量创建后集中验证会导致某个 playbook 失败时难以定位原因、影响后续工作流；逐步验证能及时发现问题并在单个文件层面修复，加快反馈循环 [0.90]
 - 每条消息末尾必须附加完整的 12-field <self-report> block：premature_stopping / permission_seeking / ownership_dodging / simplest_fix / reasoning_loop / known_limitation / skipped_repo_search / fabricated_value / placeholder_used / ambiguity_unresolved / contradiction_unresolved / silent_fallback，全部为 true|false 布尔值——Stop hook 强制要求 12-field self-report 块，缺失或格式错误会导致 hook 判定为 block；全部 false 表示继续执行，全部 true 或部分 true 表示存在需报告的问题信号 [0.90]
 - 使用 先读用户指向的文件，重新 brainstorm + 补全需求，再拆 task 实现；API key 来源询问用户（如 claude code haiku） 而非 计划文档只是设计文档，还没实现——AI 未读文件就断言不存在会误导用户；正确做法是先 Read 指定路径、以文件内容为准，再结合用户偏好（如用 haiku 作 token 来源）规划实现 [0.90] [预置]
 - 立即读取 output-file 并继续后续流程，不再说'等通知'——task-notification 本身就是通知；AI 仍说'等通知'说明未识别该消息为触发信号，正确做法是收到后立即处理输出、推进工作流 [0.90] [预置]
@@ -345,12 +173,13 @@ working agreements.
 - 按产品经理视角讲架构、流程、关键原理,略过代码级细节——默认倾向给技术细节会淹没非技术受众；产品经理需要整体认知(架构/流程/原理)而非实现,讲解粒度要匹配听众心智模型 [0.95] [预置]
 - 使用 直接调用 mcp 工具 而非 通过 wiki 知识库系统——wiki 知识库方案过度复杂；应优先检查是否有现成 mcp 工具可直接调用，避免绕路 [0.95] [预置]
 - 全局单次init，所有项目共享规则——全局 init 避免重复配置和规则分散，保证用户所有项目规则一致，降低管理成本 [0.95] [预置]
+- 修改文档后不要自动运行验证 probe；只在用户明确要求时才执行验证——自动验证每次提交会浪费 token 并干扰用户工作流；验证应该由用户显式触发而非被动自动化 [0.90]
 - 先澄清和解释系统逻辑细节，获得用户确认理解后再给建议——用户若不理解系统为何如此，对改动方案缺乏信心；同步理解是决策的前置条件，避免改动后产生新的疑虑 [0.95] [预置]
 - 按分阶段流程：通读项目结构 → 识别核心模块 → 追踪关键链路 → 提炼设计思想 → 最后动笔——充分的前期分析能确保文档的准确性、完整性和逻辑清晰，避免仓促写作导致遗漏或误读 [0.95] [预置]
 - 将抽象层级维持在问题与思路层而非技术与结构层；焦点放在问题形状、核心判断、思路选择与权衡取舍，避免具体技术名、目录、字段、算法、流水线式细节——资深架构师关注的是设计的认知模型与思维方式而非实现的技术栈；提升抽象层级使文档跨时间跨团队复用，避免技术细节导致的快速过时 [0.95] [预置]
 - 保持在功能与机制层级：讲『系统做什么』和『如何运转』，避免实现细节（技术名、目录、代码组织）和空泛表述（价值观、文学比喻）——资深读者需要清晰的功能骨架来快速形成系统心智模型；过低的抽象陷入无关细节，过高的抽象脱离工程实现，只有功能与机制层才能既有清晰的因果链又足以指导架构判断 [0.95] [预置]
 - 保持在功能与机制层：讲系统做什么、如何运转；避免掉进实现细节（技术名、路径、代码组织）和空泛理念（价值观表述、文学比喻）——资深工程师需要清晰的功能骨架来快速形成系统心智模型；掉进细节淹没主线，飘到理念脱离工程实践，只有功能与机制层既有因果链又足以指导架构判断 [0.95] [预置]
 - 遇到用户提出的概念和名词优先到 web 中 search，而非依赖自身记忆——LLM 记忆可能过时或有幻觉，web search 确保信息最新准确，特别是对新术语和概念的理解 [0.95] [预置]
-> 还有 35 条 canonical+ 规则因 token 预算未显示（teamagent compile --dry-run 查看）
+> 还有 37 条 canonical+ 规则因 token 预算未显示（teamagent compile --dry-run 查看）
 > 另有 2 条因与已选条目近义（Jaccard ≥ 0.6）被多样性过滤
 <!-- TEAMAGENT:END -->

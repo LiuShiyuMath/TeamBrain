@@ -4,7 +4,7 @@
 
 ### What the judge harness verifies
 
-`docs/features/doctor-install/run-judge.sh` runs 3 isolated installation scenarios:
+`docs/plans/docs--features--doctor-install--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/doctor-install/run-judge.sh`) runs 3 isolated installation scenarios:
 
 **Scenario 1 — fresh** (no hooks, no plugins, no knowledge.db)
 - Expected: `knowledge-db=fail` AND `hook-registered != pass`

@@ -27,7 +27,7 @@ demo
    v   second `teamagent` run
 "上次你跑了 X，要不要试试 Y？"
 
-W4: scripts/judge-first-run.sh + docs/baselines/help-output.txt  <- third-party judge harness
+W4: docs/plans/scripts--judge-first-run/judge.md + docs/baselines/help-output.txt  <- third-party judge harness (archived: docs/legacy/judge-scripts/scripts/judge-first-run.sh)
 R:  this file (report section) + GitHub PR (Closes #87)
 ```
 
@@ -82,7 +82,7 @@ Worktree: `/Users/m1/projects/TeamBrain/.claude/worktrees/issues87`.
 | **W1** | sonnet | `packages/cli/src/commands/first-run.ts`, `packages/cli/src/__tests__/first-run.test.ts` | (1) probe `commands/*.ts` 现有 export 模式; (2) probe `~/.teamagent/` 已有 JSON 状态文件 schema 范例 |
 | **W2** | sonnet | `packages/teamagent/postinstall.mjs` | (1) probe 现有 welcome block 行数与中文风格; (2) probe 项目里 emoji + 鼓励语气文案先例 |
 | **W3** | sonnet | `packages/cli/src/bin.ts`, `docs/features/first-run.md`, `docs/PRODUCT-FEATURES.md` | (1) probe `bin.ts` `case undefined` 改造点 & router 风格; (2) probe `docs/features/*.md` 风格与 PRODUCT-FEATURES 一行格式 |
-| **W4** | sonnet | `scripts/judge-first-run.sh`, `docs/baselines/help-output.txt`, `scripts/judge-first-run.README.md` | (1) probe `scripts/` 现有 judge / probe 脚本范例; (2) probe baseline / fixture 文件惯例 |
+| **W4** | sonnet | `docs/plans/scripts--judge-first-run/judge.md` (archived: `docs/legacy/judge-scripts/scripts/judge-first-run.sh`), `docs/baselines/help-output.txt`, `scripts/judge-first-run.README.md` | (1) probe `docs/plans/scripts--judge-first-run/judge.md` md playbook; (2) probe baseline / fixture 文件惯例 |
 | **R** | opus | this spec file (report section), git commits, PR | 不跑 probe；只 read JSON + 集中 commit + 开 PR |
 
 ---
@@ -99,7 +99,7 @@ Worktree: `/Users/m1/projects/TeamBrain/.claude/worktrees/issues87`.
 | 文档 | `docs/features/first-run.md` | trigger / UX 范例 / state schema / known limits；ASCII art 开头 | W3 |
 | 文档 | `docs/PRODUCT-FEATURES.md` | 追加一行 VERIFIED 后的「首次运行向导」 | W3 |
 | 文档 | `docs/specs/2026-05-07-issue87-first-run.md` | 本文件；report 节由 R 填 | R |
-| 验证 | `scripts/judge-first-run.sh` | 跑 J1-J6，写 `.judge/<run>/judge.json` + evidence | W4 |
+| 验证 | `docs/plans/scripts--judge-first-run/judge.md` (archived: `docs/legacy/judge-scripts/scripts/judge-first-run.sh`) | 跑 J1-J6，写 `.judge/<run>/judge.json` + evidence | W4 |
 | 验证 | `docs/baselines/help-output.txt` | 当前 `teamagent --help` 输出快照 | W4 |
 | PR | GitHub PR (LiuShiyuMath account) | body `Closes #87`；CI green；Codex silent/👍；无 conflict；非 draft | R |
 
@@ -111,7 +111,7 @@ Worktree: `/Users/m1/projects/TeamBrain/.claude/worktrees/issues87`.
 
 按项目铁律：**固定工具跑 → dump JSON → 第三方 LLM 只读 raw JSON + evidence**。Wizard 不自评、agent 不自评。
 
-### Harness checks (W4 实现 `scripts/judge-first-run.sh`)
+### Harness checks (W4 实现 `docs/plans/scripts--judge-first-run/judge.md`; archived: `docs/legacy/judge-scripts/scripts/judge-first-run.sh`)
 
 | # | 固定工具 | 命令 | 通过条件 → JSON 字段 |
 |---|---------|------|----------------------|

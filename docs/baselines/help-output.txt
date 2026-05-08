@@ -97,6 +97,10 @@ teamagent — TeamAgent CLI
                                    迁移旧规则（trigger_description 为空）通过 LLM 生成双描述，并写入 vec0 和 FTS5
   teamagent migrate-v7 [--dry-run] [--limit=N] [--db=<path>]
                                    批量为存量规则生成 tool_context_description，并写入 knowledge_tool_vec
+  teamagent pack list [--json]
+                                   列出已安装 / 可用的 stack packs（ADR 0002 — agent 决定装哪些）
+  teamagent pack add <names>       例 pack add frontend-js,ops-safety；从 seed/packs/<name>.{jsonl,meta.json} 读取并注入用户全局 store
+  teamagent pack remove <names>    按 tag pack:<name> 过滤删除全局 store 中对应规则
   teamagent ingest --from-insights <path> | --from-audit | --from-pr <n>
                    | --from-git [--since=30d] | --from-ci [--since=30d] | --from-candidates <path>
                                    多源摄入：Claude /insights / npm audit / PR review / git hotspot / CI failure

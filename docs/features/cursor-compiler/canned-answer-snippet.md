@@ -4,7 +4,7 @@ No `verify-canned-answer.sh` exists for this slug. Verification is done via `run
 
 ### What the judge harness verifies
 
-`docs/features/cursor-compiler/run-judge.sh` asserts all 4 of:
+`docs/plans/docs--features--cursor-compiler--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/cursor-compiler/run-judge.sh`) asserts all 4 of:
 
 1. **vitest unit tests pass** for `packages/core/src/compiler/__tests__/cursor-compiler.test.ts`
 2. **Functional integration**: seed 3 fixture rules, call `compileCursorRules`, emit a non-empty `.cursorrules` file

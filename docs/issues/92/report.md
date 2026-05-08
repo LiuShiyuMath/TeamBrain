@@ -22,7 +22,7 @@ Implementation complete; PR open. Filled in after PR creation; finalized after C
 - [x] Single one-liner CTA in README hero region: `curl -fsSL .../release/install.sh | sh && teamagent init` — replaces previous tarball install at `README.md:29`.
 - [x] Script includes `set -eu` and prints clear errors with exit codes (10 = node missing, 11 = node too old, 20 = no npm/pnpm, 30 = install failed).
 - [x] No domain registration; all URLs on `raw.githubusercontent.com`.
-- [x] Verify script `docs/features/install-sh/run-judge.sh` returns exit 0 (six scenarios, `all_passed: true`).
+- [x] Verify script `bash docs/features/install-sh/run-judge.sh` returns exit 0 (six scenarios, `all_passed: true`; utility, retained per docs/legacy/judge-scripts/README.md exemption).
 - [ ] `pnpm test` passes — recorded after CI.
 - [x] Listed in `docs/PRODUCT-FEATURES.md` as VERIFIED (#60 under "Landing CTA installer (#92)").
 
@@ -31,7 +31,7 @@ Implementation complete; PR open. Filled in after PR creation; finalized after C
 | Path | LOC | Purpose |
 |---|---|---|
 | `release/install.sh` | 69 | POSIX sh installer (mode 0755) |
-| `docs/features/install-sh/run-judge.sh` | ~210 | Six-scenario judge harness (mode 0755) |
+| `docs/features/install-sh/run-judge.sh` | ~210 | Six-scenario judge harness (utility, retained per docs/legacy/judge-scripts/README.md exemption) |
 | `docs/issues/92/research.md` | ~120 | Pre-plan exploration findings |
 | `docs/issues/92/plan.md` | ~150 | Approved plan (project-tracked copy) |
 | `docs/issues/92/report.md` | this file | Completion report |
@@ -48,6 +48,7 @@ Implementation complete; PR open. Filled in after PR creation; finalized after C
 
 ```
 $ bash docs/features/install-sh/run-judge.sh
+# utility script, retained per docs/legacy/judge-scripts/README.md exemption
 === install.sh judge harness run_id=<utc-stamp>-<pid> ===
 all_passed   : true
 RESULT: PASS — all scenarios met expectations

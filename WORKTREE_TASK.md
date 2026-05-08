@@ -37,5 +37,5 @@
 ## Non-goals
 
 - 不修改 `CLAUDE.md` / `AGENTS.md` 内 inline 写死的全局触发答案。
-- 不重写 `scripts/verify-all-rules.sh` 已覆盖的 8 条 triggered rule。
+- 不重写 `scripts/verify-all-rules.sh` 已覆盖的 8 条 triggered rule（该脚本已归档于 `docs/legacy/judge-scripts/scripts/verify-all-rules.sh`）。
 - 不引入新的 LLM judge 框架或外部依赖；probe 走 `claudefast` 即可。

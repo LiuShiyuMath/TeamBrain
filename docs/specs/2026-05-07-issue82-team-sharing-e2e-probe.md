@@ -30,7 +30,7 @@
 # issue #82 e2e probe canonical spec（B 交付物）
 
 > Date: 2026-05-07
-> 实施: `docs/features/team-sharing-probe/run-judge.sh`
+> 实施: `docs/plans/docs--features--team-sharing-probe--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/team-sharing-probe/run-judge.sh`)
 > Glossary: `docs/CONTEXT.md`
 
 本文件是 e2e probe 的**仅有契约**。所有 metric / schema / 阈值之争以本文件为准；harness 实现与之冲突时改 harness。

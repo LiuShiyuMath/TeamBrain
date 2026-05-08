@@ -28,7 +28,15 @@ These are the two tasks that produced the live evidence archives under `docs/tea
 
 ### A1. Run the harness against the staged change
 
-```bash
+Dispatch via md playbook (archived script: `docs/legacy/judge-scripts/scripts/verify/tbrain-verify.sh`):
+
+```
+claudefast -p "Follow docs/plans/scripts--verify--tbrain-verify/judge.md with RECIPE_ID=VERIFY-TBRAIN-001 RUN_ID=20260502T000000Z-real-task-1 task_title='Align run_id stability + task_title field across docs/teambrain/'"
+```
+
+Historical command reference (archived — do not run directly):
+
+```text
 scripts/verify/tbrain-verify.sh VERIFY-TBRAIN-001 20260502T000000Z-real-task-1 \
   --task-title "Align run_id stability + task_title field across docs/teambrain/"
 ```
@@ -76,7 +84,7 @@ Real Task #1 exposed four framework gaps. Each one has a closure committed in Da
 
 | GAP | Closure |
 |---|---|
-| GAP-1 (no harness binary) | `scripts/verify/tbrain-verify.sh` (commit `9230b3c`) |
+| GAP-1 (no harness binary) | `docs/plans/scripts--verify--tbrain-verify/judge.md` (archived: `docs/legacy/judge-scripts/scripts/verify/tbrain-verify.sh`, commit `9230b3c`) |
 | GAP-2 (archive gate by convention only) | `TRAP-OPS-012` row in `TRAPS.md` (commit `83c54b6`) |
 | GAP-3 (judge prompt splices contents) | `AP-8` + `VERIFY-CLAUDE-007` in `agent_rules/claude.md` (commit `181ac5f`) |
 | GAP-4 (`archive_dir` not in schema) | `evidence/README.md` 8-field table (commit `5819ab6`) |
@@ -87,7 +95,7 @@ The same mapping is encoded in `TRAPS.md` under "Real Task #1 GAP closure" so fu
 
 ## Walkthrough B — Real Task #2 (Day 2 H36-60)
 
-**Owner task:** Run `scripts/verify/tbrain-verify.sh` against Real Task #1 evidence dir; build the self-bootstrap evidence archive (closes GAP-1..GAP-4).
+**Owner task:** Run the tbrain-verify harness against Real Task #1 evidence dir; build the self-bootstrap evidence archive (closes GAP-1..GAP-4). The harness is now the md playbook `docs/plans/scripts--verify--tbrain-verify/judge.md` (archived: `docs/legacy/judge-scripts/scripts/verify/tbrain-verify.sh`).
 
 **Recipe / run id:**
 
@@ -99,18 +107,20 @@ The same mapping is encoded in `TRAPS.md` under "Real Task #1 GAP closure" so fu
 
 ### B1. Positive case — harness against Task #1
 
-```bash
-scripts/verify/tbrain-verify.sh VERIFY-TBRAIN-001 20260502T000000Z-real-task-1
-# exit 0, missing_evidence=false
+```text
+# archived: docs/legacy/judge-scripts/scripts/verify/tbrain-verify.sh
+# now: claudefast -p "Follow docs/plans/scripts--verify--tbrain-verify/judge.md with RECIPE_ID=VERIFY-TBRAIN-001 RUN_ID=20260502T000000Z-real-task-1"
+# expected: exit 0, missing_evidence=false
 ```
 
 This re-verifies that Task #1 still passes under the new harness binary. Captured to `.judge/20260502T000000Z-real-task-2/task1-verify-stdout.txt`.
 
 ### B2. Negative case — harness against Task #2 before its own archive exists
 
-```bash
-scripts/verify/tbrain-verify.sh VERIFY-TBRAIN-002 20260502T000000Z-real-task-2
-# exit 2, archive_missing=6, missing_evidence=true
+```text
+# archived: docs/legacy/judge-scripts/scripts/verify/tbrain-verify.sh
+# now: claudefast -p "Follow docs/plans/scripts--verify--tbrain-verify/judge.md with RECIPE_ID=VERIFY-TBRAIN-002 RUN_ID=20260502T000000Z-real-task-2"
+# expected: exit 2, archive_missing=6, missing_evidence=true
 ```
 
 This is the **right** failure. The harness must reject a run whose archive directory is empty. The negative-case stdout is captured to `pre-archive-stdout.txt` so future agents have proof of the gate firing.
@@ -126,9 +136,10 @@ $EDITOR "$DIR"/{INDEX.md,transcript.md,stdout.txt,stderr.txt,failures.md,judge-s
 
 ### B4. Positive case — harness against Task #2 after archive built
 
-```bash
-scripts/verify/tbrain-verify.sh VERIFY-TBRAIN-002 20260502T000000Z-real-task-2
-# exit 0, archive_present=6/6, missing_evidence=false
+```text
+# archived: docs/legacy/judge-scripts/scripts/verify/tbrain-verify.sh
+# now: claudefast -p "Follow docs/plans/scripts--verify--tbrain-verify/judge.md with RECIPE_ID=VERIFY-TBRAIN-002 RUN_ID=20260502T000000Z-real-task-2"
+# expected: exit 0, archive_present=6/6, missing_evidence=false
 ```
 
 The harness now re-verifies Task #2 itself. The bootstrap loop closes.

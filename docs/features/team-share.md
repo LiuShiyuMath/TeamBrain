@@ -43,14 +43,14 @@ A–E, merged to `main` via PR #71). Concretely:
   the higher-level auto-publish path (`teamagent m5-publish`) commit changes
   under `.teamagent/team/<author>/<rule_id>.json` with the fixed
   `[teamagent-sync]` prefix; remote is the project's own git remote, no extra
-  central server. Verify: `docs/features/xsync/run-judge.sh`,
+  central server. Verify: `docs/plans/docs--features--xsync--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/xsync/run-judge.sh`),
   `bash scripts/m5-auto-demo.sh`.
 - **Outbound redactor** (M5-B): two gates run before any rule reaches L2 —
   (1) hard secret scanner (`packages/core/src/m5/secret-scanner.ts`) that
   permanently seals API keys / JWT / phone / CC / AWS / private paths in L1,
   (2) scope classifier (`packages/core/src/m5/scope-classifier.ts`) that
   defaults `uncertain` to `personal`. Verify:
-  `docs/features/pii-redaction/run-judge.sh`.
+  `docs/plans/docs--features--pii-redaction--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/pii-redaction/run-judge.sh`).
 - **Completed team-sharing gate**: the path "user pitfall → secret scan →
   scope classify → write `.teamagent/team/` → auto-commit
   `[teamagent-sync] sync N team rule(s)` → push" now runs end-to-end via

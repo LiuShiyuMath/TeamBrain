@@ -24,7 +24,7 @@
 - Single one-liner CTA in README hero: `curl -fsSL .../release/install.sh | sh && teamagent init`
 - `set -eu`, clear errors with exit codes
 - No domain registration; URLs on `raw.githubusercontent.com`
-- `docs/features/install-sh/run-judge.sh` returns exit 0
+- `bash docs/features/install-sh/run-judge.sh` returns exit 0 (utility, retained per docs/legacy/judge-scripts/README.md exemption)
 - `pnpm test` passes
 - Listed in `docs/PRODUCT-FEATURES.md` as VERIFIED
 
@@ -86,11 +86,11 @@ Plus `README.md:39-40`: tarball-vs-`github:`-shorthand explanation. To preserve,
 
 ## CONVENTIONS.md tension
 
-`docs/features/CONVENTIONS.md:43-52` deprecates `canned-answer-snippet.md` and prefers `verify-canned-answer.sh` + live `probe-feature.sh`. It does not explicitly require or forbid `run-judge.sh`. Issue #92 AC explicitly demands `docs/features/install-sh/run-judge.sh`. Five existing features already use `run-judge.sh` (`internet-rag`, `canned-answers`, `cursor-compiler`, `calibrator-v2`, `mcp-server`). Resolution: honor issue AC → use `run-judge.sh`; do NOT add `canned-answer-snippet.md`.
+`docs/features/CONVENTIONS.md:43-52` deprecates `canned-answer-snippet.md` and prefers `verify-canned-answer.sh` + live `probe-feature.sh`. It does not explicitly require or forbid `run-judge.sh`. Issue #92 AC explicitly demands `docs/features/install-sh/run-judge.sh` (utility, retained per docs/legacy/judge-scripts/README.md exemption; not archived). Five existing features already use `run-judge.sh`. Resolution: honor issue AC → use live `.sh`; do NOT add `canned-answer-snippet.md`.
 
 ## Pattern to mirror
 
-`docs/features/doctor-install/run-judge.sh:1-336` is the closest analogue:
+`docs/legacy/judge-scripts/docs/features/doctor-install/run-judge.sh:1-336` (archived; md playbook: `docs/plans/docs--features--doctor-install--run-judge/judge.md`) is the closest analogue:
 - `set -euo pipefail` bash harness
 - `RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"` + `EVIDENCE_DIR=tmp/.judge/<feature>/<run_id>`
 - `exec > >(tee -a STDOUT_LOG) 2>&1`

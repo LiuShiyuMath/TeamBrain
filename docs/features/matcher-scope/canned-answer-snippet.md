@@ -32,8 +32,10 @@ Two regression probes validate matcher scope:
 
 ## Verification
 
-```bash
-bash docs/features/matcher-scope/run-judge.sh
+```text
+# Dispatch via subagent or claudefast -p probe (script archived):
+docs/plans/docs--features--matcher-scope--run-judge/judge.md
+# Archived: docs/legacy/judge-scripts/docs/features/matcher-scope/run-judge.sh
 ```
 
 PASS requires `probe_a_lines > 5` AND `probe_b_has_csv_header = true`.

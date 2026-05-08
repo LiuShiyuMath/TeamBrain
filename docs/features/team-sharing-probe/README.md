@@ -56,36 +56,37 @@ Glossary: `docs/CONTEXT.md`
 
 ## Static gates
 
-```bash
-bash -n docs/features/team-sharing-probe/run-judge.sh    # 语法
-shellcheck docs/features/team-sharing-probe/run-judge.sh # 可选；本仓库没强制
+> **PR #148 sweep:** `docs/features/team-sharing-probe/run-judge.sh` is archived at
+> `docs/legacy/judge-scripts/docs/features/team-sharing-probe/run-judge.sh`.
+> Use md playbook `docs/plans/docs--features--team-sharing-probe--run-judge/judge.md`
+> dispatched via subagent or `claudefast -p` probe.
+
+Historical syntax check (archived path, for reference only):
+```text
+bash -n docs/legacy/judge-scripts/docs/features/team-sharing-probe/run-judge.sh
 ```
 
 ## Dry-run（默认；安全）
 
-```bash
-BRANCH_PROTECTION=off bash docs/features/team-sharing-probe/run-judge.sh --dry-run
+Dispatch the md playbook with `--dry-run` parameter:
+```text
+claudefast -p "Follow docs/plans/docs--features--team-sharing-probe--run-judge/judge.md
+with BRANCH_PROTECTION=off and --dry-run mode."
 ```
 
-输出每一步会跑的命令；不创建 GitHub repo、不跑 claudefast、不写 evidence。
+（输出每一步会跑的命令；不创建 GitHub repo、不跑 claudefast、不写 evidence。）
 
 ## Real run（hit GitHub + spend tokens）
 
-```bash
+Dispatch via the md playbook for real runs. Historical command sequence (archived):
+
+```text
 # Step 0 一次性准备：
 gh repo create libz-renlab-ai/TeamBrain-team-sharing-probe --public --confirm
 
-# Step 1 第一遍 protection=off：
-BRANCH_PROTECTION=off \
-  bash docs/features/team-sharing-probe/run-judge.sh --real-run
-
-# Step 2 GitHub 端启用 main 保护：
-gh api -X PUT repos/libz-renlab-ai/TeamBrain-team-sharing-probe/branches/main/protection \
-  --input docs/features/team-sharing-probe/branch-protection.json   # TODO（执行时手 craft）
-
-# Step 3 第二遍 protection=on：
-BRANCH_PROTECTION=on \
-  bash docs/features/team-sharing-probe/run-judge.sh --real-run
+# Steps 1-3: Dispatch docs/plans/docs--features--team-sharing-probe--run-judge/judge.md
+# with BRANCH_PROTECTION=off --real-run, then on, then --real-run again.
+# Archived script: docs/legacy/judge-scripts/docs/features/team-sharing-probe/run-judge.sh
 ```
 
 ## Exit codes

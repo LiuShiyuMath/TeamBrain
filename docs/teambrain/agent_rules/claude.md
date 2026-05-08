@@ -173,9 +173,9 @@ claudefast -p "Read these files and emit JSON {recipe_id, run_id, conclusion, no
 **Catch:** Recipe `VERIFY-CLAUDE-007`. Inline `verify_command`:
 ```bash
 awk 'FNR==1{flag=0} /claudefast/{flag=1} flag && /\$\(cat |\$\(head /{print FILENAME ":" FNR ": " $0; bad=1} /^"$|^"\s*$|^\)\s*$|^EOF$/{flag=0} END{exit bad?1:0}' \
-  scripts/verify/*.sh docs/teambrain/VERIFY_TEMPLATE.md
+  docs/plans/scripts--verify--tbrain-verify/judge.md docs/teambrain/VERIFY_TEMPLATE.md
 ```
-Non-zero exit = fail. Canonical failing case retained at `docs/teambrain/VERIFY_TEMPLATE.md` lines 153–159 (Real Task #2 transcript).
+Non-zero exit = fail. Canonical failing case retained at `docs/teambrain/VERIFY_TEMPLATE.md` lines 153–159 (Real Task #2 transcript). (Archived scripts at `docs/legacy/judge-scripts/scripts/verify/`)
 
 ---
 

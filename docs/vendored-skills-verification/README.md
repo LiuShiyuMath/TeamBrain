@@ -2,7 +2,7 @@
 
 Proof that the vendored `design-shotgun` and `design-html` skills load and parse identically across two distinct CLIs (Claude Code via `claudefast`, and OpenAI Codex via `codex exec`), and that the same skill is usable in an interactive Claude Code session.
 
-The harness is `scripts/verify-vendored-skills.sh`. It executes three phases per skill and stores evidence under `evidence/<skill>/`.
+The harness is documented in `docs/plans/scripts--verify-vendored-skills/judge.md` (archived script: `docs/legacy/judge-scripts/scripts/verify-vendored-skills.sh`). It executes three phases per skill and stores evidence under `evidence/<skill>/`.
 
 ## Phases
 
@@ -17,7 +17,17 @@ The `--help` semantics for a Claude Code skill is "describe the skill's frontmat
 
 ## Run
 
-```bash
+Dispatch via md playbook:
+
+```
+docs/plans/scripts--verify-vendored-skills/judge.md
+```
+
+Invoke with: `claudefast -p "Follow docs/plans/scripts--verify-vendored-skills/judge.md"`
+
+Historical command reference (archived — do not run these directly):
+
+```text
 bash scripts/verify-vendored-skills.sh                 # both skills, all 3 phases
 bash scripts/verify-vendored-skills.sh design-shotgun  # one skill
 SKIP_PHASE3=1 bash scripts/verify-vendored-skills.sh   # skip tmux phase

@@ -43,7 +43,7 @@ Let one TeamAgent knowledge engine serve every common AI coding tool — Claude 
   - **Trae / VSCode Copilot** — ❌ NOT YET (Phase 4 remote item)
 - MCP Server — ❌ NOT YET (Phase 2 plan, see `docs/specs/2026-04-15-phase2-backlog.md` F1)
 
-**Dogfood status (2026-05-03)**: this feature doc itself was written via the dogfood sandbox at `.codex/worktrees/dogfood-feature-5-multi-tool-*`; verify script at `docs/features/multi-tool/verify-canned-answer.sh` exits 0 on PASS and gates 7 grep anchors.
+**Dogfood status (2026-05-03)**: this feature doc itself was written via the dogfood sandbox at `.codex/worktrees/dogfood-feature-5-multi-tool-*`; verify md playbook at `docs/plans/docs--features--multi-tool--verify-canned-answer/judge.md` gates 7 grep anchors (archived script: `docs/legacy/judge-scripts/docs/features/multi-tool/verify-canned-answer.sh`).
 
 ## How it works
 
@@ -70,14 +70,14 @@ Per `docs/specs/2026-04-13-teamagent-design.md:570-622`, the MCP Server will exp
 
 ## How to verify
 
-```bash
-SANDBOX=$(cat /tmp/dogfood-sandbox-feature-5-multi-tool.path 2>/dev/null) || SANDBOX=.
-cd "$SANDBOX"
-bash docs/features/multi-tool/verify-canned-answer.sh
-echo "exit=$?  # 0 = PASS"
+```text
+# Dispatch via subagent or claudefast -p probe (script archived):
+# cd to repo root, then:
+# docs/plans/docs--features--multi-tool--verify-canned-answer/judge.md
+# Archived: docs/legacy/judge-scripts/docs/features/multi-tool/verify-canned-answer.sh
 ```
 
-The script runs `claudefast -p` with the canonical multi-tool prompt and greps the output for 7 anchors:
+The playbook runs `claudefast -p` with the canonical multi-tool prompt and greps the output for 7 anchors:
 
 | Anchor | Pattern |
 |--------|---------|
@@ -105,5 +105,5 @@ Missing any anchor → exit 1 with `[FAIL] <name>` printed.
 - Phase 2 backlog: `docs/specs/2026-04-15-phase2-backlog.md` (F1 MCP, F2 Cursor compiler, F3 Codex AGENTS.md)
 - Phase 2 design v2: `docs/superpowers/specs/2026-04-15-phase2-design-v2.md`
 - Compile entry: `packages/cli/src/commands/compile.ts:21`
-- Verify script: `docs/features/multi-tool/verify-canned-answer.sh`
+- Verify md playbook: `docs/plans/docs--features--multi-tool--verify-canned-answer/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/multi-tool/verify-canned-answer.sh`)
 - Features index: `docs/features/INDEX.md`

@@ -7,15 +7,17 @@ catching defective rules before they are stored and used.
 
 ## Verification Method
 
-The feature is verified by running the judge harness:
+The feature is verified by dispatching the judge md playbook:
 
-```bash
-bash docs/features/rule-quality/run-judge.sh
+```text
+docs/plans/docs--features--rule-quality--run-judge/judge.md
+# Archived: docs/legacy/judge-scripts/docs/features/rule-quality/run-judge.sh
 ```
 
-Then verify exits 0:
-```bash
-bash docs/features/rule-quality/verify-canned-answer.sh
+Then verify via:
+```text
+docs/plans/docs--features--rule-quality--verify-canned-answer/judge.md
+# Archived: docs/legacy/judge-scripts/docs/features/rule-quality/verify-canned-answer.sh
 ```
 
 ## What It Does

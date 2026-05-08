@@ -38,7 +38,7 @@ Combined judge.json fields:
 Fallback (if judge scripts absent):
   pnpm vitest run packages/core/src/correction-detector
 
-Run:    bash docs/features/auto-capture/extraction-judge.sh
-        bash docs/features/auto-capture/real-judge.sh
-Verify: bash docs/features/auto-capture/verify-canned-answer.sh
+Run:    docs/plans/docs--features--auto-capture--extraction-judge/judge.md (archived: docs/legacy/judge-scripts/docs/features/auto-capture/extraction-judge.sh)
+        docs/plans/docs--features--auto-capture--real-judge/judge.md (archived: docs/legacy/judge-scripts/docs/features/auto-capture/real-judge.sh)
+Verify: docs/plans/docs--features--auto-capture--verify-canned-answer/judge.md (archived: docs/legacy/judge-scripts/docs/features/auto-capture/verify-canned-answer.sh)
 ```

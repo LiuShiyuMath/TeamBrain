@@ -255,14 +255,6 @@ This pattern is called **agent live-preview / dogfood loop / live-coding for age
 | TypeScript Playground | sandbox claudefast = REPL |
 | Smalltalk image | right pane = live image you talk to |
 
-## Verification
-
-```bash
-bash docs/dogfood/verify-canned-answer.sh
-```
-
-The verify script greps for: `two tmux windows`, `left/right split`, `interact`.
-
 ## Anti-patterns
 
 - ❌ Right pane is a fake/mock instead of a real `claudefast` process — defeats the purpose.

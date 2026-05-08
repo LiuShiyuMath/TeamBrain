@@ -49,8 +49,8 @@ issue body 列了 5 个 "必须答完的问题"，其中 4 个已经被 M5 spec 
 | `packages/core/src/m5/team-rule-projection.ts:22–27` | 给 team 规则打 `scope.level=team` + tag `original-author:<name>` | **#82 attribution chain 锚点** |
 | `packages/core/src/m5/lww-merge.ts`（推测）+ tombstone | 冲突裁决 | 不在 #82 验证范围 |
 | `scripts/m5-auto-demo.sh` | bare repo + 双 HOME alice/bob，模拟 SessionStart 走完管线 | **transport 已验**，metric 未验 |
-| `docs/features/xsync/run-judge.sh` | bare remote + machine-a/b，跑 `teamagent sync push/pull`，dump judge.json | **transport 已验**，没跑 hook 拦截 |
-| `docs/features/pii-redaction/run-judge.sh` | 闸门 1 e2e | 与 #82 正交 |
+| `docs/plans/docs--features--xsync--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/xsync/run-judge.sh`) | bare remote + machine-a/b，跑 `teamagent sync push/pull`，dump judge.json | **transport 已验**，没跑 hook 拦截 |
+| `docs/plans/docs--features--pii-redaction--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/pii-redaction/run-judge.sh`) | 闸门 1 e2e | 与 #82 正交 |
 | `docs/PRODUCT-FEATURES.md` §132 / §191 | 已 claim VERIFIED 包括 viral spread & auto-sync | **#82 通过后不新增 row，仅在 evidence 列追加 e2e probe 证据指针** |
 
 ## 3. AttributionEvent / hook 事件 schema 现状
@@ -107,7 +107,7 @@ tags: ["m5-team-sync", `original-author:${originalAuthor}`]
 
 **结论**：transport（push/pull/gates/projection/lww/post-merge）全打通了。**hook 拦截 metric** 没打。
 
-`docs/features/xsync/run-judge.sh`（已读 60 行）：
+`docs/plans/docs--features--xsync--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/xsync/run-judge.sh`)（已读 60 行）：
 
 - bare remote + machine-a/b + isolated HOMEs
 - 通过 tsx 直接灌 5 条 team 规则进 machine-a KB
@@ -141,7 +141,7 @@ tags: ["m5-team-sync", `original-author:${originalAuthor}`]
 ## 8. 待执行动作（需用户授权，本 research 不动）
 
 1. `gh repo create libz-renlab-ai/TeamBrain-team-sharing-probe --public --confirm`（或 private）
-2. 跑 `bash docs/features/team-sharing-probe/run-judge.sh --branch-protection=off`
+2. dispatch `docs/plans/docs--features--team-sharing-probe--run-judge/judge.md` with BRANCH_PROTECTION=off (archived: `docs/legacy/judge-scripts/docs/features/team-sharing-probe/run-judge.sh`)
 3. 在 GitHub 给 main 加 protection（require PR / disallow direct push）
-4. 跑 `bash docs/features/team-sharing-probe/run-judge.sh --branch-protection=on`
+4. dispatch `docs/plans/docs--features--team-sharing-probe--run-judge/judge.md` with BRANCH_PROTECTION=on (archived: `docs/legacy/judge-scripts/docs/features/team-sharing-probe/run-judge.sh`)
 5. 写 report.md 收尾 → 开普通 PR（非 draft）

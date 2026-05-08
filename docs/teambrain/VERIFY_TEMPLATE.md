@@ -16,7 +16,7 @@ Every TeamBrain verify entry MUST contain all of the following fields:
 |-------|------|-----------|
 | `recipe_id` | string | regex `^VERIFY-[A-Z]+-\d{3}$` |
 | `prerequisites` | list | concrete deps/fixtures/env vars — no "set up your env" |
-| `command` | string | single executable shell line OR a script path; no "run the tests" without specifics |
+| `command` | string | single executable `claudefast -p "Follow docs/plans/<slug>/judge.md ..."` dispatch line OR a concrete shell command; no "run the tests" without specifics; do not reference archived `scripts/verify/*.sh` paths |
 | `expected_output` | string | regex / exact string / JSON schema / exit_code — at minimum assert output, not exit code alone |
 | `failure_modes` | list | enumerated: `timeout`, `exit_code != 0`, `mismatch`, `missing_evidence`, `mock_detected` |
 | `evidence_path` | string | local raw evidence dir, normally `.judge/<run_id>/`; gitignored and not sufficient for PR proof |
@@ -166,7 +166,7 @@ stdout (first 100 lines): $(head -n 100 "${EVIDENCE_DIR}/stdout.txt")
 ```yaml
 recipe_id: VERIFY-PNPM-001
 prerequisites: [node >= 18, pnpm installed, repo root package.json present]
-command: "scripts/verify/VERIFY-PNPM-001.sh"
+command: "claudefast -p \"Follow docs/plans/scripts--verify--VERIFY-PNPM-001/judge.md\""
 expected_output:
   exit_code: 0
   regex_on_stdout: "^(?!.*error TS)"  # zero lines matching "error TS"

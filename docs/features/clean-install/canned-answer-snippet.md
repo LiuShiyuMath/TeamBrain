@@ -23,5 +23,5 @@ Expected --help output includes (at minimum):
 Commands currently implemented (skeleton-demo and others from M0+):
   pnpm teamagent skeleton-demo   — walking skeleton demo
 
-Run: pnpm install && bash docs/features/clean-install/verify-canned-answer.sh
+Run: pnpm install && [dispatch docs/plans/docs--features--clean-install--verify-canned-answer/judge.md] (archived: docs/legacy/judge-scripts/docs/features/clean-install/verify-canned-answer.sh)
 ```

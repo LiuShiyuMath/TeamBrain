@@ -44,6 +44,6 @@ Judge output: .judge/canned-answers/<run_id>/judge.json
 Fallback (verify-canned-answer.sh, no claudefast):
   grep DOGFOOD/DUCKPLAN/POSTPR/FASTPROBE/PRESHIP directly in CLAUDE.md
 
-Run:    bash docs/features/canned-answers/run-judge.sh
-Verify: bash docs/features/canned-answers/verify-canned-answer.sh
+Run:    docs/plans/docs--features--canned-answers--run-judge/judge.md (archived: docs/legacy/judge-scripts/docs/features/canned-answers/run-judge.sh)
+Verify: docs/plans/docs--features--canned-answers--verify-canned-answer/judge.md (archived: docs/legacy/judge-scripts/docs/features/canned-answers/verify-canned-answer.sh)
 ```

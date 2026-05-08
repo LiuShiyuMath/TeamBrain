@@ -28,7 +28,7 @@ Current facts:
 
 Verification already run:
 
-- `bash scripts/verify-vendored-skills.sh` returned `ALL VERIFIED`.
+- `bash scripts/verify-vendored-skills.sh` returned `ALL VERIFIED` (note: script archived at `docs/legacy/judge-scripts/scripts/verify-vendored-skills.sh`; current path `scripts/verify-vendored-skills.sh` is a UTILITY script that remains in place).
 - `pnpm typecheck` passed.
 - `pnpm vitest run packages/cli/src/__tests__/pitfall.test.ts` passed.
 - `pnpm test` passed after merging `origin/main`: 134 files, 1268 tests.

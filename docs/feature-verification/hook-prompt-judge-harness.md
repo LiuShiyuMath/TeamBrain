@@ -12,7 +12,8 @@ RUN → DUMP → READ
 
 # Hook Prompt Judge Harness — issue #86
 
-本文档是 `scripts/hook-prompt-verify.sh` 的配套规范，说明如何独立验证 issue #86 的
+本文档是 `docs/plans/scripts--hook-prompt-verify/judge.md` md playbook 的配套规范
+（脚本已归档：`docs/legacy/judge-scripts/scripts/hook-prompt-verify.sh`），说明如何独立验证 issue #86 的
 两项交付：人性化 hook 提示格式（task 1）和 matcher 假阳性修复（task 4）。
 
 ---

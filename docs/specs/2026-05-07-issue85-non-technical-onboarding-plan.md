@@ -83,11 +83,11 @@ CC 用户 ≠ dev。我们不能假设用户会 pnpm / git / PATH。这个 plan 
 | Parser test | `packages/cli/src/__tests__/install-md-parser-contract.test.ts` | vitest |
 | Fixture | `packages/cli/src/__tests__/fixtures/install-md/missing-pnpm.md` | fixture |
 | 文档 | `docs/features/non-technical-onboarding.md` | 6 节模板 |
-| Verify 脚本 | `scripts/verify-issue85-pr1.sh` | bash，调度下方 T1–T5 |
+| Verify md playbook | `docs/plans/scripts--verify-issue85-pr1/judge.md` (archived: `docs/legacy/judge-scripts/scripts/verify-issue85-pr1.sh`) | 调度下方 T1–T5 |
 
 ## 3. How-to-verify (claudefast judge harness)
 
-固定第三方 harness：`scripts/verify-issue85-pr1.sh` 跑 T1–T5，每个 task 写
+固定第三方 harness：md playbook `docs/plans/scripts--verify-issue85-pr1/judge.md` 跑 T1–T5（脚本已归档：`docs/legacy/judge-scripts/scripts/verify-issue85-pr1.sh`），每个 task 写
 `.judge/<run_id>/T_i/judge.json` + raw stdout/stderr/evidence。最后由
 独立 claudefast judge 只读 raw JSON + evidence 出 PASS / FAIL。**禁止
 parser / agent / 实现作者自评**。

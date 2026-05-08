@@ -106,10 +106,13 @@ teamagent — 首次运行向导
 
 ## Verification
 
-```bash
-# 第三方 judge harness（W4 实现）
-bash scripts/judge-first-run.sh
+```text
+# 第三方 judge harness — dispatch md playbook (script archived):
+# docs/plans/scripts--judge-first-run/judge.md
+# Archived: docs/legacy/judge-scripts/scripts/judge-first-run.sh
+```
 
+```bash
 # 检查 judge.json OVERALL
 cat .judge/*/judge.json | jq '.checks[] | {id, tool, exit_code}'
 ```

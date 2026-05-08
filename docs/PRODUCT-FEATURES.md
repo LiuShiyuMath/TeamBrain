@@ -100,82 +100,82 @@ user-visible VERIFIED rows; this doc covers everything.
 | 2 | Minimum learning loop: record → compile → attribute, demoable end-to-end | `docs/ship-status/2026-05-03-ceo-duck-ship-status.csv` (`pnpm teamagent skeleton-demo`) |
 | 3 | AI warned before repeating known mistake; wrong moves blocked pre-execution | `docs/features/real-time-intercept.md` (`positiveTriggerRate=1, falsePositiveRate=0`) |
 | 4 | Correct AI once; system remembers and reuses that lesson automatically | `docs/ship-status/2026-05-03-ceo-duck-ship-status.csv` (`correctionsFound=3, learnedRules=3`) |
-| 5 | Useful knowledge grows more trusted; stale knowledge auto-demoted | `docs/features/calibrator-v2/run-judge.sh` |
+| 5 | Useful knowledge grows more trusted; stale knowledge auto-demoted | `docs/plans/docs--features--calibrator-v2--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/calibrator-v2/run-judge.sh`) |
 | 6 | Visible stats: count of learnings, layers, recent additions | `docs/ship-status/2026-05-03-ceo-duck-ship-status.csv` (`teamagent stats`) |
 | 7 | User can proactively record a pitfall without waiting for AI to fail | `docs/ship-status/2026-05-03-ceo-duck-ship-status.csv` (`pitfall --non-interactive`) |
-| 8 | Safe sandbox: test changes in isolation before touching main workspace | `docs/features/multi-tool/verify-canned-answer.sh` (Tier 2/3 DOGFOOD probe) |
-| 9 | Stable canned-answer rules: POSTPR/DOGFOOD/BUGREPORT/FASTPROBE/PRESHIP/etc. | `docs/rule-verify/INDEX.md` (`bash scripts/verify-all-rules.sh`) |
+| 8 | Safe sandbox: test changes in isolation before touching main workspace | `docs/plans/docs--features--multi-tool--verify-canned-answer/judge.md` (Tier 2/3 DOGFOOD probe; archived: `docs/legacy/judge-scripts/docs/features/multi-tool/verify-canned-answer.sh`) |
+| 9 | Stable canned-answer rules: POSTPR/DOGFOOD/BUGREPORT/FASTPROBE/PRESHIP/etc. | `docs/rule-verify/INDEX.md` (md playbooks under `docs/plans/`; archived: `docs/legacy/judge-scripts/scripts/verify-all-rules.sh`) |
 
 ### Auto-capture & extraction
 
 | # | Feature | Evidence |
 |---|---------|----------|
-| 10 | Auto-capture corrections from every session (Stop hook) | `docs/features/auto-capture/verify-canned-answer.sh` |
-| 11 | Real-session extraction judge: recall ≥ 100% on labeled fixtures | `docs/features/auto-capture/real-judge.sh` |
-| 12 | Correction-detector handles real JSONL session shapes | `docs/features/auto-capture/real-judge.sh` (extraction-judge probe) |
+| 10 | Auto-capture corrections from every session (Stop hook) | `docs/plans/docs--features--auto-capture--verify-canned-answer/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/auto-capture/verify-canned-answer.sh`) |
+| 11 | Real-session extraction judge: recall ≥ 100% on labeled fixtures | `docs/plans/docs--features--auto-capture--real-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/auto-capture/real-judge.sh`) |
+| 12 | Correction-detector handles real JSONL session shapes | `docs/plans/docs--features--auto-capture--real-judge/judge.md` extraction-judge probe (archived: `docs/legacy/judge-scripts/docs/features/auto-capture/real-judge.sh`) |
 
 ### Calibrator v2
 
 | # | Feature | Evidence |
 |---|---------|----------|
-| 13 | Calibrator emits `calibrator.adjustment` events on user-reject signals | `docs/features/calibrator-v2/run-judge.sh` |
-| 14 | Calibrator v2: Wilson LB + 5-tier confidence bands | `docs/features/calibrator-v2/verify-canned-answer.sh` |
-| 15 | Validator emits `validator.failure` events on bad rule patterns | `docs/features/calibrator-v2/run-judge.sh` |
+| 13 | Calibrator emits `calibrator.adjustment` events on user-reject signals | `docs/plans/docs--features--calibrator-v2--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/calibrator-v2/run-judge.sh`) |
+| 14 | Calibrator v2: Wilson LB + 5-tier confidence bands | `docs/plans/docs--features--calibrator-v2--verify-canned-answer/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/calibrator-v2/verify-canned-answer.sh`) |
+| 15 | Validator emits `validator.failure` events on bad rule patterns | `docs/plans/docs--features--calibrator-v2--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/calibrator-v2/run-judge.sh`) |
 
 ### Rule quality & matching
 
 | # | Feature | Evidence |
 |---|---------|----------|
-| 16 | Rule-quality validator: identical_patterns, confidence_range, missing_fields | `docs/features/rule-quality/run-judge.sh` |
-| 17 | Rule-quality validator: embedding_conflict detection | `docs/features/rule-quality/run-judge.sh` |
-| 18 | Rule-quality canned-answer verified | `docs/features/rule-quality/verify-canned-answer.sh` |
-| 19 | Matcher B-055: word-boundary guard prevents wrong_pattern over-fire | `docs/features/matcher-scope/run-judge.sh` |
-| 20 | Matcher scope: file_types / paths glob filtering correct | `docs/features/matcher-scope/run-judge.sh` |
+| 16 | Rule-quality validator: identical_patterns, confidence_range, missing_fields | `docs/plans/docs--features--rule-quality--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/rule-quality/run-judge.sh`) |
+| 17 | Rule-quality validator: embedding_conflict detection | `docs/plans/docs--features--rule-quality--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/rule-quality/run-judge.sh`) |
+| 18 | Rule-quality canned-answer verified | `docs/plans/docs--features--rule-quality--verify-canned-answer/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/rule-quality/verify-canned-answer.sh`) |
+| 19 | Matcher B-055: word-boundary guard prevents wrong_pattern over-fire | `docs/plans/docs--features--matcher-scope--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/matcher-scope/run-judge.sh`) |
+| 20 | Matcher scope: file_types / paths glob filtering correct | `docs/plans/docs--features--matcher-scope--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/matcher-scope/run-judge.sh`) |
 
 ### Team knowledge sharing & sync
 
 | # | Feature | Evidence |
 |---|---------|----------|
-| 21 | Three-layer knowledge scope: personal / team / global | `docs/features/team-share/run-judge.sh` |
-| 22 | Team-scope knowledge export/import between projects | `docs/features/team-share/run-judge.sh` |
-| 23 | Cross-machine sync via `teamagent sync push|pull` | `docs/features/xsync/run-judge.sh` |
-| 24 | `sync push` writes rules to remote git branch | `docs/features/xsync/run-judge.sh` |
-| 25 | `sync pull` merges remote rules into local store | `docs/features/xsync/run-judge.sh` |
+| 21 | Three-layer knowledge scope: personal / team / global | `docs/plans/docs--features--team-share--run-transfer-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/team-share/run-judge.sh`) |
+| 22 | Team-scope knowledge export/import between projects | `docs/plans/docs--features--team-share--run-transfer-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/team-share/run-judge.sh`) |
+| 23 | Cross-machine sync via `teamagent sync push|pull` | `docs/plans/docs--features--xsync--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/xsync/run-judge.sh`) |
+| 24 | `sync push` writes rules to remote git branch | `docs/plans/docs--features--xsync--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/xsync/run-judge.sh`) |
+| 25 | `sync pull` merges remote rules into local store | `docs/plans/docs--features--xsync--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/xsync/run-judge.sh`) |
 
 ### PII redaction
 
 | # | Feature | Evidence |
 |---|---------|----------|
-| 26 | PII redactor covers API keys, JWT, phone, credit card, AWS key | `docs/features/pii-redaction/run-judge.sh` |
-| 27 | PII redactor scrubs data before team-share export | `docs/features/pii-redaction/run-judge.sh` |
+| 26 | PII redactor covers API keys, JWT, phone, credit card, AWS key | `docs/plans/docs--features--pii-redaction--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/pii-redaction/run-judge.sh`) |
+| 27 | PII redactor scrubs data before team-share export | `docs/plans/docs--features--pii-redaction--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/pii-redaction/run-judge.sh`) |
 
 ### Multi-tool & IDE integration
 
 | # | Feature | Evidence |
 |---|---------|----------|
-| 28 | PreToolUse hook intercepts tool calls pre-execution | `docs/features/multi-tool/verify-canned-answer.sh` |
-| 29 | Stop hook scans AI narrative for avoidance patterns | `docs/features/multi-tool/verify-canned-answer.sh` |
-| 30 | AttributionBus emits structured attribution events | `docs/features/multi-tool/verify-canned-answer.sh` |
-| 31 | MCP server `check_pitfall` handshake (initialize/tools-list/tools-call) | `docs/features/mcp-server/run-judge.sh` |
-| 32 | `check_pitfall` calls into core matcher and returns matched rules | `docs/features/mcp-server/run-judge.sh` |
-| 33 | Cursor `.cursorrules` compiler: exports top-N rules as Cursor-compatible file | `docs/features/cursor-compiler/run-judge.sh` |
+| 28 | PreToolUse hook intercepts tool calls pre-execution | `docs/plans/docs--features--multi-tool--verify-canned-answer/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/multi-tool/verify-canned-answer.sh`) |
+| 29 | Stop hook scans AI narrative for avoidance patterns | `docs/plans/docs--features--multi-tool--verify-canned-answer/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/multi-tool/verify-canned-answer.sh`) |
+| 30 | AttributionBus emits structured attribution events | `docs/plans/docs--features--multi-tool--verify-canned-answer/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/multi-tool/verify-canned-answer.sh`) |
+| 31 | MCP server `check_pitfall` handshake (initialize/tools-list/tools-call) | `docs/plans/docs--features--mcp-server--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/mcp-server/run-judge.sh`) |
+| 32 | `check_pitfall` calls into core matcher and returns matched rules | `docs/plans/docs--features--mcp-server--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/mcp-server/run-judge.sh`) |
+| 33 | Cursor `.cursorrules` compiler: exports top-N rules as Cursor-compatible file | `docs/plans/docs--features--cursor-compiler--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/cursor-compiler/run-judge.sh`) |
 
 ### Doctor / install diagnostics
 
 | # | Feature | Evidence |
 |---|---------|----------|
-| 34 | `teamagent doctor` reports hook-registered status | `docs/features/doctor-install/run-judge.sh` |
-| 35 | `teamagent doctor` reports plugin-sync status | `docs/features/doctor-install/run-judge.sh` |
-| 36 | `teamagent doctor` reports mcp-reachable status | `docs/features/doctor-install/run-judge.sh` |
-| 37 | hook-registered PreToolUse hook detected correctly after install | `docs/features/hook-registered/run-judge.sh` |
+| 34 | `teamagent doctor` reports hook-registered status | `docs/plans/docs--features--doctor-install--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/doctor-install/run-judge.sh`) |
+| 35 | `teamagent doctor` reports plugin-sync status | `docs/plans/docs--features--doctor-install--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/doctor-install/run-judge.sh`) |
+| 36 | `teamagent doctor` reports mcp-reachable status | `docs/plans/docs--features--doctor-install--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/doctor-install/run-judge.sh`) |
+| 37 | hook-registered PreToolUse hook detected correctly after install | `docs/plans/docs--features--hook-registered--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/hook-registered/run-judge.sh`) |
 
 ### A/B benchmark
 
 | # | Feature | Evidence |
 |---|---------|----------|
-| 38 | A/B benchmark harness: arm-A (bare Claude) vs arm-B (TeamAgent rules) | `docs/features/ab-benchmark/run-judge.sh` |
-| 39 | Benchmark produces per-arm avoidance-rate metrics | `docs/features/ab-benchmark/run-judge.sh` |
-| 40 | Benchmark judge.json written with exit_code + metrics + evidence_dir | `docs/features/ab-benchmark/run-judge.sh` |
+| 38 | A/B benchmark harness: arm-A (bare Claude) vs arm-B (TeamAgent rules) | `docs/plans/docs--features--ab-benchmark--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/ab-benchmark/run-judge.sh`) |
+| 39 | Benchmark produces per-arm avoidance-rate metrics | `docs/plans/docs--features--ab-benchmark--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/ab-benchmark/run-judge.sh`) |
+| 40 | Benchmark judge.json written with exit_code + metrics + evidence_dir | `docs/plans/docs--features--ab-benchmark--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/ab-benchmark/run-judge.sh`) |
 
 ### CLI commands
 
@@ -189,7 +189,7 @@ user-visible VERIFIED rows; this doc covers everything.
 | 46 | `teamagent analyze` session analysis | `packages/cli/src/commands/analyze.ts` (pnpm test green) |
 | 47 | `teamagent review` PR-cycle review | `packages/cli/src/commands/review.ts` (pnpm test green) |
 | 48 | `teamagent install-hook` / `uninstall-hook` | `packages/cli/src/commands/install-hook.ts` (pnpm test green) |
-| 49 | `teamagent mcp-server` stdio MCP server entrypoint | `docs/features/mcp-server/run-judge.sh` |
+| 49 | `teamagent mcp-server` stdio MCP server entrypoint | `docs/plans/docs--features--mcp-server--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/mcp-server/run-judge.sh`) |
 
 ### Viral spread & auto-sync (M5)
 
@@ -214,13 +214,13 @@ user-visible VERIFIED rows; this doc covers everything.
 
 | # | Feature | Evidence |
 |---|---------|----------|
-| 59 | 首次运行向导：装完立刻提示 3 件可以做的事 + 记住进度 | `scripts/judge-first-run.sh` (J1–J6) |
+| 59 | 首次运行向导：装完立刻提示 3 件可以做的事 + 记住进度 | `docs/plans/scripts--judge-first-run/judge.md` (archived: `docs/legacy/judge-scripts/scripts/judge-first-run.sh`; J1–J6) |
 
 ### Landing CTA installer (#92)
 
 | # | Feature | Evidence |
 |---|---------|----------|
-| 60 | One-line `curl\|sh` installer at `release/install.sh` (POSIX sh): gates `node ≥ 22`, picks `npm`/`pnpm`, runs release-tarball install with deterministic exit codes (10/11/20/30) and idempotent re-run | `bash docs/features/install-sh/run-judge.sh` (6 scenarios: syntax / node-missing / node-old / node-ok-install with captured argv / idempotent-rerun / dash-portability) |
+| 60 | One-line `curl\|sh` installer at `release/install.sh` (POSIX sh): gates `node ≥ 22`, picks `npm`/`pnpm`, runs release-tarball install with deterministic exit codes (10/11/20/30) and idempotent re-run | `bash docs/features/install-sh/run-judge.sh` (6 scenarios: syntax / node-missing / node-old / node-ok-install with captured argv / idempotent-rerun / dash-portability; utility, retained per docs/legacy/judge-scripts/README.md exemption) |
 
 ### Seed packs / first-run interception (issue #88)
 
@@ -231,7 +231,7 @@ user-visible VERIFIED rows; this doc covers everything.
 
 | # | Feature | Evidence |
 |---|---------|----------|
-| 61 | Universal seed pack: 12 cross-language substring rules ship out-of-box (moment, /Users/, /home/, rm -rf /, chmod 777, eval(, git push --force, git reset --hard, --no-verify, dangerouslySetInnerHTML, pickle.loads, .env) | `docs/features/universal-pack/run-judge.sh`; `packages/cli/src/__tests__/seed-pack-universal.test.ts` (27 tests); `packages/teamagent/seed/packs/universal.jsonl` |
+| 61 | Universal seed pack: 12 cross-language substring rules ship out-of-box (moment, /Users/, /home/, rm -rf /, chmod 777, eval(, git push --force, git reset --hard, --no-verify, dangerouslySetInnerHTML, pickle.loads, .env) | `docs/plans/docs--features--universal-pack--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/universal-pack/run-judge.sh`); `packages/cli/src/__tests__/seed-pack-universal.test.ts` (27 tests); `packages/teamagent/seed/packs/universal.jsonl` |
 
 ### Pack management (#90)
 
@@ -243,7 +243,7 @@ user-visible VERIFIED rows; this doc covers everything.
 
 | # | Feature | Evidence |
 |---|---------|----------|
-| 62 | `teamagent pack list/add/remove` + `init` agent-driven prompt (v1 contract) | `bash docs/features/pack-cli/run-judge.sh` (10/10 checks PASS) |
+| 62 | `teamagent pack list/add/remove` + `init` agent-driven prompt (v1 contract) | `docs/plans/docs--features--pack-cli--run-judge/judge.md` (10/10 checks PASS; archived: `docs/legacy/judge-scripts/docs/features/pack-cli/run-judge.sh`) |
 
 ### Demo command (issue #93)
 
@@ -256,7 +256,7 @@ user-visible VERIFIED rows; this doc covers everything.
 
 | # | Feature | Evidence |
 |---|---------|----------|
-| 63 | `teamagent demo` three modes: default (poll `events.db` 60s for moment hit) / `--inline` (spawn real `bin-pre-tool-use.cjs` with mock stdin, render ANSI deny box; CI-safe) / `--record [path]` (emit `demo.tape`; spawn vhs if on PATH, else print install hint); legacy `teamagent demo hook` subcommand preserved | `docs/features/demo/run-judge.sh`; `packages/cli/src/__tests__/demo.test.ts` (14 tests covering argv parsing, ANSI render, inline spawn contract, vhs tape generation, and events.db poll match+timeout); `packages/cli/src/commands/demo.ts` |
+| 63 | `teamagent demo` three modes: default (poll `events.db` 60s for moment hit) / `--inline` (spawn real `bin-pre-tool-use.cjs` with mock stdin, render ANSI deny box; CI-safe) / `--record [path]` (emit `demo.tape`; spawn vhs if on PATH, else print install hint); legacy `teamagent demo hook` subcommand preserved | `docs/plans/docs--features--demo--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/demo/run-judge.sh`); `packages/cli/src/__tests__/demo.test.ts` (14 tests covering argv parsing, ANSI render, inline spawn contract, vhs tape generation, and events.db poll match+timeout); `packages/cli/src/commands/demo.ts` |
 
 ### Two-stage init (issue #91)
 
@@ -271,7 +271,7 @@ user-visible VERIFIED rows; this doc covers everything.
 
 | # | Feature | Evidence |
 |---|---------|----------|
-| 64 | Two-stage init: detached warmup + `~/.teamagent/.warmup-state.json` + auto-fallback to legacy substring matcher in PreToolUse/Stop until `vector_model` is `ready`; `teamagent doctor` reports `vector_model: ready / downloading (X%) / failed / stale_downloading / missing` | `docs/features/two-stage-install/run-judge.sh`; `packages/cli/src/__tests__/warmup-state.test.ts` (18 unit) + `warmup-state-integration.test.ts` (4 integration); `packages/cli/src/warmup-state.ts` |
+| 64 | Two-stage init: detached warmup + `~/.teamagent/.warmup-state.json` + auto-fallback to legacy substring matcher in PreToolUse/Stop until `vector_model` is `ready`; `teamagent doctor` reports `vector_model: ready / downloading (X%) / failed / stale_downloading / missing` | `docs/plans/docs--features--two-stage-install--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/two-stage-install/run-judge.sh`); `packages/cli/src/__tests__/warmup-state.test.ts` (18 unit) + `warmup-state-integration.test.ts` (4 integration); `packages/cli/src/warmup-state.ts` |
 
 ---
 

@@ -45,7 +45,7 @@ fixed in code → re-verified.
 `redactor.test.ts` source + commit-message audit trail.
 Live `pnpm vitest` skipped because worktree `node_modules` was missing.
 
-Future iterations should run live: `pnpm install && bash docs/features/pii-redaction/run-judge.sh`.
+Future iterations should run live: follow `docs/plans/docs--features--pii-redaction--run-judge/judge.md` (archived script: `docs/legacy/judge-scripts/docs/features/pii-redaction/run-judge.sh`).
 
 ## Artifacts
 

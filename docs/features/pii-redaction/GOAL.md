@@ -7,9 +7,9 @@ sources:
   commits: [c08b8fa, 79adc0d, 6147c9e]  # introducing-commit SHAs; legacy m4/wave6 era — no clean PR mapping
   issues: []
   related_docs:
-    - docs/features/pii-redaction/run-judge.sh
+    - docs/plans/docs--features--pii-redaction--run-judge/judge.md
+    - docs/plans/docs--features--pii-redaction--verify-canned-answer/judge.md
     - docs/features/pii-redaction/canned-answer-snippet.md
-    - docs/features/pii-redaction/verify-canned-answer.sh
     - packages/core/src/pii/redactor.ts
     - packages/core/src/pii/__tests__/redactor.test.ts
     - scripts/pii-redact-fixture.ts
@@ -35,7 +35,7 @@ last_composed: 2026-05-08
 
 - redactor.ts 的 `PATTERNS` 数组 + Luhn-checked CC 包含上述 5 类全部模式
 - redactor.test.ts 对每个公开类别至少 1 个 test 覆盖
-- 当跑 run-judge.sh 时（live 或 simulated），`judge.json` 满足
+- 当按 `docs/plans/docs--features--pii-redaction--run-judge/judge.md` 跑 judge playbook 时（live 或 simulated），`judge.json` 满足
   `vitest_fail_count == 0` 且 `leaked_pii_count == 0`
 - AWS key 的 ASIA/ABIA 前缀也被识别（不仅 AKIA）
 - credit card 的 Luhn 检查避免普通 13–19 位数字误判
@@ -60,8 +60,11 @@ last_composed: 2026-05-08
 
 ## Notes for verifier
 
-- **RUN harness**: `docs/features/pii-redaction/run-judge.sh`
+- **RUN harness**: follow `docs/plans/docs--features--pii-redaction--run-judge/judge.md`
   （mechanical, machine-readable, 输出 `.judge/pii/<run_id>/judge.json`）
+  [archived: `docs/legacy/judge-scripts/docs/features/pii-redaction/run-judge.sh`]
+- For verify-canned-answer checks: follow `docs/plans/docs--features--pii-redaction--verify-canned-answer/judge.md`
+  [archived: `docs/legacy/judge-scripts/docs/features/pii-redaction/verify-canned-answer.sh`]
 - worktree `node_modules` 缺失时走 code-frozen attestation：
   - 读 redactor.ts `PATTERNS` 数组确认 5 类全在
   - 读 redactor.test.ts 确认每类至少 1 test

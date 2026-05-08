@@ -9,23 +9,32 @@
                    |___/   Issue #87 — First-Run Judge Harness
 ```
 
-# judge-first-run.sh
+# judge-first-run (archived)
+
+> **PR #148 sweep note:** `scripts/judge-first-run.sh` has been archived to
+> `docs/legacy/judge-scripts/scripts/judge-first-run.sh`. Use the md playbook
+> at `docs/plans/scripts--judge-first-run/judge.md` instead — dispatch via
+> subagent or `claudefast -p` probe.
 
 Third-party judge harness for issue #87 (first-run welcome / wizard).
 
 ## Purpose
 
 Verifies the issue #87 feature slice — postinstall welcome + first-run wizard — without
-any self-evaluation. The script runs fixed tools, dumps raw evidence, and writes
+any self-evaluation. The playbook runs fixed tools, dumps raw evidence, and writes
 `judge.json`. A separate LLM reads only the JSON to render a verdict.
 
 ## How to Run
 
-From the worktree root:
+Dispatch the md playbook:
 
-```bash
-bash scripts/judge-first-run.sh
+```text
+claudefast -p "Follow docs/plans/scripts--judge-first-run/judge.md
+and return structured JSON {pass: bool, checks: [...], reasons: [string]}."
 ```
+
+Archived script reference (no longer at original path):
+`docs/legacy/judge-scripts/scripts/judge-first-run.sh`
 
 Output:
 - `OUT_DIR=.judge/<run_id>/` — all evidence lives here

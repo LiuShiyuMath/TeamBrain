@@ -34,10 +34,10 @@
    - Re-run safe (idempotent — `npm install -g` upgrades in place; no external state).
    - Does **not** auto-run `teamagent init` (CTA stays `curl|sh && teamagent init` per spec 决策 5).
 
-2. **`docs/features/install-sh/run-judge.sh`** (bash harness, `set -euo pipefail`):
+2. **`docs/features/install-sh/run-judge.sh`** (bash harness, `set -euo pipefail`; utility, retained per docs/legacy/judge-scripts/README.md exemption):
    - Six scenarios: `syntax`, `node_missing`, `node_old`, `node_ok_install`, `idempotent_rerun`, `dash_portability`.
    - Stub PATH dirs with controlled `node`/`npm` binaries; capture install argv to verify tarball URL was actually invoked.
-   - Emit `judge.json` at `tmp/.judge/install-sh/<run_id>/judge.json` with fixed schema (mirrors `docs/features/doctor-install/run-judge.sh:280-321`).
+   - Emit `judge.json` at `tmp/.judge/install-sh/<run_id>/judge.json` with fixed schema (mirrors `docs/legacy/judge-scripts/docs/features/doctor-install/run-judge.sh:280-321`).
    - Exit 0 only if `all_passed: true`.
 
 3. **`.github/workflows/release-branch.yml`** patch:
@@ -56,7 +56,7 @@
 ### How (sequenced)
 
 1. ✅ `release/install.sh` (POSIX sh, ≤80 lines, mode 0755).
-2. ✅ `docs/features/install-sh/run-judge.sh` (bash harness).
+2. ✅ `docs/features/install-sh/run-judge.sh` (bash harness; utility, retained per docs/legacy/judge-scripts/README.md exemption).
 3. ✅ Run judge locally; iterate to `all_passed: true`.
 4. ✅ Patch `.github/workflows/release-branch.yml`.
 5. ✅ Patch `README.md:25-37`.
@@ -81,7 +81,7 @@
 | Artifact | Path | Acceptance |
 |---|---|---|
 | Installer script | `release/install.sh` | POSIX sh, `set -eu`, `sh -n` clean, ≤80 lines, mode 0755 |
-| Judge harness | `docs/features/install-sh/run-judge.sh` | exits 0; `tmp/.judge/install-sh/<run>/judge.json` `all_passed: true` |
+| Judge harness | `docs/features/install-sh/run-judge.sh` (utility, retained per docs/legacy/judge-scripts/README.md exemption) | exits 0; `tmp/.judge/install-sh/<run>/judge.json` `all_passed: true` |
 | Workflow patch | `.github/workflows/release-branch.yml` | next push to main → release branch carries `install.sh` (mode 0755) |
 | README hero | `README.md:25-46` | curl\|sh one-liner replaces line 29; tarball preserved in `<details>` |
 | Feature row | `docs/PRODUCT-FEATURES.md` | counts 59 → 60; new row 60 with link to run-judge.sh |
@@ -93,7 +93,7 @@
 
 > Project rule "不要让代码自己评价自己". Harness writes fixed JSON; downstream LLM judge reads only `judge.json` + raw evidence files; must not trust prose.
 
-### Tool runner (`docs/features/install-sh/run-judge.sh`)
+### Tool runner (`docs/features/install-sh/run-judge.sh` — utility, retained per docs/legacy/judge-scripts/README.md exemption)
 
 Six scenarios run with `env -i PATH=<stub-dir> /bin/sh release/install.sh`:
 
@@ -141,7 +141,7 @@ Judge LLM verifies `all_passed=true` AND `npm_args_captured` contains literal `a
 pnpm install
 pnpm test
 pnpm typecheck
-bash docs/features/install-sh/run-judge.sh
+bash docs/features/install-sh/run-judge.sh  # utility, retained per docs/legacy/judge-scripts/README.md exemption
 # inspect: tmp/.judge/install-sh/*/judge.json → all_passed: true
 sh -n release/install.sh
 
@@ -149,6 +149,9 @@ sh -n release/install.sh
 gh api repos/libz-renlab-ai/TeamBrain/contents/install.sh?ref=release --jq '.path'
 curl -fsSL https://raw.githubusercontent.com/libz-renlab-ai/TeamBrain/release/install.sh | sh -n
 ```
+
+## Phase 2 fix log
+Resolved 2026-05-08 (iter-4 P3): line 40 citation updated from `docs/features/doctor-install/run-judge.sh:280-321` to `docs/legacy/judge-scripts/docs/features/doctor-install/run-judge.sh:280-321` so the cited line range resolves on disk. Commit see iter-4 fix commit.
 
 ## Risks & mitigations
 

@@ -25,6 +25,7 @@ introduces the harness, so reviewers can re-run the harness deterministically.
 
 | File | Captured from | Used by |
 |------|---------------|---------|
+| `help-output.txt` | `pnpm --silent teamagent --help 2>/dev/null` at worktree-mdplaybook HEAD `f2fee73` (2026-05-08, includes `pack` subcommand suite) | `docs/plans/scripts--judge-first-run/judge.md` J6 — exact match / anchor check for `teamagent pack` lines. |
 | `stats-engineer-baseline.txt` | `pnpm --silent teamagent stats 2>/dev/null` at branch `worktree-issue116` HEAD `866cb9a` (≡ `main` HEAD at PR-plan time, 2026-05-07) | `docs/feature-verification/duck-mode-judge-harness.md` §V4 — `engineer_view_diff = (engineer_view_lines - baseline_engineer_lines) / (baseline_engineer_lines + 1)`. Threshold ≤ 0.05. |
 
 ## Why a sibling README and not inline comments
@@ -49,6 +50,9 @@ pnpm --silent teamagent stats 2>/dev/null > docs/baselines/stats-engineer-baseli
 git add docs/baselines/stats-engineer-baseline.txt
 git commit -m "chore(m5): refresh stats engineer baseline at $(git rev-parse --short HEAD)"
 ```
+
+## Phase 2 fix log
+Resolved 2026-05-08: #4 (P3) regenerated `help-output.txt` from main repo `pnpm --silent teamagent --help`; diff was purely additive (4 new `pack list/add/remove` subcommand lines). Commit f2fee73.
 
 ## Capture-context caveat for `stats-engineer-baseline.txt` (2026-05-07)
 

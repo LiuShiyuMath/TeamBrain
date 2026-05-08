@@ -37,7 +37,7 @@ acceptance gates G1–G5 维度做映射。
 | 2 | `scripts/install-from-md.ts` + `package.json` 中 `install:from-md` script | ESM TypeScript，345 行 | Parser + Runner：用 node built-ins（fs/child_process/path）解析 fenced yaml 块、正则匹配 `common_errors[].pattern`、stdout 打印 fix；用 `filterSafeLines` 剥掉 `^\s+at` 栈帧避免 raw stack trace 泄漏；支持 `--dry-run` / `--step` / `--help` |
 | 3 | `.claude/skills/install-walkthrough/SKILL.md` | project-level skill，128 行 | Frontmatter 含全部 trigger 关键词（install / onboarding / pnpm 是什么 / 怎么安装 / 我装不上 / non-technical install / 帮我安装 / 安装步骤 等）；body 用中文白话讲解，命令永远 fenced bash block，不一次讲超过一步；不匹配的错误兜底走 GitHub issue 链接；当前 session 已加载 |
 | 4 | `packages/cli/src/__tests__/install-md-parser-contract.test.ts` + `fixtures/install-md/{happy.md,missing-pnpm.md}` | vitest，189 行 + 2 fixture | 11 个 it：4 schema contract（缺字段拒绝 + progress optional）/ 2 happy path / 3 error-fix matching（含 unrelated stderr 不命中）/ 2 no-stack-trace；用 `vi.spyOn(process,"exit")` 在 dynamic import 前防止 main() kill runner |
-| 5 | `scripts/verify-issue85-pr1.sh` | bash，521 行，`-rwxr-xr-x` | 第三方 judge harness：T1-T5 + final judge 写到 `.judge/issue85-pr1/<run_id>/`；用 canonical claudefast flags（stream-json + debug hooks）；`zsh -i -c` 优先解析 alias，PATH fallback；纯 python3 解析 stream-json + brace-depth scanner 抓最后一个 JSON object，无 jq 依赖；macOS bash 3.2 兼容；JSON 解析失败写 sentinel `{exit_code:2, error:"json_parse_failed", metrics.raw_excerpt}`；最终 exit 0=PASS / 1=FAIL |
+| 5 | `scripts/verify-issue85-pr1.sh` (archived: `docs/legacy/judge-scripts/scripts/verify-issue85-pr1.sh`; md playbook: `docs/plans/scripts--verify-issue85-pr1/judge.md`) | bash，521 行，`-rwxr-xr-x` | 第三方 judge harness：T1-T5 + final judge 写到 `.judge/issue85-pr1/<run_id>/`；用 canonical claudefast flags（stream-json + debug hooks）；`zsh -i -c` 优先解析 alias，PATH fallback；纯 python3 解析 stream-json + brace-depth scanner 抓最后一个 JSON object，无 jq 依赖；macOS bash 3.2 兼容；JSON 解析失败写 sentinel `{exit_code:2, error:"json_parse_failed", metrics.raw_excerpt}`；最终 exit 0=PASS / 1=FAIL |
 
 ## 覆盖的 acceptance gates（plan §3）
 
@@ -83,7 +83,7 @@ missing_evidence=[]。下面是第二次实跑数据：
      完全一致。
 
 3. **Verify harness 的 prompt 用 `bash scripts/install-from-md.ts`**（低优先级，未修）。
-   `scripts/verify-issue85-pr1.sh` T2/T3/T5 prompt 沿用 plan §3 原文，写
+   `docs/plans/scripts--verify-issue85-pr1/judge.md` (archived: `docs/legacy/judge-scripts/scripts/verify-issue85-pr1.sh`) T2/T3/T5 prompt 沿用 plan §3 原文，写
    `bash scripts/install-from-md.ts ...`；但 install-from-md.ts 是 TS 文件需要
    tsx runner（package.json 中真正入口是 `pnpm install:from-md` =
    `tsx scripts/install-from-md.ts`）。
@@ -113,7 +113,7 @@ missing_evidence=[]。下面是第二次实跑数据：
        extraction（line 463-464）两处都修，fallback sentinel 保留。
      - T1-T5 + final judge prompt 全部加 "Return ONLY bare JSON (no
        markdown fences, no prose)"（line 234, 261, 289, 316, 343, 389）。
-   - 验证：harness-fixer 报 `bash -n scripts/verify-issue85-pr1.sh` 语法 OK；
+   - 验证：harness-fixer 报 `bash -n docs/legacy/judge-scripts/scripts/verify-issue85-pr1.sh` 语法 OK（脚本已归档）；
      inline synthetic 测试 4 case（fenced+embedded-quotes / 末尾 prose /
      开头 prose / 无 JSON）全部 round-trip 正确。
 

@@ -42,9 +42,20 @@ installed and discoverable by both project-level skill loaders.
 
 ## How to re-run
 
-```bash
-# All from repo root.
-zsh   docs/canary-verify/verify-claudefast.sh
+These scripts are archived at `docs/legacy/judge-scripts/docs/canary-verify/`.
+Use the corresponding md playbooks via subagent or `claudefast -p` probe:
+
+| Step | md playbook |
+|------|-------------|
+| verify-claudefast | `docs/plans/docs--canary-verify--verify-claudefast/judge.md` |
+| verify-codex | `docs/plans/docs--canary-verify--verify-codex/judge.md` |
+| hardmatch | `docs/plans/docs--canary-verify--hardmatch/judge.md` |
+| tmux-export | `docs/plans/docs--canary-verify--tmux-export/judge.md` |
+
+Historical command reference (archived; no longer at these paths):
+
+```text
+zsh   docs/canary-verify/verify-claudefast.sh   # -> docs/legacy/judge-scripts/...
 bash  docs/canary-verify/verify-codex.sh
 bash  docs/canary-verify/hardmatch.sh
 bash  docs/canary-verify/tmux-export.sh

@@ -79,8 +79,8 @@
 
 | 项 | 已被覆盖于 |
 |---|---|
-| LWW + tombstone 并发正确性 | M5 单元测试 + `xsync/run-judge.sh` |
-| 闸门 1（secret scanner）准确率 | `docs/features/pii-redaction/run-judge.sh` |
+| LWW + tombstone 并发正确性 | M5 单元测试 + `docs/plans/docs--features--xsync--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/xsync/run-judge.sh`) |
+| 闸门 1（secret scanner）准确率 | `docs/plans/docs--features--pii-redaction--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/pii-redaction/run-judge.sh`) |
 | 闸门 2（scope classifier）二选一 | `packages/core/src/m5/__tests__/auto-share-pipeline.test.ts` |
 | post-merge hook fire | `m5-auto-demo.sh` Step 6+ |
 | infect / bootstrap | `m5-auto-demo.sh` Step 1 |

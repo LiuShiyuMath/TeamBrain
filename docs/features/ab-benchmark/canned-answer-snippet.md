@@ -34,6 +34,6 @@ Harness output: docs/features/ab-benchmark/judge.json
   Fields: run_id, recipe_id, metrics.reduction_pct, assertion.result (PASS/FAIL),
           per_probe[].{arm_a_mistake, arm_b_mistake, avoided}, evidence_dir
 
-Run: bash docs/features/ab-benchmark/run-judge.sh
-Verify: bash docs/features/ab-benchmark/verify-canned-answer.sh
+Run:    docs/plans/docs--features--ab-benchmark--run-judge/judge.md (archived: docs/legacy/judge-scripts/docs/features/ab-benchmark/run-judge.sh)
+Verify: docs/plans/docs--features--ab-benchmark--verify-canned-answer/judge.md (archived: docs/legacy/judge-scripts/docs/features/ab-benchmark/verify-canned-answer.sh)
 ```

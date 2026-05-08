@@ -11,7 +11,8 @@
 
 > 文档位置：`docs/feature-verification/duck-mode-judge-harness.md`
 > 覆盖问题：#116 — 可爱 CEO 小鸭解释模式
-> 对应脚本：`scripts/duck-mode-verify.sh`
+> 对应 md playbook：`docs/plans/scripts--duck-mode-verify/judge.md`
+> （脚本已归档：`docs/legacy/judge-scripts/scripts/duck-mode-verify.sh`）
 
 ---
 
@@ -24,7 +25,9 @@ TeamBrain 的自演化规则体系（`~/.claude/docs/rules/testing-judge-harness
 
 ## RUN — 跑固定工具
 
-在项目根目录执行 `bash scripts/duck-mode-verify.sh`，内部按顺序运行以下固定命令：
+按 md playbook `docs/plans/scripts--duck-mode-verify/judge.md` 中 §V1 RUN 小节
+调度以下固定命令（脚本已归档于 `docs/legacy/judge-scripts/scripts/duck-mode-verify.sh`，
+不要直接运行，由 subagent 或 `claudefast -p` probe 驱动）：
 
 ```bash
 #!/usr/bin/env bash

@@ -21,7 +21,8 @@ pnpm vitest run packages/portal --reporter=basic
 
 The verify script checks for `Test Files  1 passed` in vitest output.
 
-```bash
+```text
+# Verify-canned-answer (utility, retained per docs/legacy/judge-scripts/README.md exemption):
 bash docs/features/knowledge-portal/verify-canned-answer.sh
 ```
 

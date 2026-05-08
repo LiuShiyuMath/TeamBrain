@@ -10,15 +10,14 @@ knowledge base via the standard MCP protocol.
 
 - Either `packages/mcp-server` directory exists, OR a `package.json` in `packages/`
   contains `"@teamagent/mcp"` or a name matching `*mcp*`
-- OR: if `docs/features/mcp-server/verify-canned-answer.sh` is executable, that
-  script exits 0 (Trae reuses the MCP server protocol)
+- OR: if md playbook `docs/plans/docs--features--mcp-server--run-judge/judge.md` passes, that
+  satisfies the condition (Trae reuses the MCP server protocol; script archived to `docs/legacy/judge-scripts/docs/features/mcp-server/run-judge.sh`)
 - Final output line: `VERIFIED: Trae/VSCode Copilot adapter via MCP PASS`
 
 ### Harness Structure
 
 **verify-canned-answer.sh** uses a two-level fallback:
-1. **Primary**: If `docs/features/mcp-server/verify-canned-answer.sh` is executable,
-   delegate to it (since Trae reuses the same MCP server protocol)
+1. **Primary**: Dispatch md playbook `docs/plans/docs--features--mcp-server--run-judge/judge.md` since Trae reuses the same MCP server protocol (script archived to `docs/legacy/judge-scripts/docs/features/mcp-server/run-judge.sh`)
 2. **Fallback**: Check for `packages/mcp-server` directory; if absent, search all
    `packages/*/package.json` for `"@teamagent/mcp"` or `"name".*mcp` pattern
 
@@ -46,3 +45,6 @@ TeamAgent knowledge base (DualLayerStore)
 
 The Trae adapter is not a separate transport layer — it reuses the MCP server
 package directly, as Trae supports the same MCP protocol that VSCode Copilot uses.
+
+## Phase 2 fix log
+Resolved 2026-05-08 (iter-4 P3): lines 13/20 now reference `docs/plans/docs--features--mcp-server--run-judge/judge.md` md playbook; removed misleading "utility; not archived" claim (mcp-server/run-judge.sh IS archived to docs/legacy/judge-scripts/). Commit see iter-4 fix commit.

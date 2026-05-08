@@ -14,15 +14,12 @@ The MCP server (`packages/mcp-server`) registers a `check_pitfall` tool that que
 
 ## Verification
 
-```bash
-# Delegates to mcp-server verify if available
-bash docs/features/mcp-server/verify-canned-answer.sh
-
+```text
 # Fallback: confirm packages/mcp-server directory exists
 ls packages/mcp-server
 
-# Run verify script
+# Run check-pitfall verify (utility, retained per docs/legacy/judge-scripts/README.md exemption):
 bash docs/features/mcp-check-pitfall/verify-canned-answer.sh
 ```
 
-PASS requires either `mcp-server/verify-canned-answer.sh` to pass (delegated), or `packages/mcp-server` directory to exist as a minimum structural check, yielding `VERIFIED: AI MCP check_pitfall real-time lookup PASS`.
+PASS requires either mcp-server judge playbook to pass (delegated), or `packages/mcp-server` directory to exist as a minimum structural check, yielding `VERIFIED: AI MCP check_pitfall real-time lookup PASS`.

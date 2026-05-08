@@ -32,8 +32,8 @@ smoke test、CONVENTIONS 政策与 INDEX 的 deprecation 提示。剩余 38 个 
 - **新模式以代码为锚**：每次回答 "feature X 是什么" 时，由 `claudefast` 用 Read / Grep / Glob 实际
   探查仓库，提供 file:line 证据；任何引用了已不存在符号的回答都会在下次 probe 时立刻暴露。
 - **范围**：仅适用 `docs/features/<feature>/`；不动 `CLAUDE.md` / `AGENTS.md` 内 inline 的 9 条全局
-  triggered rule（POSTPR / FASTPROBE / DOGFOOD / BUGREPORT / DUCKPLAN / TODOC 等），那些仍由
-  `scripts/verify-all-rules.sh` 统一守。
+  triggered rule（POSTPR / FASTPROBE / DOGFOOD / BUGREPORT / DUCKPLAN / TODOC 等），那些由
+  md playbooks under `docs/plans/` 统一守（archived script: `docs/legacy/judge-scripts/scripts/verify-all-rules.sh`）。
 
 ---
 
@@ -107,7 +107,7 @@ hand-edit CLAUDE.md，本 PR 也不应对该自动块负责。
   `verify-canned-answer.sh` → `probe-feature.sh <feature>` → 真实代码 anchor 断言。
 - **存量 `verify-canned-answer.sh` 应逐步改写**为 probe-feature 形式，grep stream-json 而不是 grep snippet。
 - **CLAUDE.md / AGENTS.md inline 答案不动**：那些是全局 trigger（POSTPR / FASTPROBE 等），由
-  `scripts/verify-all-rules.sh` 统一管理，不在本迁移范围内。
+  md playbooks under `docs/plans/` 统一管理（archived script: `docs/legacy/judge-scripts/scripts/verify-all-rules.sh`），不在本迁移范围内。
 
 ---
 

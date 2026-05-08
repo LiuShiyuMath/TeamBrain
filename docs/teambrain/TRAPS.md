@@ -86,10 +86,10 @@ Start at P0 — these are the traps that have caused actual production incidents
 - **category**: ops
 - **trigger**: Closing a real task without running the executable archive-gate harness; relying on convention or visual review of `docs/teambrain/evidence/<run_id>/` instead of a fixed binary
 - **wrong_pattern**: Reviewer eyeballs the evidence dir, agent claims "all 6 files present", or VERIFY recipe leaves `verify_command` as prose like "ensure archive gate is satisfied" — no executable. ⚠️ archive-gate-by-convention loophole.
-- **right_pattern**: Run `scripts/verify/tbrain-verify.sh <recipe_id> <run_id>` (binary closes GAP-1 + GAP-2 from Real Task #1 evidence). It writes raw `.judge/<run_id>/judge.json` with `metrics.archive_present`, `metrics.archive_missing`, and `missing_evidence`; a separate LLM judge then reads only the JSON file path (per AP-8 / GAP-3). Exit non-zero blocks the merge.
+- **right_pattern**: Run the harness via md playbook `docs/plans/scripts--verify--tbrain-verify/judge.md` (archived script: `docs/legacy/judge-scripts/scripts/verify/tbrain-verify.sh`; binary closed GAP-1 + GAP-2 from Real Task #1 evidence). It writes raw `.judge/<run_id>/judge.json` with `metrics.archive_present`, `metrics.archive_missing`, and `missing_evidence`; a separate LLM judge then reads only the JSON file path (per AP-8 / GAP-3). Exit non-zero blocks the merge.
 - **evidence_link**: `docs/teambrain/evidence/20260502T000000Z-real-task-1/failures.md` GAP-2 ("archive gate is enforced by convention, not by a CI check") and GAP-1 ("no automated harness binary lives in repo yet")
 - **severity**: P0
-- **verify_command**: `scripts/verify/tbrain-verify.sh "${RECIPE_ID:?set RECIPE_ID}" "${RUN_ID:?set RUN_ID}" >/dev/null && jq -e '.missing_evidence == false and .metrics.archive_missing == 0 and .metrics.canonical_paths_missing == 0' ".judge/${RUN_ID}/judge.json"` — exit 0 = PASS; non-zero exit or `missing_evidence=true` = FAIL. Negative case for a fresh agent: invoking with `RUN_ID=20260101T000000Z-nonexistent` returns exit 2 and `missing_evidence=true`.
+- **verify_command**: `claudefast -p "Follow docs/plans/scripts--verify--tbrain-verify/judge.md with RECIPE_ID=${RECIPE_ID:?set RECIPE_ID} RUN_ID=${RUN_ID:?set RUN_ID}"` then `jq -e '.missing_evidence == false and .metrics.archive_missing == 0 and .metrics.canonical_paths_missing == 0' ".judge/${RUN_ID}/judge.json"` — exit 0 = PASS; non-zero exit or `missing_evidence=true` = FAIL. Negative case for a fresh agent: invoking with `RUN_ID=20260101T000000Z-nonexistent` returns exit 2 and `missing_evidence=true`. (archived: `docs/legacy/judge-scripts/scripts/verify/tbrain-verify.sh`)
 
 ---
 
@@ -99,9 +99,9 @@ Each GAP surfaced by Real Task #1 (recorded under `evidence/20260502T000000Z-rea
 
 | GAP | Closure entry | Closure commit | verify_command (exit 0 = closure intact) |
 |-----|---------------|----------------|------------------------------------------|
-| GAP-1: no automated harness binary in `scripts/verify/` | `TRAP-OPS-012` (this file, P0) | `9230b3c` | `test -x scripts/verify/tbrain-verify.sh && bash scripts/verify/tbrain-verify.sh VERIFY-TBRAIN-001 20260502T000000Z-real-task-1 >/dev/null` |
+| GAP-1: no automated harness binary in `scripts/verify/` | `TRAP-OPS-012` (this file, P0) | `9230b3c` | `test -f docs/plans/scripts--verify--tbrain-verify/judge.md && claudefast -p "Follow docs/plans/scripts--verify--tbrain-verify/judge.md with RECIPE_ID=VERIFY-TBRAIN-001 RUN_ID=20260502T000000Z-real-task-1" >/dev/null` (archived: `docs/legacy/judge-scripts/scripts/verify/tbrain-verify.sh`) |
 | GAP-2: archive gate enforced by convention only | `TRAP-OPS-012` `verify_command` (this file, P0) | `83c54b6` | `jq -e '.missing_evidence == false and .metrics.archive_missing == 0' .judge/20260502T000000Z-real-task-1/judge.json` *(historical run; for new runs replace the path with `.judge/${RUN_ID}/judge.json`)* |
-| GAP-3: judge prompt splices file contents instead of paths | `AP-8` + `VERIFY-CLAUDE-007` in `agent_rules/claude.md` | `181ac5f` | `! grep -RnE 'claudefast.*\$\((cat\|head\|tail) ' scripts/verify/ 2>/dev/null` |
+| GAP-3: judge prompt splices file contents instead of paths | `AP-8` + `VERIFY-CLAUDE-007` in `agent_rules/claude.md` | `181ac5f` | `! grep -RnE 'claudefast.*\$\((cat\|head\|tail) ' docs/plans/ 2>/dev/null` (archived scripts at `docs/legacy/judge-scripts/scripts/verify/`) |
 | GAP-4: `archive_dir` not enumerated in `judge-summary.json` schema | `evidence/README.md` "judge-summary.json required fields" table | `5819ab6` | `grep -qF '| `archive_dir` |' docs/teambrain/evidence/README.md` |
 
 Also recorded as anti-mock evidence under `evidence/20260502T000000Z-real-task-2/failures.md` §"TeamBrain framework gaps tracked from Real Task #1", which marks all four GAPs **CLOSED** with the same commit SHAs.

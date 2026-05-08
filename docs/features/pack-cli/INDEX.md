@@ -80,7 +80,7 @@ Any change to markers, observed-file ordering, or section field names is a
 - Unit: `pnpm test packages/core/src/packs/__tests__/packs.test.ts`
 - Unit: `pnpm test packages/cli/src/__tests__/pack.test.ts`
 - Integration: `pnpm test packages/cli/src/__tests__/init-pack-prompt.test.ts`
-- Judge harness: `bash docs/features/pack-cli/run-judge.sh` (exit 0 on PASS)
+- Judge harness: `bash docs/features/pack-cli/run-judge.sh (utility, retained per docs/legacy/judge-scripts/README.md exemption)`
 - 1+2+3 verification per `docs/feature-verification.md`: claudefast vs codex
   exec on `pnpm teamagent pack list --json`, byte-identical via `jq -S`.
 

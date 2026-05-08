@@ -34,6 +34,6 @@ Judge output: .judge/attribution-bus/<run_id>/judge.json
           drain_count, sub_count_before_unsub, buf_after_drain, bus_ok,
           overall_pass, evidence_dir, stdout_path
 
-Run: bash docs/features/attribution-bus/run-judge.sh
-Verify: bash docs/features/attribution-bus/verify-canned-answer.sh
+Run:    docs/plans/docs--features--attribution-bus--run-judge/judge.md (archived: docs/legacy/judge-scripts/docs/features/attribution-bus/run-judge.sh)
+Verify: docs/plans/docs--features--attribution-bus--verify-canned-answer/judge.md (archived: docs/legacy/judge-scripts/docs/features/attribution-bus/verify-canned-answer.sh)
 ```

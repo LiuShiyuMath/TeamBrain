@@ -16,7 +16,7 @@ Per `docs/specs/2026-04-13-teamagent-design.md:570-622`, the MCP Server will exp
 
 ### Judge harness
 
-`docs/features/mcp-server/run-judge.sh` sends 3 JSON-RPC messages over stdio:
+`docs/plans/docs--features--mcp-server--run-judge/judge.md` (archived: `docs/legacy/judge-scripts/docs/features/mcp-server/run-judge.sh`) sends 3 JSON-RPC messages over stdio:
 1. `initialize` — verifies `protocolVersion` + `serverInfo` in response
 2. `tools/list` — verifies `check_pitfall` appears in tool list
 3. `tools/call check_pitfall` — verifies non-empty `content` returned

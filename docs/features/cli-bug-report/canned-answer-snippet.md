@@ -34,5 +34,5 @@ Auto-collector:
   Paste output into https://github.com/libz-renlab-ai/TeamBrain/issues/new
 
 Run: pnpm teamagent bug-report --help
-Verify: bash docs/features/cli-bug-report/verify-canned-answer.sh
+Verify: docs/plans/docs--features--cli-bug-report--verify-canned-answer/judge.md (archived: docs/legacy/judge-scripts/docs/features/cli-bug-report/verify-canned-answer.sh)
 ```

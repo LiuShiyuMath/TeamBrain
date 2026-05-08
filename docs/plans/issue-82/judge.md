@@ -22,7 +22,7 @@ This is the **MD playbook** dispatched by the main agent (or a maintainer runnin
 - `docs/superpowers/specs/2026-05-06-m5-team-viral-sync-design.md`
 - `docs/features/team-share.md`
 - `docs/features/multi-tool.md`
-- `docs/features/xsync/run-judge.sh`, `docs/features/pii-redaction/run-judge.sh`, `scripts/m5-auto-demo.sh`
+- `docs/plans/docs--features--xsync--run-judge/judge.md` (md playbook; xsync/run-judge.sh archived to docs/legacy/judge-scripts/), `docs/plans/docs--features--pii-redaction--run-judge/judge.md` (md playbook; pii-redaction/run-judge.sh archived), `scripts/m5-auto-demo.sh`
 - The new e2e rig: `tests/e2e/m5-teaching/` or `packages/cli/src/__tests__/m5-e2e-teaching.test.ts`
 - Latest `docs/research/<DATE>-personal-use-3people/subject-1/` from #81's follow-up impl PR (existence check only)
 
@@ -72,8 +72,8 @@ Pass condition: aggregate `hits_in_prose == 0`. The whitelisted-context counter 
 
 Sub-agent runs each of the 7 M5 already-shipped verifications:
 
-1. `bash docs/features/xsync/run-judge.sh`
-2. `bash docs/features/pii-redaction/run-judge.sh`
+1. Dispatch md playbook `docs/plans/docs--features--xsync--run-judge/judge.md` (script archived; do not invoke `docs/features/xsync/run-judge.sh` directly — archived to `docs/legacy/judge-scripts/docs/features/xsync/run-judge.sh`)
+2. Dispatch md playbook `docs/plans/docs--features--pii-redaction--run-judge/judge.md` (script archived; do not invoke `docs/features/pii-redaction/run-judge.sh` directly — archived to `docs/legacy/judge-scripts/docs/features/pii-redaction/run-judge.sh`)
 3. `bash scripts/m5-auto-demo.sh`
 4. `pnpm exec vitest run packages/core/src/m5/__tests__/lww-merge.test.ts`
 5. `pnpm exec vitest run packages/core/src/m5/__tests__/secret-scanner.test.ts`
@@ -126,6 +126,9 @@ If the impl PR fires before any subject-* exists, this step fails; the impl PR i
 ## Step 6 — Aggregate verdict
 
 Main agent reads `step-{1..5}/raw.json`, applies pass conditions, writes `verdict.json` per the schema above. Failure on any step is a hard block.
+
+## Phase 2 fix log
+Resolved 2026-05-08 (iter-4 P2): §V1 RUN steps 1+2 now dispatch md playbooks (docs--features--xsync--run-judge, docs--features--pii-redaction--run-judge) instead of broken archived .sh paths; Inputs dependency note updated to match. Commit see iter-4 fix commit.
 
 ## What this judge harness does NOT do
 
