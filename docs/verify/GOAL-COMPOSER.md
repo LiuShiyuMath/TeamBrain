@@ -19,6 +19,7 @@
 | 关联 issue(s) | PR body 里 `Refs #<i>` / `Closes #<i>` 提取 → `gh issue view` | 用户痛点 + 原始需求 |
 | Feature owner | PR `--json author` + commit `git log --author` | 决策权人；歧义找他 |
 | `docs/features/<name>/` 旁路 docs | `ls docs/features/<name>/` 全读 | 实现细节 + 已有 anti-probe |
+| `docs/features/<name>.md` 主文档 | `Read docs/features/<name>.md`（注意：**file 和 dir 同名共存是项目常见模式**，不是冲突） | 总览、架构图、状态表、verify 命令 |
 
 ## Composer 工作流
 

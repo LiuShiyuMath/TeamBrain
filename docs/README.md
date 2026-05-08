@@ -57,7 +57,8 @@ the indexes below to choose what to read first.
    autonomous loop the main agent runs per product feature — composes
    GOAL.md from 5 sources, calls JUDGE, then `--bare` META-JUDGE decides
    STILL_MOVING / STUCK_REPEATING / STUCK_DESIGN_FLAW. See also
-   [verify/GOAL-COMPOSER.md](verify/GOAL-COMPOSER.md) and
+   [verify/GOAL-COMPOSER.md](verify/GOAL-COMPOSER.md),
+   [verify/JUDGE.md](verify/JUDGE.md), and
    [verify/META-JUDGE.md](verify/META-JUDGE.md).
 
 ### Milestone Work

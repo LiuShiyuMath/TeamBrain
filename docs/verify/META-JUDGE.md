@@ -53,11 +53,19 @@ Output ONLY this JSON (no prose):
 ## 调用方式 — 必须 `--bare`
 
 ```bash
-claudefast --bare -p \
-  --output-format json \
-  --max-tokens 800 \
-  "<META-JUDGE prompt above>"
+timeout 180 claudefast --bare -p "<META-JUDGE prompt above>" < /dev/null > meta-out.txt 2>&1
 ```
+
+### 关键 flags 经验（dogfood 验证 2026-05-08, claudefast 2.1.133）
+
+| flag | 用 / 不用 |
+|---|---|
+| `--bare` | ✅ 必须 — 否则 Stop hook 会把 `<self-report>` block 注进输出 |
+| `< /dev/null` | ✅ 必须 — 不加会有 3s stdin warning |
+| `--max-turns N` | ❌ 不加 — N=1 会 hard fail with `Reached max turns (1)` |
+| `--max-budget-usd $X` | ❌ 不加（默认 $0.10 不够 1.4KB 提示） |
+| `--output-format json` | ⚠️ 可选 — prompt 里要求 JSON-only 已足够 |
+| `--max-tokens` | ❌ 该 flag 不存在 |
 
 ### 为什么 `--bare`
 

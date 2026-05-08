@@ -28,17 +28,39 @@
 
 ## Step 2 · RUN
 
-- 主 agent 决定 RUN harness（每 feature 不同，参考 `docs/features/<name>/`）
+主 agent 按以下顺序找 RUN harness：
+
+1. `docs/features/<name>/run-judge.sh`（如果存在）
+2. `docs/features/<name>/verify-canned-answer.sh`（canned-answer 路径）
+3. `packages/cli/src/__tests__/<related>.test.ts`（按 `PRODUCT-FEATURES.md` evidence 字段提示找）
+4. `pnpm teamagent <subcommand>`（CLI feature）
+5. `AskUserQuestion` — 真的找不到 harness 时问 owner
+
+执行：
+
 - dump trace 到 `/tmp/verify-<feature>-<ts>.txt`
 - **不要求 trace 结构化**；judge 看不懂时下一轮主 agent 决定加什么 logging
 
+### worktree `node_modules` 缺失时的降级：code-frozen attestation
+
+worktree 未跑 `pnpm install` 时，**不要**硬跑 install（要几分钟）。改用：
+
+- 读 RUN harness **源码**里的断言（如 `expect(metric).toBe(...)`）
+- 读最近一次成功 verify 的 evidence 文件（如 `docs/features/<name>.md` 里 verification 记录行）
+- 拼成 trace.txt 并标记 `RUN status: SKIPPED, code-frozen attestation`
+- JUDGE 仍跑——这一轮证明的是「代码意图与上次验证记录一致」，不是「现在仍 work」
+- iteration record 里写 `run_mode: code-frozen-attestation`
+- 装好依赖的 worktree 里再走一次真实 RUN，覆盖本条 attestation
+
 ## Step 3 · JUDGE（注意：**不**用 `--bare`）
 
+详细 prompt 模板 / flag 矩阵 / self-report 干扰处理见 [JUDGE.md](JUDGE.md)。
+
 ```bash
-claudefast -p "<JUDGE prompt with trace + GOAL>"
+timeout 180 claudefast -p "<JUDGE prompt with trace + GOAL>" < /dev/null > judge-out.txt 2>&1
 ```
 
-解析 verdict：
+解析 verdict（**取第一行 JSON**；后面会带 `<self-report>` 块，整段忽略）：
 
 - PASS → 跳 Step 6
 - FAIL / INCONCLUSIVE → Step 4
