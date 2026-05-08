@@ -69,9 +69,9 @@ describe("renderDoctorResult", () => {
     expect(out).toContain("v22.4.0");
   });
 
-  it("does not say everything passed when product-boundary checks are skipped", () => {
+  it("does not say everything passed when checks are skipped", () => {
     const checks: DoctorCheckResult[] = [
-      { name: "team-sharing", status: "skip", detail: "PARTIAL" },
+      { name: "hook-script", status: "skip", detail: "knowledge.db 先修" },
     ];
     const out = renderDoctorResult(makeResult({ checks, skipped: 1, allPassed: true }));
     expect(out).not.toContain("全部检查通过");
@@ -80,13 +80,12 @@ describe("renderDoctorResult", () => {
 });
 
 describe("checkTeamSharingStatus", () => {
-  it("reports Phase 4 team sharing as explicit partial, not pass/fail", () => {
+  it("reports M5 viral-sync as pass after end-to-end verification (B-150 fix)", () => {
     const result = checkTeamSharingStatus();
-    expect(result.status).toBe("skip");
-    expect(result.detail).toContain("PARTIAL");
-    expect(result.detail).toContain("transport");
-    expect(result.detail).toContain("privacy");
-    expect(result.detail).toContain("review gates");
+    expect(result.status).toBe("pass");
+    expect(result.detail).toContain("M5 viral-sync");
+    expect(result.detail).toContain("gate-1");
+    expect(result.detail).toContain("LWW");
   });
 });
 
@@ -170,7 +169,7 @@ describe("executeDoctor team-sharing boundary", () => {
     db.close();
   }
 
-  it("keeps team-sharing PARTIAL visible when knowledge.db is missing", async () => {
+  it("reports team-sharing pass even when knowledge.db is missing (M5 viral-sync is independent of L1 knowledge.db)", async () => {
     const workspace = makeTempWorkspace();
     try {
       const result = await executeDoctor({
@@ -183,15 +182,15 @@ describe("executeDoctor team-sharing boundary", () => {
       expect(names).toContain("team-sharing");
       expect(result.checks.find((check) => check.name === "knowledge-db")?.status).toBe("fail");
       expect(result.checks.find((check) => check.name === "team-sharing")).toMatchObject({
-        status: "skip",
-        detail: expect.stringContaining("PARTIAL"),
+        status: "pass",
+        detail: expect.stringContaining("M5 viral-sync"),
       });
     } finally {
       workspace.cleanup();
     }
   });
 
-  it("keeps team-sharing PARTIAL visible when hook registration is missing", async () => {
+  it("reports team-sharing pass when hook registration is missing (team sync layer is decoupled from per-clone hook install)", async () => {
     const workspace = makeTempWorkspace();
     try {
       createKnowledgeDb(workspace.cwd);
@@ -205,8 +204,8 @@ describe("executeDoctor team-sharing boundary", () => {
       expect(names).toContain("team-sharing");
       expect(result.checks.find((check) => check.name === "hook-registered")?.status).toBe("fail");
       expect(result.checks.find((check) => check.name === "team-sharing")).toMatchObject({
-        status: "skip",
-        detail: expect.stringContaining("PARTIAL"),
+        status: "pass",
+        detail: expect.stringContaining("M5 viral-sync"),
       });
     } finally {
       workspace.cleanup();

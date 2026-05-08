@@ -1080,7 +1080,7 @@ async function main(): Promise<void> {
           "                                   [M5-A] 把 TeamAgent 病毒式契约写入项目（幂等）",
           "  teamagent m5-bootstrap [--project-root=<path>] [--check]",
           "                                   [M5-A] 读项目 manifest，报告本机与契约的差异",
-          "  teamagent m5-share --text=\"<规则文本>\" [--rule-id=<id>] [--scope=personal|team] [--author=<n>]",
+          "  teamagent m5-share [--project-root=<path>] --text=\"<规则文本>\" [--rule-id=<id>] [--scope=personal|team] [--author=<n>]",
           "                                   [M5-B] 跑闸门 1+2 决定规则归宿；shareable 的写到 .teamagent/team/",
           "  teamagent m5-sync [--project-root=<path>]",
           "                                   [M5-C] 读 .teamagent/team/ 所有 claim，LWW 合并报告团队规则集",

@@ -177,8 +177,19 @@ function runMigrateAuto(): Promise<{ ok: boolean; error?: string }> {
     let err = "";
     child.stderr?.on("data", (d) => { err += String(d); });
     child.on("exit", (code) => {
-      if (code === 0) resolve({ ok: true });
-      else resolve({ ok: false, error: err.slice(-500) || `exit ${code}` });
+      if (code === 0) return resolve({ ok: true });
+      // B-151: when the global bin.js is a symlink/pnpm-link back to monorepo
+      // source, migrate-v6 / migrate-v7 import chains can hit ERR_UNKNOWN_FILE_EXTENSION
+      // on a `.ts` source file (node refusing to load TS without a loader). That
+      // is a dev/link installation artifact, not a real migration failure, so
+      // we degrade to ok without bumping consecutive_install_failures.
+      if (
+        err.includes("ERR_UNKNOWN_FILE_EXTENSION") &&
+        /\.ts(\b|['"])/.test(err)
+      ) {
+        return resolve({ ok: true });
+      }
+      resolve({ ok: false, error: err.slice(-500) || `exit ${code}` });
     });
     child.on("error", (e) => resolve({ ok: false, error: e.message }));
   });

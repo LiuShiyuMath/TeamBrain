@@ -1,3 +1,6 @@
+import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import * as path from "node:path";
 import { parseManifest, computeBootstrapDiff } from "@teamagent/core";
 import { FsBootstrap } from "@teamagent/adapters/m5/fs-bootstrap";
 import type { BootstrapDiff } from "@teamagent/types";
@@ -21,6 +24,8 @@ export interface M5BootstrapResult {
     teamagent_install_command?: string;
     skills_pending?: string[];
     hooks_pending?: string[];
+    /** B-150: whether `git config core.hooksPath .githooks` was set on this clone. */
+    git_hookspath_set?: boolean;
   };
 }
 
@@ -81,6 +86,23 @@ export async function runM5Bootstrap(
   }
   if (diff.install_hooks.length > 0) {
     applied.hooks_pending = diff.install_hooks;
+  }
+
+  // B-150: viral propagation needs `core.hooksPath = .githooks` on this clone
+  // so that the post-merge hook fires after every git pull. m5-infect sets it
+  // for the originator; bootstrap --apply sets it for downstream teammates
+  // who clone the repo. Idempotent — re-runs are safe.
+  if (existsSync(path.join(opts.projectRoot, ".githooks"))) {
+    try {
+      execSync("git config core.hooksPath .githooks", {
+        cwd: opts.projectRoot,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      applied.git_hookspath_set = true;
+    } catch {
+      applied.git_hookspath_set = false;
+    }
   }
 
   return { diff, applied };

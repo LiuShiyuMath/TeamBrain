@@ -227,18 +227,33 @@ async function main() {
         ? `向量模型预热失败, 首次 embed 会按需下载 (~5–10s)`
         : "向量模型: 跳过预热 (TEAMAGENT_SKIP_WARMUP=1)";
 
+  // B-152: previously the banner always said "✨ TeamAgent 安装成功" even when
+  // install-user-hook failed (e.g., monorepo dev mode where dist/bin.js is
+  // missing). That misled users into thinking SessionStart would auto-trigger.
+  // Now the banner reflects the real state.
+  const hookOk = userHookStatus === "registered";
+  const headerLine = hookOk
+    ? "✨ TeamAgent 安装成功"
+    : "⚠️  TeamAgent 部分安装 — 用户级 hook 注册失败";
+  const closingLine = hookOk
+    ? "✅ 装好啦 🎉 立刻可以做的 3 件事:"
+    : "⚠️  装了但没完全跑通。SessionStart hook 没装 → 不会自动 init 新项目。详情:";
+  const nextLine = hookOk
+    ? "   · 下一步  : 直接打开 Claude Code, 任何项目首次开会自动 init"
+    : `   · 下一步  : 看 ${setupLogPath} 排查；修好后跑 \`teamagent install-user-hook\``;
+
   process.stdout.write(
     duckify([
       "",
       "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-      "✨ TeamAgent 安装成功",
+      headerLine,
       `   · 归因渲染: verbose 模式 (TEAMAGENT_VISIBILITY=smart 可调)`,
       `   · 知识种子: ${ruleMsg}`,
       `   · 自动初始化: ${userHookMsg}`,
       `   · 向量模型  : ${warmupMsg}`,
-      "   · 下一步  : 直接打开 Claude Code, 任何项目首次开会自动 init",
+      nextLine,
       "",
-      "✅ 装好啦 🎉 立刻可以做的 3 件事:",
+      closingLine,
       "   1. teamagent skeleton-demo   — 跑最小学习闭环 demo，看系统怎么记住一条经验",
       "   2. teamagent stats           — 看自己 brain 学了多少经验",
       "   3. teamagent --help          — 看完整命令列表",

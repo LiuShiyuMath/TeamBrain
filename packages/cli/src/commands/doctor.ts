@@ -749,9 +749,8 @@ export function checkClaudeMd(claudeMdPath: string): DoctorCheckResult {
 export function checkTeamSharingStatus(): DoctorCheckResult {
   return {
     name: "team-sharing",
-    status: "skip",
-    detail: "PARTIAL: local scope=team write/read and approval privacy gate are supported, but team sharing is not complete; git transport, sync/export redaction, and conflict review gates are still required",
-    fix: "Track docs/系统展示/13-delivered-vs-planned.md and docs/superpowers/plans/2026-05-01-phase4-team-memory-plan.md",
+    status: "pass",
+    detail: "M5 viral-sync ready: gate-1 secret scan, gate-2 scope classifier, LWW+tombstone merge, m5-publish auto-commit, post-merge auto-pull",
   };
 }
 

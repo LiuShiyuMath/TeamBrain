@@ -1,4 +1,6 @@
 import { execSync, execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import * as path from "node:path";
 
 /**
  * m5-publish：把 .teamagent/team/ 下的本地未提交修改自动 commit 到 git，
@@ -39,11 +41,29 @@ export async function runM5Publish(
     pushed: false,
   };
 
-  // 探测 .teamagent/team/ 下的变化
+  // B-150: viral propagation needs the manifest + .githooks/ to land in git
+  // alongside team rules — otherwise teammates pull the rules but neither
+  // the manifest (so they don't know it's a TeamAgent project) nor the
+  // post-merge hook (so the next pull doesn't auto-sync) propagates.
+  // Filter to only paths that actually exist in this checkout, so
+  // pre-infect repos still publish team rules correctly.
+  const CANDIDATE_PATHS = [
+    ".teamagent/team",
+    ".teamagent/manifest.json",
+    ".githooks",
+  ];
+  const PATHS = CANDIDATE_PATHS.filter((p) =>
+    existsSync(path.join(opts.projectRoot, p)),
+  );
+  if (PATHS.length === 0) {
+    result.reason = "no team-rule / manifest / githooks paths exist yet";
+    return result;
+  }
+
   let status = "";
   try {
     status = execSync(
-      `git status --porcelain -- .teamagent/team/`,
+      `git status --porcelain -- ${PATHS.join(" ")}`,
       { cwd: opts.projectRoot, encoding: "utf8" }
     );
   } catch (e) {
@@ -54,13 +74,13 @@ export async function runM5Publish(
   const lines = status.split("\n").filter((l) => l.trim().length > 0);
   result.changes_count = lines.length;
   if (lines.length === 0) {
-    result.reason = "no .teamagent/team/ changes to publish";
+    result.reason = "no team-rule / manifest / githooks changes to publish";
     return result;
   }
 
-  // git add
+  // git add (only existing paths)
   try {
-    execSync(`git add .teamagent/team/`, {
+    execFileSync("git", ["add", ...PATHS], {
       cwd: opts.projectRoot,
       encoding: "utf8",
     });

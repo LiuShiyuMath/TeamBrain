@@ -19,6 +19,8 @@ export interface M5InfectResult {
   written_files: string[];
   written_dirs: string[];
   skipped: boolean;
+  /** B-150: whether `git config core.hooksPath .githooks` was set on the local clone. */
+  git_hookspath_set?: boolean;
 }
 
 export async function runM5Infect(
@@ -48,10 +50,28 @@ export async function runM5Infect(
 
   await port.applyInfection(opts.projectRoot, plan);
 
+  // B-150: viral propagation requires the local clone to honor `.githooks/`.
+  // Without `git config core.hooksPath .githooks`, the post-merge hook that
+  // pulls team rules after every `git pull` never fires. Setting it here
+  // closes the gap so that infect → bootstrap → publish → pull → sync
+  // is fully end-to-end on the same clone.
+  let git_hookspath_set = false;
+  try {
+    execSync("git config core.hooksPath .githooks", {
+      cwd: opts.projectRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    git_hookspath_set = true;
+  } catch {
+    // best-effort: not a git repo, or git absent — bootstrap --apply will retry.
+  }
+
   return {
     written_files: Object.keys(plan.files_to_create),
     written_dirs: plan.dirs_to_create,
     skipped: false,
+    git_hookspath_set,
   };
 }
 
