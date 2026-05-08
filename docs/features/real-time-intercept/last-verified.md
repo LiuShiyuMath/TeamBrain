@@ -13,9 +13,11 @@ PASS on iteration 1 of dogfood run.
 ## What was checked
 
 - `positiveTriggerRate = 1.0` (every positive-kind probe triggered;
-  `e2e-evaluate.test.ts` runs **10 probes total** split across mixed
-  kinds — positive / generalization / negative — and
-  `positiveTriggerRate` is computed only over the positive subset)
+  `e2e-evaluate.test.ts:28` asserts the 10-probe count, and
+  `packages/cli/src/commands/e2e-evaluate.ts:138-251` is where the
+  kind composition lives — split across mixed kinds: 4 positive /
+  3 generalization / 4 negative; `positiveTriggerRate` is computed
+  only over the positive subset)
 - `falsePositiveRate = 0.0` (negative-kind probes silent — no false matches)
 - enforcement logic: `confidence ≥ 0.9 + objective + enforcement=block → deny` documented + tested
 

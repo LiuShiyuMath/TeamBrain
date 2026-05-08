@@ -16,6 +16,7 @@
 |---|---|---|
 | `docs/PRODUCT-FEATURES.md` 对应行 | 按 feature_id 行号定位 | 产品定义 + evidence 路径 |
 | 引入 PR(s) | `gh pr view <n> --json title,body,commits` | 实现意图 + 验收讨论 |
+| 引入 commit(s)（**fallback**：legacy / 直接合 main 的 feature） | `git show <sha>` 抓 commit message | 当 PR 号无法干净映射时使用 `commits: [<sha>, ...]` 字段 |
 | 关联 issue(s) | PR body 里 `Refs #<i>` / `Closes #<i>` 提取 → `gh issue view` | 用户痛点 + 原始需求 |
 | Feature owner | PR `--json author` + commit `git log --author` | 决策权人；歧义找他 |
 | `docs/features/<name>/` 旁路 docs | `ls docs/features/<name>/` 全读 | 实现细节 + 已有 anti-probe |
@@ -61,7 +62,8 @@ feature_name: AI warned before repeating known mistake
 owner: <github_handle>
 sources:
   product_features_md: line 30
-  prs: [#71, #88]
+  prs: [#71, #88]                   # 优先；可读 gh pr view 拿 body
+  # commits: [<sha1>, <sha2>]       # fallback when feature pre-dates clean PR mapping
   issues: [#85]
   related_docs: [docs/features/real-time-intercept.md]
 last_composed: 2026-05-07

@@ -78,7 +78,7 @@ the indexes below to choose what to read first.
 | `gstack/` | Approved `/office-hours` design docs that downstream gstack review skills can discover automatically. |
 | `notes/` | Small decision records. |
 | `feature-verification.md` | Feature/fix verification gate and evidence requirements. |
-| `verify/` | Autonomous verification loop playbook for product features (RUN-VERIFY-LOOP, GOAL-COMPOSER, META-JUDGE). |
+| `verify/` | Autonomous verification loop playbook for product features (RUN-VERIFY-LOOP, GOAL-COMPOSER, JUDGE, META-JUDGE; see `verify/INDEX.md`). |
 | `features/` | Short per-feature canned answer docs and conventions. |
 | `knowledge/` | Project knowledge index and docs propagation notes. |
 | `pr-14-status.md` | PR #14 local status index for restricted verification sessions. |

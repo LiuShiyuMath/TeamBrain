@@ -84,6 +84,16 @@ timeout 180 claudefast -p "<JUDGE prompt with trace + GOAL>" < /dev/null > judge
 
 ## Step 5 · META-JUDGE（**必须用 `--bare`**）
 
+### 5a · Divergence pre-check（content-based 兜底）
+
+跑 META-JUDGE **之前**，主 agent 先读 `iterations.jsonl` 最近 K 条（建议 K=3）比对 `code_diff_summary` 字段。如果连续 ≥2 轮值落在 `{"none", "", "no logic change"}` 或彼此 near-identical：
+
+→ 直接判 `decision = STUCK_REPEATING`，跳过 META-JUDGE 调用，直接到 Step 6 写 backlog。
+
+理由：物理上 fix 没动 code/docs，loop 不可能收敛——即使 META-JUDGE 仍 STILL_MOVING 也是 hallucinate。详见 [META-JUDGE.md](META-JUDGE.md) "Orchestrator-level divergence detector" 段。
+
+### 5b · 否则跑 META-JUDGE
+
 照 [META-JUDGE](META-JUDGE.md) 跑。按 `decision` 分支：
 
 - **STILL_MOVING** → 把 judge 的 reason 当 fix prompt 应用到自己（改 code/docs），回 Step 2

@@ -4,7 +4,7 @@ feature_name: PII redactor covers API keys, JWT, phone, credit card, AWS key
 owner: LiuShiyuMath
 sources:
   product_features_md: row 26
-  prs: [c08b8fa, 79adc0d, 6147c9e]
+  commits: [c08b8fa, 79adc0d, 6147c9e]  # introducing-commit SHAs; legacy m4/wave6 era — no clean PR mapping
   issues: []
   related_docs:
     - docs/features/pii-redaction/run-judge.sh

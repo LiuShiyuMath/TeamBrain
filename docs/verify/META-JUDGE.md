@@ -95,7 +95,24 @@ timeout 180 claudefast --bare -p "<META-JUDGE prompt above>" < /dev/null > meta-
 ## 失败模式 + 兜底
 
 - META-JUDGE 自身 hallucinate decision → 看 `confidence`，< 0.4 时主 agent 忽略本次决策、按上一轮处理
-- META-JUDGE 一直 STILL_MOVING 但 loop 实际原地转 → 这是**唯一**会自然发散的 case。靠用户偶尔 `wc -l docs/features/*/iterations.jsonl` 看异常长 backlog 触发抽查（人工，非自动）
+- META-JUDGE 一直 STILL_MOVING 但 loop 实际原地转 → **orchestrator-level divergence detector**（见下方）兜底，不再依赖人工抽查
+
+## Orchestrator-level divergence detector（content-based，非 hardcoded N）
+
+主 agent 在 RUN-VERIFY-LOOP Step 5 调用 META-JUDGE **之前**先跑这一步：
+
+```
+divergence = (count of latest contiguous iterations where
+              code_diff_summary IN {"none", "", "no logic change",
+                                    near-identical to prev})
+              >= 2
+```
+
+**触发时**：主 agent **覆盖** META-JUDGE 输出，强制 `decision = STUCK_REPEATING`、写 backlog、收工。理由：连续 ≥2 轮 fix 没有实质 code/docs 变化，loop 在原地转——即使 META-JUDGE 还在说 STILL_MOVING，物理上也不可能收敛。
+
+**为什么不算 hardcoded N**：这不是「跑 N 轮就停」的硬上限，是「连续 N 轮 **没有** 实质动作」的内容信号。仍然是语义停（stop iff 没动），只是把人工抽查的兜底从「偶尔人 wc -l」提到 orchestrator 自动化。
+
+**实现位置**：主 agent 在 RUN-VERIFY-LOOP.md Step 5 跑 META-JUDGE 前，读 `iterations.jsonl` 最近 K 条比对 `code_diff_summary` 字段。建议起步 K=3。
 
 ## 联动
 

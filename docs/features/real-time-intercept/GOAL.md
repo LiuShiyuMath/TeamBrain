@@ -10,8 +10,8 @@ sources:
     - docs/features/real-time-intercept.md
     - docs/features/real-time-intercept/canned-answer-snippet.md
     - docs/features/real-time-intercept/verify-canned-answer.sh
-    - packages/cli/src/commands/e2e-evaluate.ts
-    - packages/cli/src/__tests__/e2e-evaluate.test.ts
+    - packages/cli/src/commands/e2e-evaluate.ts        # runtime — kind composition lives here (4 positive / 3 generalization / 4 negative)
+    - packages/cli/src/__tests__/e2e-evaluate.test.ts  # asserts metrics; only mocks 2 fake probes — does NOT enumerate kind composition
 last_composed: 2026-05-08
 ---
 
