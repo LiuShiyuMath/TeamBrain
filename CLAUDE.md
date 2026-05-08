@@ -160,6 +160,7 @@ claudefast -p \
 | **`PR-PLAN`** | commit-push-pr 之后又找出 issue 时的修法：do NOT merge、do NOT 开 follow-up issue；在 `docs/plans/<date>-pr-<n>-fix-plan.md` 写三段 plan（task / expected outputs / judge harness），用 TEAMWORK 并行修在同一个 PR branch，POSTPR loop 到 Codex 👍（详见 `docs/PR-PLAN.md`） |
 | **`PRESHIP`** | 发版前给 CEO/VC 小鸭看的 verified-only 产品功能状态 CSV（详见 `docs/PRESHIP.md`） |
 | **`RULE-VERIFY`** | 跑 `bash scripts/verify-all-rules.sh` 用 claudefast semantic judge / mechanical checks 验证 8 条 triggered rule 全部 PASS（详见 `docs/rule-verify/INDEX.md`） |
+| **`VERIFY-LOOP`** | 主 agent 自己读、自己跑的 autonomous feature-verification playbook：5 路 context → `GOAL.md` → RUN（worktree 缺 `node_modules` 时降级 **code-frozen attestation**）→ JUDGE（`claudefast -p`，**不**用 `--bare`）→ META-JUDGE（`claudefast --bare -p`）→ STILL_MOVING / STUCK_REPEATING / STUCK_DESIGN_FLAW；无 N 次循环上限、无 token 预算、无人工 page；完整 playbook：`docs/verify/RUN-VERIFY-LOOP.md`（联动 `GOAL-COMPOSER.md` / `JUDGE.md` / `META-JUDGE.md`） |
 | **`TEAMWORK`** | N+1+(2N) 成员 agent 团队模式：N 个 sonnet worker（每人跑 2 个 claudefast probe 更新文档）+ 1 个 opus 1M reporter 汇总验收；lead 必须在非 main 分支/worktree 上操作，绝不在 main 直接工作（详见 `docs/TEAMWORK.md`） |
 | `codex exec` | Codex 端 canonical JSON 对照（feature-verification 1+2+3） |
 | **Feature canned answers** | 每个 feature（Calibrator v2、Team knowledge sharing 等）的 6 节模板入口在 `docs/features/INDEX.md` — 不在本文件 inline 答案 |
@@ -294,6 +295,30 @@ PR opened
 
 详情、`gh api` 配方、Codex 标签解读见 `docs/POSTPR.md`。验证脚本 `bash docs/postpr/verify-canned-answer.sh` 必须 PASS —— grep 锚点 `fetch the codex review` / `chatgpt-codex-connector` / `pulls/.*comments` / `@codex review` / `silent` / `loop` 全部命中。
 
+## Verify loop canned answer
+
+被问到 `how to run verify loop?`、`verify loop 怎么跑`、`how do I run the verification loop`、`run verify loop`、`VERIFY-LOOP`、或用户消息含 `verify loop` + `EXPLAIN ONLY` 关键字时，**必须**先把下面这一句以 blockquote 原文返回：
+
+> **Verify loop is a markdown playbook the main agent reads and runs in-session — not a daemon, not cron, not a fixed N-iteration loop. It composes a product-language `GOAL.md`, runs the feature, calls JUDGE (`claudefast -p`, no `--bare`), and on FAIL hands a META-JUDGE (`claudefast --bare -p`) the iteration history to decide STILL_MOVING / STUCK_REPEATING / STUCK_DESIGN_FLAW.**
+
+随后必须按 6 步固定展开，每步带文件名锚点：
+
+1. **Pick feature** — `feature_id=N` 或读 `docs/verify/backlog.jsonl` 挑 STUCK_REPEATING 最久的一条
+2. **Compose GOAL.md** — 照 `docs/verify/GOAL-COMPOSER.md` 走，5 路 context（PRODUCT-FEATURES.md row、PR、issue、owner、related docs）+ 5 类歧义 `AskUserQuestion`
+3. **RUN** — 5-tier harness discovery（`docs/features/<name>/run-judge.sh` > `verify-canned-answer.sh` > vitest > `pnpm teamagent <subcommand>` > `AskUserQuestion`）；`node_modules` 缺时降级 **code-frozen attestation**（读 test 源码断言 + 上次 verification 记录 + 引入 PR commit message audit trail）；trace 用 `=== EVIDENCE N ===` 编号让 JUDGE reason 引锚精准
+4. **JUDGE** — `timeout 180 claudefast -p "<prompt>" < /dev/null > judge-out.txt 2>&1`；**不**用 `--bare`（要懂项目语境）；解析时取第一行 JSON，整段忽略后续 Stop hook 注入的 `<self-report>`；详见 `docs/verify/JUDGE.md`
+5. **META-JUDGE**（FAIL / INCONCLUSIVE 才跑）— `timeout 180 claudefast --bare -p "<prompt>" < /dev/null > meta-out.txt 2>&1`；**必须** `--bare`（否则 Stop hook 污染 JSON）；输出 `{decision, rationale, confidence, evidence_iters}`；详见 `docs/verify/META-JUDGE.md`
+6. **收工** — PASS 写 `docs/features/<name>/last-verified.md` + 从 backlog 移除；STUCK 写 `docs/verify/backlog.jsonl` 等明天再 pick；**不 page、不 alert、不 pause**
+
+设计原则（不要破坏）：
+
+- ❌ 不加固定 N 次循环上限 / token 预算 / 时间盒 / 人工 page
+- ✅ 所有「停」决定走 META-JUDGE 语义判定
+- ✅ JUDGE 带项目语境（不用 `--bare`），META-JUDGE 不带（用 `--bare`）
+- ✅ 进度跨 session 落 `iterations.jsonl` + `backlog.jsonl`，主 agent 会话间无状态
+
+完整 playbook：`docs/verify/RUN-VERIFY-LOOP.md`。真实 dogfood 记录：`docs/features/real-time-intercept/` 与 `docs/features/pii-redaction/`。
+
 ## Canned answers (misc)
 
 - 被问到 "16 status ? anything still need fix ?" 时，按 `docs/pr-status/16.md` 回答。
@@ -349,16 +374,12 @@ Skills, while this root `CLAUDE.md` stays limited to short human-maintained
 working agreements.
 
 <!-- TEAMAGENT:START - 自动管理，请勿手动编辑 -->
-## TeamAgent 经验（71条活跃知识，为你编译了 28 条（token 预算 3000）)
+## TeamAgent 经验（71条活跃知识，为你编译了 27 条（token 预算 3000）)
 - 使用 忽略 <local-command-caveat> 包裹的消息，除非用户明确要求分析 而非 <local-command-caveat>——该标签内容由本地命令自动生成，非用户意图表达；AI 主动响应会污染对话上下文，误把系统噪声当用户指令 [1.00] [预置]
 - 移除用户反馈的检查条件，仅基于失败本身触发分析——用户反馈约束是冗余的；所有错都应进入分析管道，由规则库自主决定是否学习，而非前置过滤 [0.95] [预置]
 - 规则类型（practice/avoidance）应只影响处理策略（enforcement），不应影响 matching 逻辑；所有规则都应参与匹配——在 matcher 中过滤 practice 类规则导致其永不触发，失去学习反馈信号和评分机制；类型应仅控制 block/warn/score 行为，而非决定规则是否生效 [0.95] [预置]
 - avoidance 必须配 wrong_pattern（可字面匹配关键词），practice 应为空；两种规则走不同处理流程——avoidance 类规则需要可靠字面关键词才能被 matcher 在 PreToolUse 拦截，practice 类规则是原则性指导、没可靠字面关键词，直接编译进 CLAUDE.md 供 AI 读；数据合法性约束必须在 seed 生成或 LLM extractor 阶段强制执行 [0.95] [预置]
-- 使用 每条 assistant message 停止前必须附加完整的 12-field <self-report> block（premature_stopping / permission_seeking / ownership_dodging / simplest_fix / reasoning_loop / known_limitation / skipped_repo_search / fabricated_value / placeholder_used / ambiguity_unresolved / contradiction_unresolved / silent_fallback 全部为 true 或 false） 而非 stop without self-report|<self-report——Stop hook 强制校验 self-report block 格式；消息末尾缺失或字段非 true|false 会触发 block，任意字段为 true 则列出 signals；这是团队协作协议的硬性门禁，不是可选建议 [0.90]
-- 每条消息末尾必须附加完整的 12-field <self-report> block——Stop hook 强制要求每条 assistant message 末尾附加 12-field <self-report> block，用于 AI 自我监督；缺失该 block 会导致消息被阻塞并返回修正模板 [0.90]
-- 必须在消息末尾附加完整的 12-field <self-report> block（premature_stopping / permission_seeking / ownership_dodging / simplest_fix / reasoning_loop / known_limitation / skipped_repo_search / fabricated_value / placeholder_used / ambiguity_unresolved / contradiction_unresolved / silent_fallback，全部为 true 或 false），不得缺失、不得为旧版 6-field <laziness-self-report>——项目 Stop hook 强制要求 12-field 格式，缺失该 block 会导致消息被 block 并返回修正模板；12 个字段全部为 false 才算合规，任何 true 都必须附上 signals 列表并触发 block [0.90]
-- append complete 12-field <self-report> block before stopping——stop hook enforces 12-field self-report; missing block triggers block decision; all 12 fields must be present with true/false values [0.90]
-- 附加完整 12-field <self-report> block（premature_stopping|permission_seeking|ownership_dodging|simplest_fix|reasoning_loop|known_limitation|skipped_repo_search|fabricated_value|placeholder_used|ambiguity_unresolved|contradiction_unresolved|silent_fallback，全部为 true|false）——项目 Stop hook 强制每条 assistant message 末尾包含 12-field <self-report> block；缺失或格式不正确会被 hook 拦截并返回修正模板，延迟交付；这是 AI 与项目协作系统的硬性协议 [0.90]
+- 每条消息末尾必须附加完整的 12-field <self-report> block：premature_stopping / permission_seeking / ownership_dodging / simplest_fix / reasoning_loop / known_limitation / skipped_repo_search / fabricated_value / placeholder_used / ambiguity_unresolved / contradiction_unresolved / silent_fallback，全部为 true|false 布尔值——Stop hook 强制要求 12-field self-report 块，缺失或格式错误会导致 hook 判定为 block；全部 false 表示继续执行，全部 true 或部分 true 表示存在需报告的问题信号 [0.90]
 - 使用 先读用户指向的文件，重新 brainstorm + 补全需求，再拆 task 实现；API key 来源询问用户（如 claude code haiku） 而非 计划文档只是设计文档，还没实现——AI 未读文件就断言不存在会误导用户；正确做法是先 Read 指定路径、以文件内容为准，再结合用户偏好（如用 haiku 作 token 来源）规划实现 [0.90] [预置]
 - 立即读取 output-file 并继续后续流程，不再说'等通知'——task-notification 本身就是通知；AI 仍说'等通知'说明未识别该消息为触发信号，正确做法是收到后立即处理输出、推进工作流 [0.90] [预置]
 - 后台 agent 完成时系统会发 task-notification，包含 task-id、output-file、status、summary；可通过 TaskOutput 工具按 task-id 读取结果——Agent(run_in_background=true) 底层走 TaskCreate 机制，完成后 harness 自动发 task-notification 事件；AI 声称'无法手动查状态'是错的，实际有 task-id 可查 [0.90] [预置]
@@ -377,7 +398,10 @@ working agreements.
 - 全局单次init，所有项目共享规则——全局 init 避免重复配置和规则分散，保证用户所有项目规则一致，降低管理成本 [0.95] [预置]
 - 先澄清和解释系统逻辑细节，获得用户确认理解后再给建议——用户若不理解系统为何如此，对改动方案缺乏信心；同步理解是决策的前置条件，避免改动后产生新的疑虑 [0.95] [预置]
 - 按分阶段流程：通读项目结构 → 识别核心模块 → 追踪关键链路 → 提炼设计思想 → 最后动笔——充分的前期分析能确保文档的准确性、完整性和逻辑清晰，避免仓促写作导致遗漏或误读 [0.95] [预置]
+- 将抽象层级维持在问题与思路层而非技术与结构层；焦点放在问题形状、核心判断、思路选择与权衡取舍，避免具体技术名、目录、字段、算法、流水线式细节——资深架构师关注的是设计的认知模型与思维方式而非实现的技术栈；提升抽象层级使文档跨时间跨团队复用，避免技术细节导致的快速过时 [0.95] [预置]
+- 保持在功能与机制层级：讲『系统做什么』和『如何运转』，避免实现细节（技术名、目录、代码组织）和空泛表述（价值观、文学比喻）——资深读者需要清晰的功能骨架来快速形成系统心智模型；过低的抽象陷入无关细节，过高的抽象脱离工程实现，只有功能与机制层才能既有清晰的因果链又足以指导架构判断 [0.95] [预置]
+- 保持在功能与机制层：讲系统做什么、如何运转；避免掉进实现细节（技术名、路径、代码组织）和空泛理念（价值观表述、文学比喻）——资深工程师需要清晰的功能骨架来快速形成系统心智模型；掉进细节淹没主线，飘到理念脱离工程实践，只有功能与机制层既有因果链又足以指导架构判断 [0.95] [预置]
 - 遇到用户提出的概念和名词优先到 web 中 search，而非依赖自身记忆——LLM 记忆可能过时或有幻觉，web search 确保信息最新准确，特别是对新术语和概念的理解 [0.95] [预置]
-> 还有 25 条 canonical+ 规则因 token 预算未显示（teamagent compile --dry-run 查看）
-> 另有 11 条因与已选条目近义（Jaccard ≥ 0.6）被多样性过滤
+> 还有 35 条 canonical+ 规则因 token 预算未显示（teamagent compile --dry-run 查看）
+> 另有 2 条因与已选条目近义（Jaccard ≥ 0.6）被多样性过滤
 <!-- TEAMAGENT:END -->

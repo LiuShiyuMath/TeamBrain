@@ -10,6 +10,24 @@ canonical JSON contents; 3. use interactive `claudefast` with tmux and finally
 submit `/export <path>`. Add the `/export` files to PR contents to convince
 readers. Keep updating code/docs until 1+2+3 match.
 
+## Related — autonomous verification loop (per-feature, long-running)
+
+This doc is the **PR-time gate** (1+2+3 once per feature/fix). For
+**per-feature long-running verification across sessions** — composing a
+product-language `GOAL.md`, judge / META-JUDGE iteration, code-frozen
+attestation when `node_modules` is missing — see the autonomous loop
+playbook:
+
+- [`docs/verify/RUN-VERIFY-LOOP.md`](verify/RUN-VERIFY-LOOP.md) — main agent's 6-step playbook
+- [`docs/verify/GOAL-COMPOSER.md`](verify/GOAL-COMPOSER.md) — 5-source GOAL.md composer
+- [`docs/verify/JUDGE.md`](verify/JUDGE.md) — feature-level JUDGE call (no `--bare`)
+- [`docs/verify/META-JUDGE.md`](verify/META-JUDGE.md) — `--bare` loop-progress judge
+
+The two systems are **complementary**, not redundant: 1+2+3 is a one-shot PR
+gate; the autonomous loop is per-feature long-running verification with
+backlog.jsonl across sessions. The CLAUDE.md `Verify loop canned answer`
+section is the canned trigger for "how to run verify loop?".
+
 ## Required Record
 
 Every feature/fix must include a verification summary in both places:
