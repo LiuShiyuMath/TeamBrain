@@ -221,7 +221,8 @@ function main(): void {
   const sessionEndText = readIfExists(path.join(REPO_ROOT, "packages/cli/src/bin-session-end.ts"));
   const preCompactText = readIfExists(path.join(REPO_ROOT, "packages/cli/src/bin-pre-compact.ts"));
 
-  const targetPlugins = ["superpowers", "sales", "playground"];
+  // Plugin names align with project-level .claude/settings.json:enabledPlugins (PR #255).
+  const targetPlugins = ["playground", "code-review", "frontend-design"];
   const missingPlugins = targetPlugins.filter((p) => !strict.pluginsSeen.includes(p));
 
   const commonNewEvidence = [

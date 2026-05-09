@@ -94,11 +94,11 @@ describe("m5-bootstrap command", () => {
       const mPath = path.join(root, ".teamagent", "manifest.json");
       const raw = await fs.readFile(mPath, "utf8");
       const m = JSON.parse(raw);
-      m.required_plugins = ["caveman", "superpowers"];
+      m.required_plugins = ["code-review", "playground"];
       await fs.writeFile(mPath, JSON.stringify(m, null, 2));
       const r = await runM5Bootstrap({ projectRoot: root, checkOnly: true, port: makeStubPort() });
       expect(r.diff?.needs_bootstrap).toBe(true);
-      expect(r.diff?.install_plugins).toEqual(["caveman", "superpowers"]);
+      expect(r.diff?.install_plugins).toEqual(["code-review", "playground"]);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }

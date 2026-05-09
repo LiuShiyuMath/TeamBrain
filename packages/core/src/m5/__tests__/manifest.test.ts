@@ -9,7 +9,7 @@ import type { Manifest } from "@teamagent/types";
 const valid: Manifest = {
   schema_version: 1,
   teamagent_version: "0.9.4",
-  required_plugins: ["superpowers"],
+  required_plugins: ["playground"],
   required_project_skills: [".claude/skills/canary"],
   required_hooks: ["UserPromptSubmit", "Stop"],
   created_by: "alice",

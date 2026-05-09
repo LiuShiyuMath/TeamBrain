@@ -5,7 +5,7 @@ import type { Manifest, LocalState } from "@teamagent/types";
 const m: Manifest = {
   schema_version: 1,
   teamagent_version: "0.9.4",
-  required_plugins: ["superpowers", "caveman"],
+  required_plugins: ["playground", "code-review"],
   required_project_skills: [".claude/skills/canary"],
   required_hooks: ["UserPromptSubmit", "Stop"],
   created_by: "alice",
@@ -14,7 +14,7 @@ const m: Manifest = {
 
 const fullySatisfied: LocalState = {
   teamagent_version: "0.9.4",
-  installed_plugins: ["superpowers", "caveman"],
+  installed_plugins: ["playground", "code-review"],
   installed_project_skills: [".claude/skills/canary"],
   installed_hooks: ["UserPromptSubmit", "Stop"],
 };
@@ -57,12 +57,12 @@ describe("computeBootstrapDiff", () => {
   it("missing plugins/skills/hooks: each listed", () => {
     const d = computeBootstrapDiff(m, {
       teamagent_version: "0.9.4",
-      installed_plugins: ["superpowers"],
+      installed_plugins: ["playground"],
       installed_project_skills: [],
       installed_hooks: ["UserPromptSubmit"],
     });
     expect(d.needs_bootstrap).toBe(true);
-    expect(d.install_plugins).toEqual(["caveman"]);
+    expect(d.install_plugins).toEqual(["code-review"]);
     expect(d.install_project_skills).toEqual([".claude/skills/canary"]);
     expect(d.install_hooks).toEqual(["Stop"]);
   });

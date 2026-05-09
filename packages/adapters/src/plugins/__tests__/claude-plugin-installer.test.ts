@@ -130,42 +130,42 @@ describe("ClaudePluginInstaller.installPlugin", () => {
     const installer = new ClaudePluginInstaller({
       spawner: fakeSpawner([
         {
-          match: ["plugin", "install", "superpowers@claude-plugins-official"],
+          match: ["plugin", "install", "playground@claude-plugins-official"],
           result: {
             kind: "exit",
             code: 0,
             stdout:
-              "Installing plugin \"superpowers@claude-plugins-official\"...✔ Successfully installed plugin: superpowers@claude-plugins-official (scope: user)",
+              "Installing plugin \"playground@claude-plugins-official\"...✔ Successfully installed plugin: playground@claude-plugins-official (scope: user)",
             stderr: "",
           },
         },
       ]),
     });
     const out = await installer.installPlugin({
-      plugin: "superpowers",
+      plugin: "playground",
       marketplace: "claude-plugins-official",
     });
     expect(out.status).toBe("added");
-    expect(out.detail).toContain("superpowers@claude-plugins-official");
+    expect(out.detail).toContain("playground@claude-plugins-official");
   });
 
   it("returns already when CLI prints 'already installed'", async () => {
     const installer = new ClaudePluginInstaller({
       spawner: fakeSpawner([
         {
-          match: ["plugin", "install", "sales@knowledge-work-plugins"],
+          match: ["plugin", "install", "code-review@claude-plugins-official"],
           result: {
             kind: "exit",
             code: 0,
-            stdout: "✔ Plugin sales@knowledge-work-plugins is already installed",
+            stdout: "✔ Plugin code-review@claude-plugins-official is already installed",
             stderr: "",
           },
         },
       ]),
     });
     const out = await installer.installPlugin({
-      plugin: "sales",
-      marketplace: "knowledge-work-plugins",
+      plugin: "code-review",
+      marketplace: "claude-plugins-official",
     });
     expect(out.status).toBe("already");
   });
@@ -174,11 +174,11 @@ describe("ClaudePluginInstaller.installPlugin", () => {
     const installer = new ClaudePluginInstaller({
       spawner: fakeSpawner([
         {
-          match: ["plugin", "install", "ghost@knowledge-work-plugins"],
+          match: ["plugin", "install", "ghost@nonexistent-marketplace"],
           result: {
             kind: "exit",
             code: 0,
-            stdout: "Installing plugin…✘ Failed: plugin 'ghost' not found in marketplace 'knowledge-work-plugins'",
+            stdout: "Installing plugin…✘ Failed: plugin 'ghost' not found in marketplace 'nonexistent-marketplace'",
             stderr: "",
           },
         },
@@ -186,7 +186,7 @@ describe("ClaudePluginInstaller.installPlugin", () => {
     });
     const out = await installer.installPlugin({
       plugin: "ghost",
-      marketplace: "knowledge-work-plugins",
+      marketplace: "nonexistent-marketplace",
     });
     expect(out.status).toBe("failed");
     expect(out.detail).toMatch(/not found|Failed/);
@@ -206,7 +206,7 @@ describe("ClaudePluginInstaller.installPlugin", () => {
       },
     });
     await installer.installPlugin(
-      { plugin: "sales", marketplace: "knowledge-work-plugins" },
+      { plugin: "frontend-design", marketplace: "claude-plugins-official" },
       { scope: "project" },
     );
     expect(capturedArgs).toContain("--scope");

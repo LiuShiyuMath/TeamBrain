@@ -42,8 +42,8 @@ describe("parseInstallPluginsArgs", () => {
   });
 
   it("parses --only as comma-separated plugin names", () => {
-    const o = parseInstallPluginsArgs(["--only=superpowers,sales"]);
-    expect(o.only).toEqual(["superpowers", "sales"]);
+    const o = parseInstallPluginsArgs(["--only=playground,code-review"]);
+    expect(o.only).toEqual(["playground", "code-review"]);
   });
 
   it("parses --scope=user|project|local", () => {
@@ -151,17 +151,17 @@ describe("renderInstallPluginsResult", () => {
       dryRun: false,
       marketplaces: [
         { name: "claude-plugins-official", status: "added", detail: "ok" },
-        { name: "knowledge-work-plugins", status: "already", detail: "on disk" },
+        { name: "test-extra-marketplace", status: "already", detail: "on disk" },
       ],
       plugins: [
-        { name: "superpowers@claude-plugins-official", status: "added", detail: "ok" },
-        { name: "sales@knowledge-work-plugins", status: "failed", detail: "oops" },
+        { name: "playground@claude-plugins-official", status: "added", detail: "ok" },
+        { name: "ghost@test-extra-marketplace", status: "failed", detail: "oops" },
       ],
       summary: { added: 2, alreadyPresent: 1, failed: 1, wouldDo: 0 },
     };
     const out = renderInstallPluginsResult(result);
     expect(out).toContain("claude-plugins-official");
-    expect(out).toContain("sales@knowledge-work-plugins");
+    expect(out).toContain("ghost@test-extra-marketplace");
     expect(out).toContain("✅");
     expect(out).toContain("❌");
   });

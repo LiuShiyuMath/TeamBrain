@@ -88,7 +88,7 @@ export interface InitOptions {
   /** Override registry directory (tests inject; production resolves via seed path walk + TEAMAGENT_PACKS_DIR). */
   packsDir?: string;
   /**
-   * Opt-in：装团队标配 plugins（superpowers/sales/playground）。
+   * Opt-in：装团队标配 plugins（与项目级 `.claude/settings.json:enabledPlugins` 同步）。
    * 默认 false——插件装在用户全局（~/.claude/settings.json），跨所有项目生效，
    * 与"初始化本项目"不是同一个心智模型，不能默认打开。
    */
@@ -1543,7 +1543,7 @@ export function renderInitResult(result: InitResult): string {
     );
     if (hasClaude && !pluginsInstalled) {
       lines.push("");
-      lines.push("💡 团队标配插件（superpowers/sales/playground）默认不装");
+      lines.push("💡 团队标配插件（与 .claude/settings.json:enabledPlugins 同步）默认不装");
       lines.push("   需要时运行: teamagent install-plugins");
     }
   } else {

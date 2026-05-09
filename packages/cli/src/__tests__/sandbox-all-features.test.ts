@@ -429,10 +429,10 @@ describe("Feature: install-plugins arg parsing", () => {
     expect(parseInstallPluginsArgs(["--dry-run"]).dryRun).toBe(true);
   });
 
-  it("parses --only=superpowers,sales", () => {
-    const args = parseInstallPluginsArgs(["--only=superpowers,sales"]);
-    expect(args.only).toContain("superpowers");
-    expect(args.only).toContain("sales");
+  it("parses --only=playground,code-review", () => {
+    const args = parseInstallPluginsArgs(["--only=playground,code-review"]);
+    expect(args.only).toContain("playground");
+    expect(args.only).toContain("code-review");
   });
 
   it("parses --scope=project", () => {

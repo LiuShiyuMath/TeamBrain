@@ -477,7 +477,7 @@ async function main(): Promise<void> {
           "  --skip-import          Skip LLM-based rule import step\n" +
           "  --skip-hook            Skip hook registration\n" +
           "  --skip-warmup          Skip embedding model warmup\n" +
-          "  --install-plugins      Also install team plugins (superpowers/caveman/sales)\n" +
+          "  --install-plugins      Also install team plugins (playground/code-review/code-simplifier/...)\n" +
           "  --target=TARGET        claude (default), codex, or both\n" +
           "  --pack=NAMES           Install stack packs without showing the agent prompt.\n" +
           "                         NAMES may be 'all' or a comma-separated list (e.g. frontend-js,ops-safety).\n" +
@@ -1227,7 +1227,7 @@ async function main(): Promise<void> {
           "                                          配 --dry-run 预览 unified diff，不写入；详细帮助见 `teamagent doctor --help`",
           "                                   --json: 输出机器可读 JSON（含 fixOutcomes 与 dryRun 字段）",
           "  teamagent install-plugins [--dry-run] [--only=a,b] [--scope=user|project|local]",
-          "                                   注册团队标配 plugins（superpowers/sales/playground）",
+          "                                   注册团队标配 plugins（与 .claude/settings.json:enabledPlugins 同步）",
           "                                   通过 'claude plugin marketplace add' + 'claude plugin install' 调 CC CLI",
           "                                   默认装全部；--only 限定子集；--dry-run 只预览",
           "  teamagent pair capsule --name=<device> --host=<host> [--user=<user>] [--out=<file>]",

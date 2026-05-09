@@ -12,7 +12,7 @@ describe("FsBootstrap", () => {
     );
     const port = new FsBootstrap({
       readTeamagentVersion: async () => "0.9.4",
-      readInstalledPlugins: async () => ["superpowers"],
+      readInstalledPlugins: async () => ["playground"],
       readInstalledProjectSkills: async () => [],
       readInstalledHooks: async () => ["UserPromptSubmit", "Stop"],
     });
