@@ -109,9 +109,10 @@ export function tapSession(
     };
     writeFileSync(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
 
-    // Best-effort spawn uploader daemon. PR-3 will provide the binary; in PR-2
-    // it may not exist yet (silent fail acceptable — the queue file persists
-    // for later daemon runs to pick up).
+    // Best-effort spawn uploader daemon. The caller (bin-digital-twin-tap.ts)
+    // is responsible for resolving + self-installing the binary; we only
+    // spawn what was passed in. Spawn failure is silent — the queue file
+    // persists for later daemon runs to pick up.
     if (deps.daemonBin && existsSync(deps.daemonBin)) {
       const spawnFn = deps.spawn ?? nodeSpawn;
       try {
