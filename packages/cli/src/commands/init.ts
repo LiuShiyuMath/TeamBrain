@@ -1424,15 +1424,16 @@ export function renderInitResult(result: InitResult): string {
     lines.push("━".repeat(36));
     lines.push("");
     lines.push("  产品特性");
-    lines.push("    你写 ≤50 字 issue + 贴 grill 评论 + 加 grill-ready label，本地");
-    lines.push("    mainpi 自动: worktree → 实现 → /review fix-loop（无限至 PASS）→");
-    lines.push("    普通 PR → squash-merge → 清理。Step 3-5 全程无人介入。");
+    lines.push("    你写 ≤50 字 issue + 贴 grill 评论 + 加 grill-ready label。");
+    lines.push("    maintainer 在 Claude Code 里手动跑 /fixed-flow-driver skill:");
+    lines.push("    worktree → 实现 → /review fix-loop（循环至 PASS）→ 普通 PR →");
+    lines.push("    squash-merge → 清理。无 watcher / 无后台轮询 / 无自动 dispatch。");
     lines.push("    /review 出 issue 时强制走 PR-PLAN（禁开 follow-up issue）；");
     lines.push("    POSTPR 仅 squash-merge（禁 --merge / --rebase）。");
     lines.push("");
     lines.push("  快速验证（复制运行）");
     lines.push(
-      '    claudefast -p "explain TeamBrain FIXEDFLOW: 5 steps, what\'s manual vs auto"',
+      '    claudefast -p "explain TeamBrain FIXEDFLOW: 5 steps, who triggers step 3"',
     );
     lines.push("");
     lines.push("  详情");
