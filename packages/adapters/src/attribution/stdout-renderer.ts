@@ -88,6 +88,10 @@ function describeAction(event: AttributionEvent): string {
       return `scan-errors 超时 (>${event.timeoutMs}ms)，跳过`;
     case "hook-stop.semantic-scan-hit":
       return `semantic-scan 命中 ${event.count} 条规则`;
+    case "hook-stop.semantic-scan-timeout":
+      return `semantic-scan 超时 (>${event.timeoutMs}ms)，跳过`;
+    case "hook-stop.skip-concurrent":
+      return `stop hook pid ${event.otherPid} 仍在运行，跳过本次 Stop event`;
     case "hook-pre.matched":
       return `pre-hook 命中规则 ${event.ruleId} → ${event.permissionDecision}`;
     case "hook-pre.passed":

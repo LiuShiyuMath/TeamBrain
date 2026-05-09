@@ -461,6 +461,26 @@ const ALL_EVENTS: Array<{ label: string; event: AttributionEvent }> = [
       count: 2,
     },
   },
+  {
+    label: "hook-stop.semantic-scan-timeout",
+    event: {
+      kind: "hook-stop.semantic-scan-timeout",
+      source: "hook-stop",
+      severity: "info",
+      timestamp: BASE_TS,
+      timeoutMs: 30000,
+    },
+  },
+  {
+    label: "hook-stop.skip-concurrent",
+    event: {
+      kind: "hook-stop.skip-concurrent",
+      source: "hook-stop",
+      severity: "info",
+      timestamp: BASE_TS,
+      otherPid: 12345,
+    },
+  },
 
   // ── hook-pre ──────────────────────────────────────────────────────────────
   {
@@ -522,16 +542,16 @@ describe("StdoutRenderer render-coverage — all AttributionEvent kinds", () => 
   /**
    * Note: we have 42 entries in ALL_EVENTS (40 kinds + 2 extra variants for
    * skeleton.l0-validation ok/false and hook-stop.analyze-finished with/without
-   * firstLine). All 40 TypeScript kind literals are covered.
+   * firstLine). All 42 TypeScript kind literals are covered.
    */
 
   // Cross-check: every distinct AttributionEvent kind in the discriminated
-  // union must have at least one fixture. If a 41st kind is added to
+  // union must have at least one fixture. If a new kind is added to
   // packages/types/src/attribution.ts but no fixture is added here, this
   // assertion fails loudly instead of silently passing.
   const kindsCovered = new Set(ALL_EVENTS.map((entry) => entry.event.kind));
   it("covers every AttributionEvent kind", () => {
-    expect(kindsCovered.size).toBe(40);
+    expect(kindsCovered.size).toBe(42);
   });
 
   it.each(ALL_EVENTS)("$label: action line is non-empty and contains no 'undefined'/'NaN'", ({ event }) => {

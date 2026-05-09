@@ -327,6 +327,18 @@ export interface HookStopSemanticScanHitEvent extends AttributionEventBase {
   count: number;
 }
 
+export interface HookStopSemanticScanTimeoutEvent extends AttributionEventBase {
+  kind: "hook-stop.semantic-scan-timeout";
+  source: "hook-stop";
+  timeoutMs: number;
+}
+
+export interface HookStopSkipConcurrentEvent extends AttributionEventBase {
+  kind: "hook-stop.skip-concurrent";
+  source: "hook-stop";
+  otherPid: number;
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // hook-pre channel —— bin-pre-tool-use（commit 11 会启用）
 // ──────────────────────────────────────────────────────────────────────────
@@ -401,6 +413,8 @@ export type AttributionEvent =
   | HookStopScanErrorsProgressEvent
   | HookStopScanErrorsTimeoutEvent
   | HookStopSemanticScanHitEvent
+  | HookStopSemanticScanTimeoutEvent
+  | HookStopSkipConcurrentEvent
   | HookPreMatchedEvent
   | HookPrePassedEvent
   | UserPromptInjectedEvent
