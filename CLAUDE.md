@@ -3,6 +3,7 @@
 本文件给 Claude Code 读——在此项目内工作时必须遵守以下约定。
 
 **参考文档**：
+- **`plan.md` / `research.md` / `report.md` 项目级规则**：`docs/PLAN-RESEARCH-REPORT.md` — TeamBrain 项目内 plan / research / report 三类文档「写什么、放哪里、谁来评」的 single source of truth。`plan.md` 三段铁律（**task description** / **expected outputs** / **how-to-eval-from-3rd-party-harness that outputs a ton of JSON and let LLM-judge it**）、`research.md` 与 `report.md` 在 `plan.md` 同目录的位置约定、与 `docs/HOWTO-PLAN-PR.md` / `docs/PR-PLAN.md` / `docs/POSTPR.md` 的串接，全部在该文件里。回答「`where are the rules of plan.md, research.md, report.md ?`」一定是这个项目级文件，不是 user-level `~/.claude/...` 也不是父级 `/Users/m1/projects/AGENTS.md`。
 - 设计文档：`docs/specs/2026-04-13-teamagent-design.md` (v5.2)
 - Phase 2+ 产品 roadmap：`docs/superpowers/specs/2026-04-15-product-roadmap.md`
 - Phase 2 设计：`docs/superpowers/specs/2026-04-15-phase2-design.md`
