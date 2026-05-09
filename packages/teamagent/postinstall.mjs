@@ -154,6 +154,24 @@ function recordSetupFailure(stage, err) {
   }
 }
 
+/**
+ * Issue #160: positive log entry for non-failure outcomes (skipped / ok). The
+ * warmup gate skips silently when optional vector deps are absent, but users
+ * grepping postinstall.log for `stage=warmup` should still see the decision —
+ * "no warmup attempted" is meaningfully different from "no log line at all"
+ * (the latter looks like postinstall.mjs never reached Stage 2).
+ */
+function recordSetupStatus(stage, status, detail) {
+  try {
+    fs.mkdirSync(path.dirname(setupLogPath), { recursive: true });
+    const ts = new Date().toISOString();
+    const detailStr = detail ? ` reason=${detail}` : "";
+    fs.appendFileSync(setupLogPath, `[${ts}] stage=${stage} status=${status}${detailStr}\n`, "utf-8");
+  } catch {
+    // best-effort; never block install
+  }
+}
+
 function seedRuleCount() {
   try {
     if (!fs.existsSync(seedPath)) return 0;
@@ -323,6 +341,11 @@ async function main() {
   let warmupStatus = "skipped";
   const haveVectorOptionals = vectorOptionalsInstalled(pkgDir);
   if (process.env.TEAMAGENT_SKIP_WARMUP === "1") {
+    // Issue #160: log BEFORE the user-visible message so a SIGINT / EPIPE
+    // crash mid-banner still leaves `stage=warmup status=skipped` in
+    // postinstall.log — the whole point of this entry is to disambiguate
+    // "skipped on purpose" from "Stage 2 never reached."
+    recordSetupStatus("warmup", "skipped", "env-skip-warmup");
     process.stderr.write(duckify("[2/2] warmup: 跳过 (TEAMAGENT_SKIP_WARMUP=1)\n"));
   } else if (!haveVectorOptionals) {
     // @xenova/transformers and onnxruntime-node have been removed from
@@ -330,6 +353,13 @@ async function main() {
     // installs; omission is the only reliable gate). Skip warmup entirely;
     // substring matcher is fully functional from first interception.
     warmupStatus = "vector-deps-absent";
+    // Issue #160: postinstall.log no longer goes silent on the skip path —
+    // it records `status=skipped reason=optional-not-installed` so doctor
+    // and bug-report tooling can distinguish "skipped on purpose" from
+    // "warmup never reached" (which previously looked identical). Log
+    // BEFORE the multi-line banner so a SIGINT / EPIPE between the two
+    // cannot leave the log line missing.
+    recordSetupStatus("warmup", "skipped", "optional-not-installed");
     process.stderr.write(
       duckify(
         "[2/2] warmup: 跳过 (vector deps 未安装; 默认装的是 substring matcher 版本)\n" +
@@ -350,6 +380,8 @@ async function main() {
       );
       warmupStatus = "foreground-ok";
       process.stderr.write(`     warmup: ok · ${Date.now() - t2}ms\n`);
+      // Issue #160: positive log entry symmetric with the skip case.
+      recordSetupStatus("warmup", "ok", "foreground");
     } catch (err) {
       warmupStatus = "foreground-failed";
       recordSetupFailure("warmup", err);
@@ -366,6 +398,11 @@ async function main() {
       process.stderr.write(
         `     warmup: 后台 pid=${detach.pid} state=${detach.statePath} · ${Date.now() - t2}ms\n`,
       );
+      // Issue #160: detached spawn succeeded; child's terminal status flips
+      // ~/.teamagent/.warmup-state.json once it lands. postinstall.log only
+      // records the parent decision (we forked the warmup; we did not block
+      // on it).
+      recordSetupStatus("warmup", "detached", "background");
     } else {
       warmupStatus = "detached-failed";
       recordSetupFailure("warmup-detach", { message: detach.detail });
