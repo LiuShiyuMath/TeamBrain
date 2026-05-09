@@ -377,7 +377,8 @@ async function main(): Promise<void> {
         const opts = parseDemoHookArgs(rest.slice(1));
         if (!opts) {
           process.stderr.write(
-            "用法: teamagent demo hook <tool> <key=value>... 例: teamagent demo hook Bash 'command=npm install moment'\n",
+            "用法: teamagent demo hook <tool> <key=value>... 例: teamagent demo hook Bash 'command=npm install moment'\n" +
+              "多字段：用空格分隔多个 'key=value' 槽位，或传单个 JSON 对象，例: teamagent demo hook Write '{\"file_path\":\"a.js\",\"content\":\"hi\"}'\n",
           );
           process.exit(1);
         }

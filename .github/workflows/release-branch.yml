@@ -71,6 +71,10 @@ jobs:
           # Stage install-legacy.sh for backward compatibility
           cp release/install-legacy.sh /tmp/release-stage/install-legacy.sh
           chmod 0755 /tmp/release-stage/install-legacy.sh
+          # Stage a consumer-facing README so visiting
+          # https://github.com/<owner>/<repo>/tree/release no longer 404s
+          # (issue #174 sub-item #1).
+          cp release/README.md /tmp/release-stage/README.md
           # Regenerate sha256 from the templated file (NOT from release/install.sh
           # in source — the user fetches the staged copy from origin/release, so the
           # sha256 must hash the staged content).

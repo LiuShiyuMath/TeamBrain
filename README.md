@@ -37,7 +37,7 @@ bash /tmp/teambrain-install.sh
 curl -fsSL https://raw.githubusercontent.com/libz-renlab-ai/TeamBrain/release/install.sh | bash
 ```
 
-校验文件（SHA256）：**TBD H1** — SHA256 校验文件位置待 H1 open question 决定后填入。
+校验文件（SHA256）：[`install.sh.sha256`](https://raw.githubusercontent.com/libz-renlab-ai/TeamBrain/release/install.sh.sha256) — 由 `release-branch.yml` 工作流随 release 分支自动发布；GitHub Release 资产里也附带一份同名文件。
 参考：[release-prep/install-sh-checklist.md](release-prep/install-sh-checklist.md)
 
 安装完成后进入你的项目目录，初始化：
