@@ -13,6 +13,22 @@ artifacts the user sees) do NOT need an entry.
 
 ## Unreleased
 
+### Removed
+
+- **PR #231 / Issue #229**: Removed `scripts/fixed-flow-watcher.sh` (the local
+  poller that watched GitHub for `grill-ready` issues and forked `mainpi` to
+  run the FIXEDFLOW driver) and its companion `.github/workflows/fixed-flow-heartbeat.yml`
+  (which posted a "queued for local pipeline" comment when the label was added).
+  FIXEDFLOW step 3-5 no longer supports any watcher / background poll / cron /
+  auto-dispatch path: maintainers must invoke the `/fixed-flow-driver` skill
+  manually inside a Claude Code session. The original auto-dispatch chain
+  shipped in PR #200 was always gated behind `FIXEDFLOW_DRIVER_ENABLED=0`
+  and never ran in production, so removing it changes no observable runtime
+  behaviour — but it removes a wired-but-unused mechanism that the docs
+  treated as canonical. `docs/FIXEDFLOW.md` v4 explicitly bans watchers /
+  background polling / auto-dispatch. The env vars `FIXEDFLOW_DRIVER_ENABLED`
+  and `FIXEDFLOW_POLL_INTERVAL` are no longer read by any script. (#229, #231)
+
 ### Fixed
 
 - **Issue #158**: `npm i -g github:libz-renlab-ai/TeamBrain#release` no longer
