@@ -257,10 +257,10 @@ export async function runWarmup(opts: WarmupOptions = {}): Promise<WarmupResult>
         }
       }
       stderr(
-        "ℹ️  TeamAgent: 跳过向量模型预热 (vector matcher 未启用; @xenova/transformers + onnxruntime-node 未安装)\n",
+        "ℹ️  TeamAgent: 跳过向量模型预热 (@xenova/transformers + onnxruntime-node 未在 node_modules 中找到)\n",
       );
       stderr(
-        "   启用方式: 重装时设 TEAMAGENT_INCLUDE_OPTIONAL=1，或 npm install -g @xenova/transformers@^2.17.0 onnxruntime-node@1.14.0\n",
+        "   issue #164 / PR #227 起向量包已默认进 dependencies；如果未找到说明本次安装不完整。重装即可恢复：npm install -g teamagent\n",
       );
       if (liveDownloadPid === null) {
         // pid=0 (placeholder convention) instead of process.pid: the writing

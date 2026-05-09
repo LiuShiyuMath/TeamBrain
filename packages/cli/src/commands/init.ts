@@ -372,10 +372,12 @@ export async function executeInit(opts: InitOptions = {}): Promise<InitResult> {
   if (skipWarmup) {
     steps.push({ step: "warmup", status: "skipped", detail: "skipWarmup / dryRun / test env" });
   } else if (!haveVectorOptionals) {
+    // Issue #164 + PR #227: vector deps are now in `dependencies`, so a skip
+    // here means an incomplete install (failed native build / partial sync).
     steps.push({
       step: "warmup",
       status: "skipped",
-      detail: "vector deps 未安装 (默认 install 不带 @xenova/onnxruntime); 重装设 TEAMAGENT_INCLUDE_OPTIONAL=1 启用",
+      detail: "vector deps 未在 node_modules 中找到 (issue #164 / PR #227 起默认进 dependencies); 重装 teamagent 恢复",
     });
   } else {
     // Issue #91: default to detached (two-stage) warmup so init returns to
