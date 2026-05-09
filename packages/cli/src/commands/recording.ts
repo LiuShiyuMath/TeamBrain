@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { findTeamagentRoot } from "../find-teamagent-root.js";
 
 export type RecordingVisibility = "private" | "public";
 export type RecordingAction = "help" | "import" | "search" | "show" | "inject" | "metrics" | "benchmark";
@@ -209,12 +210,32 @@ const GOLDEN_PROMPTS = [
   { prompt: "When is a full recording transcript allowed in context?", expectedSource: "docs/specs/2026-04-29-recording-memory-performance-verification.md#golden-prompt-benchmark" },
 ];
 
+// Walk up to project root so subfolder writes land in the same .teamagent
+// directory as the project root (issue #161). Falls back to cwd when no
+// .teamagent/knowledge.db exists yet (e.g. `recording import` against a
+// fresh tmp dir in tests).
+function projectRoot(cwd: string): string {
+  return findTeamagentRoot(cwd);
+}
+
 function projectKey(cwd: string): string {
+  return createHash("sha256").update(path.resolve(projectRoot(cwd))).digest("hex").slice(0, 20);
+}
+
+/**
+ * Pre-walk-up project key (issue #161 follow-up). Existing users who imported
+ * private recordings from a sub-folder before walk-up landed have files at
+ * `~/.teamagent/recordings/<sha256(cwd)>.json`. After walk-up, the canonical
+ * key is `sha256(projectRoot)`. We try the legacy key on read so those
+ * records aren't silently orphaned, then migrate them to the new path on
+ * the first read so subsequent writes land at one place.
+ */
+function legacyProjectKey(cwd: string): string {
   return createHash("sha256").update(path.resolve(cwd)).digest("hex").slice(0, 20);
 }
 
 function publicStorePath(cwd: string): string {
-  return path.join(cwd, ".teamagent", "recordings.json");
+  return path.join(projectRoot(cwd), ".teamagent", "recordings.json");
 }
 
 function privateStorePath(cwd: string, homeDir: string): string {
@@ -226,8 +247,17 @@ function privateStorePath(cwd: string, homeDir: string): string {
   );
 }
 
+function legacyPrivateStorePath(cwd: string, homeDir: string): string {
+  return path.join(
+    homeDir,
+    ".teamagent",
+    "recordings",
+    `${legacyProjectKey(cwd)}.json`,
+  );
+}
+
 function metricsPath(cwd: string): string {
-  return path.join(cwd, ".teamagent", "recording-memory", "metrics.jsonl");
+  return path.join(projectRoot(cwd), ".teamagent", "recording-memory", "metrics.jsonl");
 }
 
 function readJsonl<T>(filePath: string): T[] {
@@ -310,6 +340,29 @@ function writeStore(filePath: string, records: RecordingMemory[]): void {
   fs.writeFileSync(filePath, JSON.stringify(records, null, 2) + "\n", "utf-8");
 }
 
+/**
+ * Read the private store, transparently migrating from the legacy
+ * `sha256(cwd)`-keyed path to the new `sha256(projectRoot(cwd))`-keyed path
+ * on first access (issue #161 follow-up). If only the legacy file exists,
+ * copy its records to the new path and return them; subsequent reads see
+ * only the new path. The legacy file is left in place so a downgrade can
+ * still find it.
+ */
+function loadPrivateStoreWithMigration(
+  cwd: string,
+  homeDir: string,
+): RecordingMemory[] {
+  const newPath = privateStorePath(cwd, homeDir);
+  if (fs.existsSync(newPath)) return readStore(newPath);
+  const legacyPath = legacyPrivateStorePath(cwd, homeDir);
+  if (legacyPath !== newPath && fs.existsSync(legacyPath)) {
+    const records = readStore(legacyPath);
+    if (records.length > 0) writeStore(newPath, records);
+    return records;
+  }
+  return [];
+}
+
 function stringField(value: unknown, name: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(`${name} must be a non-empty string`);
@@ -372,7 +425,7 @@ function loadVisibleRecords(
     records.push(...readStore(publicStorePath(cwd)).filter((r) => r.visibility === "public"));
   }
   if (visibility === "all" || visibility === "private") {
-    records.push(...readStore(privateStorePath(cwd, homeDir)).filter((r) => r.visibility === "private"));
+    records.push(...loadPrivateStoreWithMigration(cwd, homeDir).filter((r) => r.visibility === "private"));
   }
   return records;
 }
@@ -553,7 +606,13 @@ export async function executeRecording(
       record.visibility === "public"
         ? publicStorePath(cwd)
         : privateStorePath(cwd, homeDir);
-    const records = readStore(storePath);
+    // Private path: trigger one-time migration from legacy `sha256(cwd)` key
+    // so existing pre-walk-up records are folded into the new file before we
+    // append. Public path: legacy file is in the same project root, no
+    // migration needed.
+    const records = record.visibility === "private"
+      ? loadPrivateStoreWithMigration(cwd, homeDir)
+      : readStore(storePath);
     const duplicate = records.find((r) => r.source === record.source);
     if (duplicate) {
       appendMetric(cwd, now, {
