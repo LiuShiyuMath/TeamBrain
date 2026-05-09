@@ -468,22 +468,30 @@ async function main(): Promise<void> {
         process.stdout.write(
           "Usage: teamagent init [--dry-run] [--skip-import] [--skip-hook] [--install-plugins]\n" +
           "                      [--target=claude|codex|both] [--pack <all|name1,name2>]\n" +
+          "                      [--no-user-level-hook] [--force-nested-init]\n" +
           "\n" +
           "Options:\n" +
-          "  --dry-run            Preview what init would do without making changes\n" +
-          "  --skip-import        Skip LLM-based rule import step\n" +
-          "  --skip-hook          Skip hook registration\n" +
-          "  --skip-warmup        Skip embedding model warmup\n" +
-          "  --install-plugins    Also install team plugins (superpowers/caveman/sales)\n" +
-          "  --target=TARGET      claude (default), codex, or both\n" +
-          "  --pack=NAMES         Install stack packs without showing the agent prompt.\n" +
-          "                       NAMES may be 'all' or a comma-separated list (e.g. frontend-js,ops-safety).\n" +
+          "  --dry-run              Preview what init would do without making changes\n" +
+          "  --skip-import          Skip LLM-based rule import step\n" +
+          "  --skip-hook            Skip hook registration\n" +
+          "  --skip-warmup          Skip embedding model warmup\n" +
+          "  --install-plugins      Also install team plugins (superpowers/caveman/sales)\n" +
+          "  --target=TARGET        claude (default), codex, or both\n" +
+          "  --pack=NAMES           Install stack packs without showing the agent prompt.\n" +
+          "                         NAMES may be 'all' or a comma-separated list (e.g. frontend-js,ops-safety).\n" +
+          "  --no-user-level-hook   Issue #161 escape hatch: do NOT register hooks in\n" +
+          "                         ~/.claude/settings.json. Default behaviour registers\n" +
+          "                         user-level hooks so cc launched from sub-directories\n" +
+          "                         still triggers TeamAgent (project DB resolved via walk-up).\n" +
+          "  --force-nested-init    Issue #161 escape hatch: allow `init` to create a\n" +
+          "                         child .teamagent/ even when an ancestor already has\n" +
+          "                         one. Default refuses to avoid duplicate state.\n" +
           "\n" +
           "Scaffolds TeamAgent config in the current project:\n" +
           "  - Creates .teamagent/ directory and initializes knowledge DB\n" +
           "  - Injects meta-principles into global store\n" +
           "  - Imports rules from CLAUDE.md / AGENTS.md / .cursorrules\n" +
-          "  - Registers Claude Code hook (PreToolUse)\n" +
+          "  - Registers Claude Code hook (PreToolUse) at project AND user level\n" +
           "  - Exports compiled Skills\n" +
           "\n" +
           "Run teamagent doctor after init to verify the installation.\n",

@@ -68,6 +68,7 @@ import { runStopNarrativeScan, readLastInjected, lastInjectedFilePath } from "./
 import { rotateIfTooLarge } from "./log-rotate.js";
 import { runAdvancedHook } from "./hook-shell/index.js";
 import type { AdvancedHookOptions } from "./hook-shell/index.js";
+import { findTeamagentRoot } from "./lib/walk-up.js";
 
 /**
  * 用户可见进度事件的注入入口。
@@ -414,6 +415,16 @@ export async function runStopPipeline(
   opts: RunStopPipelineOptions = {},
 ): Promise<void> {
   const cwd = input.cwd;
+  // Issue #161: when Claude Code is launched from a sub-directory of a
+  // teamagent-initialized project, `cwd` points at the child but the project
+  // DB lives in an ancestor. Walk up once to find the real project root so
+  // analyze / calibrate / narrative-scan / catch-up vectorization all read
+  // the right `.teamagent/knowledge.db`. Falls back to `cwd` when no ancestor
+  // has been initialized — preserves the legacy "current dir is project" path.
+  // NOTE: `cwd` is still used unchanged for error logging, harvest writes,
+  // and the stop-running lock — those are about "where the user invoked
+  // from", not "where the project lives".
+  const projectRoot = findTeamagentRoot(cwd) ?? cwd;
   const fullRescan = opts.fullRescan === true;
   const modeTag = opts.modeTag ?? (fullRescan ? "full" : "incremental");
   const emit = opts.emit;
@@ -475,7 +486,7 @@ export async function runStopPipeline(
           const result = await executeAnalyze({
             session: input.transcript_path,
             commit: true,
-            cwd,
+            cwd: projectRoot,
             fromTurnIndex,
             llmClient,
             isMomentSeen: (sig) => seen.has(sig),
@@ -533,7 +544,7 @@ export async function runStopPipeline(
       },
       "TeamAgent: 校准置信度中...\n",
     );
-    await executeCalibrate({ cwd });
+    await executeCalibrate({ cwd: projectRoot });
     emitWithFallback(
       emit,
       {
@@ -607,7 +618,7 @@ export async function runStopPipeline(
   }
 
   // Step 4.5: catch-up vectorization —补全缺向量的老规则（fire-and-forget，最多 15 条/次）
-  const catchUpDbPath = path.join(cwd, ".teamagent", "knowledge.db");
+  const catchUpDbPath = path.join(projectRoot, ".teamagent", "knowledge.db");
   if (existsSync(catchUpDbPath)) {
     catchUpVectorization(catchUpDbPath, getStopEmbedder(), emit).catch(() => {/* best-effort */});
   }
@@ -689,7 +700,7 @@ export async function runStopPipeline(
       // aiText alone silently skipped compliance scoring for tool-only turns.
       if (lastTurn) {
         const aiText = lastTurn.assistantText ?? "";
-        const projectDbPath = path.join(cwd, ".teamagent", "knowledge.db");
+        const projectDbPath = path.join(projectRoot, ".teamagent", "knowledge.db");
         const globalDbPath = path.join(os.homedir(), ".teamagent", "global.db");
         const eventsDbPath = path.join(os.homedir(), ".teamagent", "events.db");
         const sessionsDir = path.join(os.homedir(), ".teamagent", "sessions");

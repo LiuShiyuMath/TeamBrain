@@ -45,6 +45,7 @@ import type {
   Visibility,
 } from "./types.js";
 import { assertEscapeNonEmpty, type RequireAtLeastOneEscape } from "./conditional-gate.js";
+import { findTeamagentRoot } from "../lib/walk-up.js";
 
 // ──────────────────────────────────────────────────────────────────────────
 // Shared helpers
@@ -114,8 +115,14 @@ export function effectiveHookVisibility(
 }
 
 function resolvePaths(cwd: string, home: string): HookDbPaths {
+  // Issue #161: walk up from cwd to find the nearest ancestor with
+  // .teamagent/knowledge.db (a hook fired from a sub-directory must still
+  // resolve to the project root's DB). Falls back to cwd itself if no
+  // ancestor contains one — preserves the legacy "create new project
+  // here" path for first-run.
+  const projectRoot = findTeamagentRoot(cwd) ?? cwd;
   return {
-    projectDbPath: path.join(cwd, ".teamagent", "knowledge.db"),
+    projectDbPath: path.join(projectRoot, ".teamagent", "knowledge.db"),
     globalDbPath: path.join(home, ".teamagent", "global.db"),
     eventsDbPath: path.join(home, ".teamagent", "events.db"),
   };
