@@ -143,15 +143,15 @@ needs a judge.
 The playbook documents three sections:
 
 - **§V1 RUN** — fixed tools to invoke (`pnpm test`, `pnpm typecheck`,
-  feature-verification 1+2+3 commands, regression repro). Stdout/stderr
+  feature-verification gate commands, regression repro). Stdout/stderr
   captured to `evidence_dir`.
 - **§V2 DUMP** — canonical JSON written to `.judge/<run_id>/judge.json`,
   schema example `{ "exit_code": <int>, "tests_passed": <int>,
   "tests_failed": <int>, "typecheck_clean": <bool>, "evidence_dir": ...,
   "stdout_path": ... }` plus raw stdout/stderr in `evidence_dir`.
-- **§V3 READ** — a separate LLM judge (`claudefast -p` or `codex exec`)
-  reads ONLY the raw JSON + evidence and grades the fix. The PR author,
-  the executing agent, and the code-under-test must never be the judge.
+- **§V3 READ** — a separate LLM judge (`claudefast -p`) reads ONLY the
+  raw JSON + evidence and grades the fix. The PR author, the executing
+  agent, and the code-under-test must never be the judge.
 
 See `~/.claude/docs/rules/testing-judge-harness.md` and user-memory
 `feedback_judge_harness_md_playbook.md`. Failed sections rerun by

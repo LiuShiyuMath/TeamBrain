@@ -50,8 +50,8 @@ the indexes below to choose what to read first.
 ### Verification
 
 1. [feature-verification.md](feature-verification.md) for the required
-   feature/fix verification gate: `claudefast`, `codex`, JSON hard-match, tmux
-   `/export`, PR review gate, and commit/PR evidence.
+   feature/fix verification gate: `claudefast` JSON snapshot, tmux `/export`,
+   PR review gate, and commit/PR evidence.
 2. [pr-14-status.md](pr-14-status.md) for the current PR #14 local status
    index when GitHub access is blocked.
 3. [verify/RUN-VERIFY-LOOP.md](verify/RUN-VERIFY-LOOP.md) for the

@@ -118,7 +118,7 @@ Exit cleanly. mainpi will free the slot for the next grill-ready issue.
 - `docs/HOWTO-PLAN-PR.md` — 4-section PR body
 - `docs/PR-PLAN.md` — same-PR fix loop, no follow-up issues
 - `docs/POSTPR.md` — /review-loop-until-PASS shape
-- `docs/feature-verification.md` — 1+2+3 gates if the implementation introduces a new feature
+- `docs/feature-verification.md` — feature-verification gate if the implementation introduces a new feature
 - AGENTS.md rule 11 — Boris research → plan → annotate → implement → report
 - AGENTS.md `.codex/worktrees/` rule
 - TeamBrain CLAUDE.md non-draft-PR rule

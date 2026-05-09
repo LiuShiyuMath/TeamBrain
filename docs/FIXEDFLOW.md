@@ -108,15 +108,14 @@ driver = `.claude/skills/fixed-flow-driver/SKILL.md`（Codex 端在 `.codex/skil
 - `docs/HOWTO-PLAN-PR.md` — FIXEDFLOW step 3 的 PR 描述继续按 4 段结构（plan / expected outputs / how-to-verify / claudefast probes）写。
 - `docs/PR-PLAN.md` — FIXEDFLOW step 4 每轮 fix 强制按 PR-PLAN 三段写新 plan 文件。
 - `docs/POSTPR.md` — FIXEDFLOW step 4 / 5 即 POSTPR 循环的程序化版本。
-- `docs/feature-verification.md` — FIXEDFLOW 自身的 1+2+3 验证由 `docs/plans/2026-05-09-fixed-flow/judge.md` 承担。
+- `docs/feature-verification.md` — FIXEDFLOW 自身的 feature-verification 由 `docs/plans/2026-05-09-fixed-flow/judge.md` 承担。
 - `docs/HOW-TO-ISSUE.md` — 已归档；FIXEDFLOW 取代之。
 
 ## 验证（语义 probe，不写 canned-answer block）
 
-按 ADR-0007 / `docs/POSTPR.md` L115 的硬约束，**不向 `CLAUDE.md` 或 `AGENTS.md` 写 FIXEDFLOW canned-answer block**。验证只走两条：
+按 ADR-0007 / `docs/POSTPR.md` L115 的硬约束，**不向 `CLAUDE.md` 或 `AGENTS.md` 写 FIXEDFLOW canned-answer block**。验证走一条：
 
-1. `claudefast -p "explain TeamBrain FIXEDFLOW: 5 steps, what's manual vs auto"` 必须有机命中本文 5 步与 manual/auto 切分。
-2. `codex exec --skip-git-repo-check -s read-only "explain TeamBrain FIXEDFLOW: 5 steps, what's manual vs auto"` 与 (1) 输出在 5 个 step 标签上 hard-match。
+1. `claudefast -p "explain TeamBrain FIXEDFLOW: 5 steps, what's manual vs auto"` 必须有机命中本文 5 步与 manual/auto 切分；与 `snapshots/fixedflow.canonical.txt` 对照。
 
 完整 judge harness 见 `docs/plans/2026-05-09-fixed-flow/judge.md`（§V1 RUN / §V2 DUMP / §V3 READ）。
 
