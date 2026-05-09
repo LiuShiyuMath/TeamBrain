@@ -87,6 +87,38 @@ function emitWithFallback(emit: EmitFn | undefined, event: AttributionEvent, fal
   try { process.stderr.write(fallbackText); } catch { /* best-effort */ }
 }
 
+/**
+ * Race a promise against a timeout that:
+ *   - resolves to `null` on timeout (caller distinguishes via the typed return)
+ *   - calls `clearTimeout` when the work-promise wins (no late-firing timer
+ *     keeping the singleton lock held past actual completion)
+ *   - `unref`s the timer so it doesn't keep the event loop alive after the
+ *     work-promise resolves (so a fast Stop event exits promptly even when
+ *     the timeout would otherwise be 30s away)
+ *
+ * Issue #189 follow-up: raw `Promise.race + setTimeout` was holding the
+ * per-cwd singleton lock for the full TEAMAGENT_*_TIMEOUT_MS window even
+ * after semantic-scan / scan-errors finished in milliseconds, blocking
+ * subsequent Stop events. Reported by Codex on PR #196.
+ */
+export async function raceWithTimeout<T>(
+  work: Promise<T>,
+  timeoutMs: number,
+): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), timeoutMs);
+    if (timer && typeof (timer as { unref?: () => void }).unref === "function") {
+      (timer as { unref: () => void }).unref();
+    }
+  });
+  try {
+    return await Promise.race<T | null>([work, timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 function nowIso(): string { return new Date().toISOString(); }
 
 // ---- Lazy singleton for semantic embedder (shared across Stop calls in same process) ----
@@ -598,7 +630,7 @@ export async function runStopPipeline(
       );
       const scanTimeoutMs = stopScanCfg.stop_scan_errors_timeout_ms;
       const scanLlm = buildLLMClient();
-      const out = await Promise.race<string | null>([
+      const out = await raceWithTimeout(
         executeScanErrors({
           mode: "efficient",
           minFreq: 2,
@@ -606,8 +638,8 @@ export async function runStopPipeline(
           quiet: true,
           llmClient: scanLlm,
         }),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), scanTimeoutMs)),
-      ]);
+        scanTimeoutMs,
+      );
       if (out === null) {
         emitWithFallback(
           emit,
@@ -730,9 +762,7 @@ export async function runStopPipeline(
             })();
             let semanticHits: import("@teamagent/core").SemanticMatch[] | null;
             try {
-              semanticHits = await Promise.race<
-                import("@teamagent/core").SemanticMatch[] | null
-              >([
+              semanticHits = await raceWithTimeout(
                 semanticMatch({
                   contextText,
                   actionText,
@@ -740,10 +770,8 @@ export async function runStopPipeline(
                   retriever: semanticRetriever,
                   scope: { level: "global" },
                 }),
-                new Promise<null>((resolve) =>
-                  setTimeout(() => resolve(null), semScanTimeoutMs),
-                ),
-              ]);
+                semScanTimeoutMs,
+              );
             } finally {
               try { semanticDb.close(); } catch { /* ok */ }
             }
