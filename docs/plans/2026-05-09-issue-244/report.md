@@ -88,8 +88,9 @@ iter-2 (this driver, after parallel commit was already on origin)
 | Gate | Result |
 |------|--------|
 | `pnpm typecheck` (workspace) | ✅ |
-| New lock unit tests (`update-state-lock.test.ts`) | ✅ 10/10 |
-| Regression suites (`update`, `updater-logic`, `session-start-logic`, `integration-issue-159`) | ✅ 62/62 (Claude); also retested post-d04be33 |
+| New lock unit tests (`update-state-lock.test.ts`) | ✅ 10/10 pre-d04be33; **11/11 post-d04be33** (parallel driver added one test asserting the empty-lock TOCTOU fix) |
+| Regression suites (`update`, `updater-logic`, `session-start-logic`, `integration-issue-159`) | ✅ 62/62 in both runs |
+| Total final test count (post-rebase + d04be33 + Claude doc fix) | ✅ 73/73 (= 11 lock + 62 regression) |
 | Scope: only 6 grill-listed files + 2 PR-PLAN docs | ✅ |
 | No npm dep added | ✅ |
 | Untouched: `events.db`, `warmup-state.json`, `knowledge.db` | ✅ |
