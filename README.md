@@ -54,11 +54,12 @@ avoidance 规则）、立即可拦截。背景任务将在 ~10 分钟内静默�
 ### 立即验证（30 秒内看到第一次拦截）
 
 ```bash
-teamagent demo
+teamagent try
 ```
 
-`demo` 命令模拟一次 `moment → dayjs` 纠正 → 下一会话被 PreToolUse 拦截的完整闭环。
-GIF 演示同样展示这两个时刻（[见 landing page](https://libz-renlab-ai.github.io/TeamBrain/)）。
+`try` 命令是 30 秒一键体验入口，依次播放 5 个经典 PreToolUse 拦截场景（含 `moment → dayjs`
+纠正 → 下一会话被拦截的完整闭环）。GIF 演示同样展示这些时刻（[见 landing page](https://libz-renlab-ai.github.io/TeamBrain/)）。
+进阶用法见 `teamagent demo --help`。
 
 ---
 

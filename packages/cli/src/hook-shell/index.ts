@@ -65,6 +65,54 @@ function parseVisibility(env: Readonly<NodeJS.ProcessEnv>): Visibility {
     : "verbose";
 }
 
+/**
+ * Hook-level verbose opt-in (issue #174 W3).
+ *
+ * Default visibility for hook channels is `verbose`, which makes
+ * `StdoutRenderer` append the `--- raw events ---` JSON dump and the
+ * `counterfactual` line to every rendered AttributionEvent on stderr. That
+ * trailing block is noisy for end users — they only need the three-line
+ * highlight/warning summary that `smart` mode already produces.
+ *
+ * This helper opts users into the noisy verbose tail explicitly via
+ * `TEAMAGENT_HOOK_VERBOSE=1` (or `=true`). When unset, the shell
+ * downgrades the renderer's mode from `verbose` to `smart` for hook
+ * channels only, preserving the JSON envelope on stdout (returned to
+ * Claude Code) untouched.
+ *
+ * Non-hook commands (`pitfall`, `skeleton-demo`) continue to honour
+ * `TEAMAGENT_VISIBILITY` directly because they construct their own
+ * renderer outside this shell.
+ */
+export function shouldShowVerboseHookOutput(env: Readonly<NodeJS.ProcessEnv>): boolean {
+  const raw = env.TEAMAGENT_HOOK_VERBOSE;
+  return raw === "1" || raw === "true";
+}
+
+/**
+ * Effective hook-channel visibility — downgrades `verbose` to `smart` unless
+ * `TEAMAGENT_HOOK_VERBOSE=1` is set. `silent` and `smart` pass through
+ * unchanged.
+ *
+ * PR #183 fix: the original W3 commit only used this for the
+ * `StdoutRenderer` mode (stderr human-prose), but `ctx.visibility` was still
+ * forwarded to handlers as the raw `verbose` and pre-tool-use-handler.ts:120
+ * went on to write `◈ TeamAgent: ✓ <tool> 放行 (检查 N 条规则)` into the
+ * stdout JSON envelope's `systemMessage` on every clean pass. That stdout
+ * leak defeated the user-visible promise of the W3 slice. We now thread
+ * this single effective value into BOTH the renderer mode AND `ctx.visibility`
+ * so the gate covers stdout + stderr together.
+ */
+export function effectiveHookVisibility(
+  visibility: Visibility,
+  env: Readonly<NodeJS.ProcessEnv>,
+): Visibility {
+  if (visibility === "verbose" && !shouldShowVerboseHookOutput(env)) {
+    return "smart";
+  }
+  return visibility;
+}
+
 function resolvePaths(cwd: string, home: string): HookDbPaths {
   return {
     projectDbPath: path.join(cwd, ".teamagent", "knowledge.db"),
@@ -204,10 +252,21 @@ export async function runHook<TInput, TOutput>(
     // become user-visible stderr lines (per visibility). bin handlers can
     // emit `bus.emit({ kind, ... })` and trust the rendering reaches the
     // terminal — no need for each bin to wire its own renderer.
+    //
+    // Issue #174 W3 + PR #183 fix: gate `verbose` behind `TEAMAGENT_HOOK_VERBOSE=1`
+    // for BOTH the StdoutRenderer mode (stderr human-prose) and ctx.visibility
+    // (the value handlers consume to decide whether to emit a verbose
+    // `systemMessage` into the stdout JSON envelope). Computing once and
+    // threading it everywhere keeps stdout + stderr in lockstep — the W3
+    // commit only gated the renderer, leaving the stdout systemMessage leak
+    // (`◈ TeamAgent: ✓ <tool> 放行`) on by default. The JSON envelope SHAPE
+    // is unchanged; only the human-prose `systemMessage` field is suppressed
+    // when verbose isn't opted in.
+    const effectiveVisibility = effectiveHookVisibility(visibility, rt.env);
     const renderer = new StdoutRenderer();
     const unsubscribeRenderer = bus.subscribe((event) => {
-      if (visibility === "silent") return;
-      const text = renderer.render([event], visibility);
+      if (effectiveVisibility === "silent") return;
+      const text = renderer.render([event], effectiveVisibility);
       if (text && text.length > 0) {
         try { process.stderr.write(`${text}\n`); } catch { /* best-effort */ }
       }
@@ -226,7 +285,7 @@ export async function runHook<TInput, TOutput>(
       env: rt.env,
       paths: rt.paths,
       bus,
-      visibility,
+      visibility: effectiveVisibility,
       mirrorSystemMessage: mirror,
     } as unknown as DefaultHookContext<TInput>;
 
@@ -382,10 +441,19 @@ export async function runAdvancedHook<
   // emits ~12 user-visible AttributionEvents through ctx.bus; the renderer
   // ensures each lands on stderr per visibility mode without each handler
   // managing its own subscription.
+  //
+  // Issue #174 W3 + PR #183 fix: same `TEAMAGENT_HOOK_VERBOSE=1` gate as the
+  // default layer — downgrade `verbose` to `smart` for BOTH the renderer
+  // (stderr) AND ctx.visibility (which advanced handlers consume to gate
+  // verbose `systemMessage` writes into the stdout JSON envelope). The W3
+  // commit only gated the renderer; PR #183 closes the stdout half too. The
+  // JSON envelope SHAPE on stdout is unchanged; only the verbose
+  // `systemMessage` field is suppressed when the env opt-in is missing.
+  const effectiveVisibility = effectiveHookVisibility(visibility, rt.env);
   const renderer = new StdoutRenderer();
   const unsubscribeRenderer = bus.subscribe((event) => {
-    if (visibility === "silent") return;
-    const text = renderer.render([event], visibility);
+    if (effectiveVisibility === "silent") return;
+    const text = renderer.render([event], effectiveVisibility);
     if (text && text.length > 0) {
       try { process.stderr.write(`${text}\n`); } catch { /* best-effort */ }
     }
@@ -410,7 +478,7 @@ export async function runAdvancedHook<
     env: rt.env,
     paths: rt.paths,
     bus,
-    visibility,
+    visibility: effectiveVisibility,
     mirrorSystemMessage: mirror,
     store: lazyStore,
     eventLog: lazyEventLog,

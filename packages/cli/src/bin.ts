@@ -347,6 +347,18 @@ async function main(): Promise<void> {
       process.stdout.write(executeStats(statsOpts));
       return;
     }
+    case "try": {
+      const { executeTry } = await import("./commands/try.js");
+      // Help mode
+      if (rest.includes("--help") || rest.includes("-h")) {
+        const r = await executeTry({ help: true });
+        process.stdout.write(r.output);
+        process.exit(r.exitCode);
+      }
+      const r = await executeTry({});
+      process.stdout.write(r.output);
+      process.exit(r.exitCode);
+    }
     case "demo": {
       // Legacy subcommand: teamagent demo hook <tool> <key=value>...
       const sub = rest[0];
@@ -1075,6 +1087,7 @@ async function main(): Promise<void> {
           "teamagent — TeamAgent CLI",
           "",
           "用法:",
+          "  teamagent try                    30 秒一键体验：依次播放 5 个经典 hook 拦截场景（首次安装推荐入口）",
           "  teamagent skeleton-demo          M0 Walking Skeleton 演示",
           "  teamagent m5-infect [--project-root=<path>] [--author=<name>]",
           "                                   [M5-A] 把 TeamAgent 病毒式契约写入项目（幂等）",
@@ -1095,8 +1108,9 @@ async function main(): Promise<void> {
           "                                   非交互模式 (可选: --category=C|E|S|K --tags=a,b --level=personal|team|global --nature=objective|subjective)",
           "  teamagent stats [--stuck-in-promotion] [--stuck-days=N] [--explain=<id>]",
           "                                   展示知识库统计；--stuck-in-promotion 列出卡在 probation 超 N 天的规则",
-          "  teamagent demo hook <tool> <k=v>...",
-          "                                   离线模拟 PreToolUse hook (例: teamagent demo hook Bash 'command=npm install moment')",
+          "  teamagent demo hook <tool> <k=v>...    [advanced] 离线模拟 PreToolUse hook（多字段请用空格分隔多个 slot，或传单个 JSON：'{\"file_path\":\"a\",\"content\":\"b\"}'）",
+          "                                   例：teamagent demo hook Bash 'command=npm install moment'",
+          "                                   例：teamagent demo hook Write file_path=a.js content='console.log(1)'",
           "  teamagent install-hook           把 PreToolUse hook 注册到当前项目 .claude/settings.local.json",
           "  teamagent uninstall-hook         移除 PreToolUse hook 注册",
           "  teamagent install-user-hook      把 SessionStart hook 注册到 ~/.claude/settings.json",
@@ -1115,7 +1129,11 @@ async function main(): Promise<void> {
           "                                   Codex 快捷安装：导出 Skills，并创建 .codex/skills 软链接",
           "  teamagent doctor [--fix] [--json]",
           "                                   诊断安装环境（Node版本/Claude Code/sqlite-vec/Hook/CLAUDE.md）",
-          "                                   --fix: 自动修复能自动修的问题",
+          "                                   --fix: 自动修复以下类型的问题（先备份到 ~/.teamagent/backups/）：",
+          "                                          - 旧版 TEAMAGENT:START 生成块（剥离）",
+          "                                          - hook 注册路径过期（更新指向当前安装）",
+          "                                          - skill 文件残留（清理）",
+          "                                          配 --dry-run 预览要改什么",
           "                                   --json: 输出机器可读 JSON",
           "  teamagent install-plugins [--dry-run] [--only=a,b] [--scope=user|project|local]",
           "                                   注册团队标配 plugins（superpowers/sales/playground）",

@@ -412,3 +412,337 @@ describe("runHook lifecycle (default layer)", () => {
     expect(exitCode).toBe(0);
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// Issue #174 W3: TEAMAGENT_HOOK_VERBOSE gates the renderer's verbose tail
+// ────────────────────────────────────────────────────────────────────────────
+//
+// Default visibility for hook channels is "verbose", which makes
+// `StdoutRenderer` append the `--- raw events ---` JSON dump to every
+// rendered event on stderr. End users only need the three-line
+// highlight/warning summary that `smart` mode produces — the dump is
+// noise. The shell now downgrades the renderer mode from "verbose" to
+// "smart" unless `TEAMAGENT_HOOK_VERBOSE=1` is set.
+//
+// The JSON envelope written to stdout (returned to Claude Code) is
+// independent: `writeStdout(wrapped)` runs unconditionally regardless of
+// either env var, so Claude Code's hook protocol parsing is unaffected.
+describe("runHook TEAMAGENT_HOOK_VERBOSE gating (issue #174 W3)", () => {
+  let origHookVerbose: string | undefined;
+
+  beforeEach(() => {
+    origHookVerbose = process.env.TEAMAGENT_HOOK_VERBOSE;
+    delete process.env.TEAMAGENT_HOOK_VERBOSE;
+  });
+
+  afterEach(() => {
+    if (origHookVerbose === undefined) delete process.env.TEAMAGENT_HOOK_VERBOSE;
+    else process.env.TEAMAGENT_HOOK_VERBOSE = origHookVerbose;
+  });
+
+  it("TEAMAGENT_HOOK_VERBOSE unset (default): stderr has no `--- raw events ---` block", async () => {
+    feedStdin(JSON.stringify({ tool_name: "Bash", cwd: tmpCwd }));
+    // Default visibility (env unset) is "verbose" via parseVisibility — exactly
+    // the case the gate has to suppress.
+
+    await runUntilExit(() =>
+      runHook<unknown, { decision: string }>({
+        channel: "PreToolUse",
+        parseInput: (raw: unknown) => raw,
+        handler: (ctx: DefaultHookContext<unknown>) => {
+          // Severity "warning" survives the smart-mode info filter so we
+          // know the renderer DID run; only the verbose tail is suppressed.
+          ctx.bus.emit({
+            kind: "hook-pre.matched",
+            source: "hook-pre",
+            severity: "warning",
+            timestamp: "2026-05-09T00:00:00.000Z",
+            ruleId: "test-rule",
+            permissionDecision: "deny",
+            counterfactual: "without-teamagent-cf-line",
+          });
+          return { decision: "deny" };
+        },
+        envelope: (out) => ({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: out.decision,
+          },
+        }),
+      }),
+    );
+
+    const stderr = stderrBuf.join("");
+    // Renderer ran (smart mode keeps the summary block).
+    expect(stderr).toContain("做了什么");
+    expect(stderr).toContain("test-rule");
+    // But the verbose tail is gated.
+    expect(stderr).not.toContain("--- raw events ---");
+    expect(stderr).not.toContain("如果没有 TeamAgent");
+    expect(stderr).not.toContain("without-teamagent-cf-line");
+    // JSON envelope on stdout is unchanged regardless of gate.
+    const envelope = JSON.parse(stdoutBuf.join(""));
+    expect(envelope).toEqual({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+      },
+    });
+    expect(exitCode).toBe(0);
+  });
+
+  it("TEAMAGENT_HOOK_VERBOSE=1: stderr DOES contain `--- raw events ---` block", async () => {
+    process.env.TEAMAGENT_HOOK_VERBOSE = "1";
+    feedStdin(JSON.stringify({ tool_name: "Bash", cwd: tmpCwd }));
+
+    await runUntilExit(() =>
+      runHook<unknown, { decision: string }>({
+        channel: "PreToolUse",
+        parseInput: (raw: unknown) => raw,
+        handler: (ctx: DefaultHookContext<unknown>) => {
+          ctx.bus.emit({
+            kind: "hook-pre.matched",
+            source: "hook-pre",
+            severity: "warning",
+            timestamp: "2026-05-09T00:00:00.000Z",
+            ruleId: "test-rule",
+            permissionDecision: "deny",
+            counterfactual: "without-teamagent-cf-line",
+          });
+          return { decision: "deny" };
+        },
+        envelope: (out) => ({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: out.decision,
+          },
+        }),
+      }),
+    );
+
+    const stderr = stderrBuf.join("");
+    expect(stderr).toContain("做了什么");
+    expect(stderr).toContain("test-rule");
+    // Opt-in restores the verbose tail.
+    expect(stderr).toContain("--- raw events ---");
+    expect(stderr).toContain("如果没有 TeamAgent");
+    expect(stderr).toContain("without-teamagent-cf-line");
+    // JSON envelope on stdout still unchanged.
+    const envelope = JSON.parse(stdoutBuf.join(""));
+    expect(envelope).toEqual({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+      },
+    });
+    expect(exitCode).toBe(0);
+  });
+
+  it("JSON envelope on stdout is identical with/without TEAMAGENT_HOOK_VERBOSE", async () => {
+    // Run twice — once gated (default), once verbose — and assert the
+    // stdout envelope is byte-identical. Only the human-prose stderr
+    // trailer differs. This pins the contract that Claude Code's hook
+    // protocol parsing is unaffected by the gate.
+    const captureStdoutOnce = async (): Promise<string> => {
+      stdoutBuf = [];
+      stderrBuf = [];
+      feedStdin(JSON.stringify({ tool_name: "Bash", cwd: tmpCwd }));
+      await runUntilExit(() =>
+        runHook<unknown, { decision: string; reason: string }>({
+          channel: "PreToolUse",
+          parseInput: (raw: unknown) => raw,
+          handler: (ctx: DefaultHookContext<unknown>) => {
+            ctx.bus.emit({
+              kind: "hook-pre.matched",
+              source: "hook-pre",
+              severity: "warning",
+              timestamp: "2026-05-09T00:00:00.000Z",
+              ruleId: "envelope-stable-rule",
+              permissionDecision: "deny",
+              counterfactual: "cf-noise",
+            });
+            return { decision: "deny", reason: "test" };
+          },
+          envelope: (out) => ({
+            hookSpecificOutput: {
+              hookEventName: "PreToolUse",
+              permissionDecision: out.decision,
+              permissionDecisionReason: out.reason,
+            },
+          }),
+        }),
+      );
+      return stdoutBuf.join("");
+    };
+
+    const stdoutGated = await captureStdoutOnce();
+    process.env.TEAMAGENT_HOOK_VERBOSE = "1";
+    const stdoutVerbose = await captureStdoutOnce();
+    delete process.env.TEAMAGENT_HOOK_VERBOSE;
+
+    // Byte-equal stdout — same JSON envelope returned to Claude Code.
+    expect(stdoutGated).toBe(stdoutVerbose);
+    // Deep-equal parse for belt-and-suspenders.
+    expect(JSON.parse(stdoutGated)).toEqual(JSON.parse(stdoutVerbose));
+  });
+
+  it("TEAMAGENT_HOOK_VERBOSE accepts `true` as well as `1`", async () => {
+    process.env.TEAMAGENT_HOOK_VERBOSE = "true";
+    feedStdin(JSON.stringify({ tool_name: "Bash", cwd: tmpCwd }));
+
+    await runUntilExit(() =>
+      runHook<unknown, { decision: string }>({
+        channel: "PreToolUse",
+        parseInput: (raw: unknown) => raw,
+        handler: (ctx: DefaultHookContext<unknown>) => {
+          ctx.bus.emit({
+            kind: "hook-pre.matched",
+            source: "hook-pre",
+            severity: "warning",
+            timestamp: "2026-05-09T00:00:00.000Z",
+            ruleId: "test-rule",
+            permissionDecision: "deny",
+          });
+          return { decision: "deny" };
+        },
+        envelope: (out) => ({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: out.decision,
+          },
+        }),
+      }),
+    );
+
+    expect(stderrBuf.join("")).toContain("--- raw events ---");
+    expect(exitCode).toBe(0);
+  });
+
+  it("TEAMAGENT_HOOK_VERBOSE=0 (or any non-truthy): tail still suppressed", async () => {
+    process.env.TEAMAGENT_HOOK_VERBOSE = "0";
+    feedStdin(JSON.stringify({ tool_name: "Bash", cwd: tmpCwd }));
+
+    await runUntilExit(() =>
+      runHook<unknown, { decision: string }>({
+        channel: "PreToolUse",
+        parseInput: (raw: unknown) => raw,
+        handler: (ctx: DefaultHookContext<unknown>) => {
+          ctx.bus.emit({
+            kind: "hook-pre.matched",
+            source: "hook-pre",
+            severity: "warning",
+            timestamp: "2026-05-09T00:00:00.000Z",
+            ruleId: "test-rule",
+            permissionDecision: "deny",
+          });
+          return { decision: "deny" };
+        },
+        envelope: (out) => ({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: out.decision,
+          },
+        }),
+      }),
+    );
+
+    expect(stderrBuf.join("")).not.toContain("--- raw events ---");
+    expect(exitCode).toBe(0);
+  });
+
+  // PR #183 fix: the W3 commit only gated the StdoutRenderer's mode (stderr
+  // human-prose). It did NOT downgrade `ctx.visibility`, so handlers like
+  // pre-tool-use-handler.ts:120 still saw "verbose" and wrote
+  // `◈ TeamAgent: ✓ <tool> 放行` into the stdout JSON envelope's
+  // systemMessage on every clean pass — the user-visible "noisy by default"
+  // problem leaked through stdout. This regression test pins the contract
+  // that ctx.visibility seen by handlers IS the downgraded value.
+  it("ctx.visibility is downgraded to `smart` when TEAMAGENT_HOOK_VERBOSE unset (PR #183 #2 regression)", async () => {
+    feedStdin(JSON.stringify({ tool_name: "Bash", cwd: tmpCwd }));
+    let observedVisibility: string | undefined;
+    await runUntilExit(() =>
+      runHook<unknown, { decision: string }>({
+        channel: "PreToolUse",
+        parseInput: (raw: unknown) => raw,
+        handler: (ctx: DefaultHookContext<unknown>) => {
+          observedVisibility = ctx.visibility;
+          return { decision: "allow" };
+        },
+        envelope: (out) => ({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: out.decision,
+          },
+        }),
+      }),
+    );
+    // Without the gate, handler observes the downgraded value.
+    expect(observedVisibility).toBe("smart");
+    expect(exitCode).toBe(0);
+  });
+
+  it("ctx.visibility stays `verbose` when TEAMAGENT_HOOK_VERBOSE=1 (PR #183 #2 opt-in)", async () => {
+    process.env.TEAMAGENT_HOOK_VERBOSE = "1";
+    feedStdin(JSON.stringify({ tool_name: "Bash", cwd: tmpCwd }));
+    let observedVisibility: string | undefined;
+    await runUntilExit(() =>
+      runHook<unknown, { decision: string }>({
+        channel: "PreToolUse",
+        parseInput: (raw: unknown) => raw,
+        handler: (ctx: DefaultHookContext<unknown>) => {
+          observedVisibility = ctx.visibility;
+          return { decision: "allow" };
+        },
+        envelope: (out) => ({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: out.decision,
+          },
+        }),
+      }),
+    );
+    // With the opt-in, handler sees the original verbose value.
+    expect(observedVisibility).toBe("verbose");
+    expect(exitCode).toBe(0);
+  });
+
+  it("TEAMAGENT_VISIBILITY=smart still works (no upgrade): no `--- raw events ---` regardless of HOOK_VERBOSE", async () => {
+    // Smart mode never produces the verbose tail in StdoutRenderer, and the
+    // gate only downgrades verbose→smart — it must NOT upgrade smart→verbose.
+    process.env.TEAMAGENT_HOOK_VERBOSE = "1";
+    const origVis = process.env.TEAMAGENT_VISIBILITY;
+    process.env.TEAMAGENT_VISIBILITY = "smart";
+    try {
+      feedStdin(JSON.stringify({ tool_name: "Bash", cwd: tmpCwd }));
+      await runUntilExit(() =>
+        runHook<unknown, { decision: string }>({
+          channel: "PreToolUse",
+          parseInput: (raw: unknown) => raw,
+          handler: (ctx: DefaultHookContext<unknown>) => {
+            ctx.bus.emit({
+              kind: "hook-pre.matched",
+              source: "hook-pre",
+              severity: "warning",
+              timestamp: "2026-05-09T00:00:00.000Z",
+              ruleId: "test-rule",
+              permissionDecision: "deny",
+            });
+            return { decision: "deny" };
+          },
+          envelope: (out) => ({
+            hookSpecificOutput: {
+              hookEventName: "PreToolUse",
+              permissionDecision: out.decision,
+            },
+          }),
+        }),
+      );
+
+      expect(stderrBuf.join("")).not.toContain("--- raw events ---");
+      expect(exitCode).toBe(0);
+    } finally {
+      if (origVis === undefined) delete process.env.TEAMAGENT_VISIBILITY;
+      else process.env.TEAMAGENT_VISIBILITY = origVis;
+    }
+  });
+});

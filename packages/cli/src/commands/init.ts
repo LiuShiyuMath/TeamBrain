@@ -397,23 +397,34 @@ export async function executeInit(opts: InitOptions = {}): Promise<InitResult> {
       }
     }
   } else if (!dryRun) {
-    const installedNames = collectInstalledPackNames(
-      paths.userGlobalDbPath,
-      available,
-    );
-    packPrompt = renderPackPromptBody({
-      observed,
-      available,
-      installed: installedNames,
-    });
-    steps.push(
-      okStep(
-        "pack-prompt",
-        available.length > 0
-          ? `已生成 v1 markdown prompt（${available.length} 个可用 pack）`
-          : "已生成 v1 markdown prompt（无 pack 可用）",
-      ),
-    );
+    if (available.length === 0) {
+      // No stack packs available — skip the prompt block entirely (issue 174 #5).
+      // The self-contradicting "已生成 v1 prompt（无 pack 可用）" + 30-line block
+      // confused new users; emit a single notice instead.
+      packPrompt = "";
+      steps.push(
+        okStep(
+          "pack-prompt",
+          "ℹ️  暂无 stack packs 可用（teamagent pack list 查看）",
+        ),
+      );
+    } else {
+      const installedNames = collectInstalledPackNames(
+        paths.userGlobalDbPath,
+        available,
+      );
+      packPrompt = renderPackPromptBody({
+        observed,
+        available,
+        installed: installedNames,
+      });
+      steps.push(
+        okStep(
+          "pack-prompt",
+          `已生成 v1 markdown prompt（${available.length} 个可用 pack）`,
+        ),
+      );
+    }
   } else {
     steps.push(
       okStep(
