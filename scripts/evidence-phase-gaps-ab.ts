@@ -216,7 +216,7 @@ function main(): void {
   const newStrict = commands.find((c) => c.name === "new-strict-claudefast")!;
 
   const dualLayerText = readIfExists(path.join(REPO_ROOT, "packages/adapters/src/storage/sqlite/dual-layer-store.ts"));
-  const roadmapText = readIfExists(path.join(REPO_ROOT, "docs/superpowers/specs/2026-04-22-product-roadmap-v3.md"));
+  const roadmapText = readIfExists(path.join(REPO_ROOT, "docs/backup/phase2-superseded/2026-04-22-product-roadmap-v3.md"));
   const installPluginsTestText = readIfExists(path.join(REPO_ROOT, "packages/cli/src/__tests__/install-plugins.test.ts"));
   const sessionEndText = readIfExists(path.join(REPO_ROOT, "packages/cli/src/bin-session-end.ts"));
   const preCompactText = readIfExists(path.join(REPO_ROOT, "packages/cli/src/bin-pre-compact.ts"));
@@ -254,7 +254,7 @@ function main(): void {
       status: dualLayerText.includes("team-scoped entries are not supported until Phase 4") && roadmapText.includes("双向同步规则")
         ? "proved-gap"
         : "blocked-by-environment",
-      oldEvidence: ["packages/adapters/src/storage/sqlite/dual-layer-store.ts", "docs/superpowers/specs/2026-04-22-product-roadmap-v3.md"],
+      oldEvidence: ["packages/adapters/src/storage/sqlite/dual-layer-store.ts", "docs/backup/phase2-superseded/2026-04-22-product-roadmap-v3.md"],
       newEvidence: commonNewEvidence,
       reasons: [
         "源码和文档直接证明 team scope/sync 仍是 Phase 4 缺口。",
