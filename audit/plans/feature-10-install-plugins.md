@@ -30,20 +30,20 @@
 8. 默认 spawner 调用 `node:child_process.spawn("claude", args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true })`，因此 audit 可以通过临时 PATH 前置 fake `claude` 捕获真实 argv。
 9. `interpretCmd()` 用 exit code、stdout/stderr 中的 `✔`、`Successfully`、`already`、`✘`、`Failed` 判定 added/already/failed；fake binary 必须输出可被生产解释器识别的成功文本。
 
-默认 bundle 来自 `packages/core/src/init/default-plugins.ts`：
+默认 bundle 来自 `packages/core/src/init/default-plugins.ts`，与项目级 `.claude/settings.json:enabledPlugins` 保持一致（PR #255 起）：
 
 ```json
 {
   "marketplaces": [
-    { "name": "claude-plugins-official", "repo": "anthropics/claude-plugins-official" },
-    { "name": "knowledge-work-plugins", "repo": "anthropics/knowledge-work-plugins" },
-    { "name": "caveman", "repo": "JuliusBrussee/caveman" }
+    { "name": "claude-plugins-official", "repo": "anthropics/claude-plugins-official" }
   ],
   "plugins": [
-    "superpowers@claude-plugins-official",
     "playground@claude-plugins-official",
-    "sales@knowledge-work-plugins",
-    "caveman@caveman"
+    "claude-code-setup@claude-plugins-official",
+    "code-review@claude-plugins-official",
+    "code-simplifier@claude-plugins-official",
+    "commit-commands@claude-plugins-official",
+    "frontend-design@claude-plugins-official"
   ]
 }
 ```
@@ -138,23 +138,23 @@ show_log() {
 
 ## 关键 JSONL command log 形态
 
-默认安装成功时，`$CLAUDE_LOG` 必须是 7 行 JSONL。关键字段示例：
+默认安装成功时，`$CLAUDE_LOG` 必须是 7 行 JSONL：1 条 marketplace add + 6 条 plugin install。关键字段示例：
 
 ```jsonl
 {"argv":["plugin","marketplace","add","anthropics/claude-plugins-official"],"home":"/tmp/teamagent-install-plugins-audit.X/home"}
-{"argv":["plugin","marketplace","add","anthropics/knowledge-work-plugins"],"home":"/tmp/teamagent-install-plugins-audit.X/home"}
-{"argv":["plugin","marketplace","add","JuliusBrussee/caveman"],"home":"/tmp/teamagent-install-plugins-audit.X/home"}
-{"argv":["plugin","install","superpowers@claude-plugins-official"],"home":"/tmp/teamagent-install-plugins-audit.X/home"}
 {"argv":["plugin","install","playground@claude-plugins-official"],"home":"/tmp/teamagent-install-plugins-audit.X/home"}
-{"argv":["plugin","install","sales@knowledge-work-plugins"],"home":"/tmp/teamagent-install-plugins-audit.X/home"}
-{"argv":["plugin","install","caveman@caveman"],"home":"/tmp/teamagent-install-plugins-audit.X/home"}
+{"argv":["plugin","install","claude-code-setup@claude-plugins-official"],"home":"/tmp/teamagent-install-plugins-audit.X/home"}
+{"argv":["plugin","install","code-review@claude-plugins-official"],"home":"/tmp/teamagent-install-plugins-audit.X/home"}
+{"argv":["plugin","install","code-simplifier@claude-plugins-official"],"home":"/tmp/teamagent-install-plugins-audit.X/home"}
+{"argv":["plugin","install","commit-commands@claude-plugins-official"],"home":"/tmp/teamagent-install-plugins-audit.X/home"}
+{"argv":["plugin","install","frontend-design@claude-plugins-official"],"home":"/tmp/teamagent-install-plugins-audit.X/home"}
 ```
 
 `pathHead[0]` 应该等于 `$AUDIT_BIN`，证明命中的是 fake `claude`。`home` 应该等于 `$AUDIT_HOME`，证明没有使用真实 HOME。
 
 ## 核查场景
 
-### A. 默认行为：3 个 marketplace + 4 个 plugin
+### A. 默认行为：1 个 marketplace + 6 个 plugin
 
 命令：
 
@@ -179,12 +179,12 @@ const rows = fs.readFileSync(process.argv[2], "utf8").trim().split(/\n/).map(JSO
 const actual = rows.map((r) => r.argv);
 const expected = [
   ["plugin", "marketplace", "add", "anthropics/claude-plugins-official"],
-  ["plugin", "marketplace", "add", "anthropics/knowledge-work-plugins"],
-  ["plugin", "marketplace", "add", "JuliusBrussee/caveman"],
-  ["plugin", "install", "superpowers@claude-plugins-official"],
   ["plugin", "install", "playground@claude-plugins-official"],
-  ["plugin", "install", "sales@knowledge-work-plugins"],
-  ["plugin", "install", "caveman@caveman"],
+  ["plugin", "install", "claude-code-setup@claude-plugins-official"],
+  ["plugin", "install", "code-review@claude-plugins-official"],
+  ["plugin", "install", "code-simplifier@claude-plugins-official"],
+  ["plugin", "install", "commit-commands@claude-plugins-official"],
+  ["plugin", "install", "frontend-design@claude-plugins-official"],
 ];
 if (JSON.stringify(actual) !== JSON.stringify(expected)) {
   console.error(JSON.stringify(actual, null, 2));
@@ -209,7 +209,7 @@ test ! -s "$AUDIT_OUT/stderr.txt"
 
 预期输出要点：
 
-- stdout 有 `Marketplaces:`、`Plugins:`，列出 3 个 marketplace 和 4 个 plugin。
+- stdout 有 `Marketplaces:`、`Plugins:`，列出 1 个 marketplace 和 6 个 plugin。
 - 汇总为 `7 新装`。
 - stderr 为空。
 - JSONL 顺序严格为「全部 marketplace add」之后「全部 plugin install」。
@@ -218,8 +218,8 @@ test ! -s "$AUDIT_OUT/stderr.txt"
 通过标准：
 
 - 7 条外部调用全部命中 fake `claude`。
-- 3 条 marketplace add 的 repo 与 default specs 完全一致。
-- 4 条 plugin install 的 `<plugin>@<marketplace>` 与 default specs 完全一致。
+- 1 条 marketplace add 的 repo 与 default specs 完全一致。
+- 6 条 plugin install 的 `<plugin>@<marketplace>` 与 default specs 完全一致。
 - 调用顺序与源码编排一致，不能交错 marketplace/plugin。
 
 ### B. `--scope=project`：scope 只传给 plugin install
@@ -243,7 +243,7 @@ const fs = require("fs");
 const rows = fs.readFileSync(process.argv[2], "utf8").trim().split(/\n/).map(JSON.parse);
 const marketplaceRows = rows.filter((r) => r.argv[1] === "marketplace");
 const pluginRows = rows.filter((r) => r.argv[1] === "install");
-if (marketplaceRows.length !== 3 || pluginRows.length !== 4) process.exit(1);
+if (marketplaceRows.length !== 1 || pluginRows.length !== 6) process.exit(1);
 if (marketplaceRows.some((r) => r.argv.includes("--scope"))) {
   console.error("marketplace add unexpectedly received --scope");
   process.exit(1);
@@ -263,8 +263,8 @@ grep -q "7 新装" "$AUDIT_OUT/stdout.txt"
 预期 JSONL plugin 行示例：
 
 ```jsonl
-{"argv":["plugin","install","superpowers@claude-plugins-official","--scope","project"]}
-{"argv":["plugin","install","caveman@caveman","--scope","project"]}
+{"argv":["plugin","install","playground@claude-plugins-official","--scope","project"]}
+{"argv":["plugin","install","frontend-design@claude-plugins-official","--scope","project"]}
 ```
 
 通过标准：
@@ -273,12 +273,12 @@ grep -q "7 新装" "$AUDIT_OUT/stdout.txt"
 - 每条 plugin install 行都以 `--scope project` 结尾。
 - stdout 成功汇总仍为 7 新装。
 
-### C. `--only=caveman`：过滤 plugin 且只注册必要 marketplace
+### C. `--only=code-review`：过滤 plugin 且只注册必要 marketplace
 
 命令：
 
 ```bash
-run_teamagent_install_plugins --only=caveman --scope=local
+run_teamagent_install_plugins --only=code-review --scope=local
 STATUS=$?
 cat "$AUDIT_OUT/stdout.txt"
 show_log
@@ -295,8 +295,8 @@ node - "$CLAUDE_LOG" <<'NODE'
 const fs = require("fs");
 const actual = fs.readFileSync(process.argv[2], "utf8").trim().split(/\n/).map((l) => JSON.parse(l).argv);
 const expected = [
-  ["plugin", "marketplace", "add", "JuliusBrussee/caveman"],
-  ["plugin", "install", "caveman@caveman", "--scope", "local"],
+  ["plugin", "marketplace", "add", "anthropics/claude-plugins-official"],
+  ["plugin", "install", "code-review@claude-plugins-official", "--scope", "local"],
 ];
 if (JSON.stringify(actual) !== JSON.stringify(expected)) {
   console.error(JSON.stringify(actual, null, 2));
@@ -304,25 +304,25 @@ if (JSON.stringify(actual) !== JSON.stringify(expected)) {
 }
 NODE
 
-grep -q "caveman@caveman" "$AUDIT_OUT/stdout.txt"
-! grep -q "superpowers@claude-plugins-official" "$AUDIT_OUT/stdout.txt"
-! grep -q "sales@knowledge-work-plugins" "$AUDIT_OUT/stdout.txt"
+grep -q "code-review@claude-plugins-official" "$AUDIT_OUT/stdout.txt"
+! grep -q "playground@claude-plugins-official" "$AUDIT_OUT/stdout.txt"
+! grep -q "frontend-design@claude-plugins-official" "$AUDIT_OUT/stdout.txt"
 grep -q "2 新装" "$AUDIT_OUT/stdout.txt"
 ```
 
 通过标准：
 
 - command log 只有 2 行。
-- 没有注册 official / knowledge-work marketplaces。
-- 没有安装 superpowers / playground / sales。
+- 已注册 official marketplace（仅这一个，default bundle 仅一个 marketplace）。
+- 没有安装 default bundle 中其他 5 个 plugin。
 - `--scope=local` 透传到唯一 plugin install。
 
-### D. `--only=superpowers,playground`：同 marketplace 去重
+### D. `--only=playground,code-review`：同 marketplace 去重
 
 命令：
 
 ```bash
-run_teamagent_install_plugins --only=superpowers,playground --scope=user
+run_teamagent_install_plugins --only=playground,code-review --scope=user
 STATUS=$?
 show_log
 echo "status=$STATUS"
@@ -339,8 +339,8 @@ const fs = require("fs");
 const actual = fs.readFileSync(process.argv[2], "utf8").trim().split(/\n/).map((l) => JSON.parse(l).argv);
 const expected = [
   ["plugin", "marketplace", "add", "anthropics/claude-plugins-official"],
-  ["plugin", "install", "superpowers@claude-plugins-official", "--scope", "user"],
   ["plugin", "install", "playground@claude-plugins-official", "--scope", "user"],
+  ["plugin", "install", "code-review@claude-plugins-official", "--scope", "user"],
 ];
 if (JSON.stringify(actual) !== JSON.stringify(expected)) {
   console.error(JSON.stringify(actual, null, 2));
@@ -422,7 +422,7 @@ test ! -s "$AUDIT_OUT/stderr.txt"
 
 ```bash
 set +e
-run_teamagent_install_plugins --only=caveman,ghost --scope=project
+run_teamagent_install_plugins --only=code-review,ghost --scope=project
 STATUS=$?
 set -e
 cat "$AUDIT_OUT/stdout.txt"
@@ -440,8 +440,8 @@ node - "$CLAUDE_LOG" <<'NODE'
 const fs = require("fs");
 const actual = fs.readFileSync(process.argv[2], "utf8").trim().split(/\n/).map((l) => JSON.parse(l).argv);
 const expected = [
-  ["plugin", "marketplace", "add", "JuliusBrussee/caveman"],
-  ["plugin", "install", "caveman@caveman", "--scope", "project"],
+  ["plugin", "marketplace", "add", "anthropics/claude-plugins-official"],
+  ["plugin", "install", "code-review@claude-plugins-official", "--scope", "project"],
 ];
 if (JSON.stringify(actual) !== JSON.stringify(expected)) {
   console.error(JSON.stringify(actual, null, 2));
@@ -449,7 +449,7 @@ if (JSON.stringify(actual) !== JSON.stringify(expected)) {
 }
 NODE
 
-grep -q "caveman@caveman" "$AUDIT_OUT/stdout.txt"
+grep -q "code-review@claude-plugins-official" "$AUDIT_OUT/stdout.txt"
 grep -q "unknown plugin" "$AUDIT_OUT/stdout.txt"
 grep -q "ghost" "$AUDIT_OUT/stdout.txt"
 grep -q "1 新装" "$AUDIT_OUT/stdout.txt"
@@ -458,7 +458,7 @@ grep -q "1 失败" "$AUDIT_OUT/stdout.txt"
 
 通过标准：
 
-- 已知 `caveman` 的 marketplace/plugin 调用照常发生。
+- 已知 `code-review` 的 marketplace/plugin 调用照常发生。
 - 未知 `ghost` 不出现在 command log 的 argv 中。
 - 由于 summary.failed > 0，CLI 最终退出 1。
 
@@ -469,7 +469,7 @@ grep -q "1 失败" "$AUDIT_OUT/stdout.txt"
 - 使用真实 `packages/cli/src/bin.ts install-plugins` 入口运行，不直接调用 `executeInstallPlugins()`。
 - fake `claude` 位于临时 PATH 首位，JSONL 中每条记录的 `pathHead[0]` 为 `$AUDIT_BIN`。
 - 每次运行的 `HOME` 为 `$AUDIT_HOME`，不使用真实用户目录。
-- 默认场景恰好 7 次外部调用，顺序为 3 次 marketplace add 后 4 次 plugin install。
+- 默认场景恰好 7 次外部调用，顺序为 1 次 marketplace add 后 6 次 plugin install。
 - `--only` 只影响默认 bundle 内的 plugin name，且 marketplace 集合按 filtered plugins 去重。
 - `--scope` 只进入 plugin install argv，不进入 marketplace add argv。
 - `--dry-run` 没有任何外部 `claude` 调用。
@@ -479,6 +479,7 @@ grep -q "1 失败" "$AUDIT_OUT/stdout.txt"
 ## 风险与补充观察
 
 - 当前 `parseInstallPluginsArgs()` 对非法 `--scope=bad` 静默忽略，不报错。若产品预期是严格参数校验，应另开缺陷；本 audit 只记录现状。
-- 默认未传 `--scope` 时，生产代码不显式传 `--scope user`，而是依赖 Claude CLI 默认 scope。文档和判定标准应避免误写成“默认 argv 带 user”。
+- 默认未传 `--scope` 时，生产代码不显式传 `--scope user`，而是依赖 Claude CLI 默认 scope。文档和判定标准应避免误写成"默认 argv 带 user"。
 - `interpretCmd()` 依赖 Claude CLI 输出文本识别状态；fake binary 必须输出 `✔ Successfully...`，否则会影响渲染汇总。
 - 此 audit 不验证真实 marketplace 仓库是否存在、网络是否可达、插件能否加载；这些属于集成/线上依赖验证，不适合在非自证本地 audit 中直接执行。
+- 默认 bundle 与项目级 `.claude/settings.json:enabledPlugins` 保持一致（PR #255 起）。本 audit 期望与这两处任一变化时同步更新。
