@@ -54,6 +54,7 @@ import { fetchRemoteSha } from "./github-api.js";
 import { resolveGithubToken } from "./commands/update.js";
 import { runAdvancedHook } from "./hook-shell/index.js";
 import { withUpdateStateLock } from "./lib/update-state-lock.js";
+import { emitUpgradeEvent } from "./lib/upgrade-event-emitter.js";
 
 function teamagentHome(): string {
   return process.env["TEAMAGENT_HOME"] ?? path.join(os.homedir(), ".teamagent");
@@ -334,6 +335,18 @@ async function main(): Promise<void> {
         now: () => Date.now(),
         acquireLock,
         releaseLock,
+        // Issue #245: tap install completion into AttributionBus +
+        // events.db so the 装机率/转化率 telemetry has a row per real
+        // install. emitUpgradeEvent (async) is awaited inside runUpdater
+        // so this detached updater process doesn't exit before the row
+        // lands in events.db; emitUpgradeEvent itself wraps both the bus
+        // emit and the sqlite append in their own try/catch so an IO
+        // failure can't propagate out and break the updater.
+        emitInstalled: async (event) => {
+          await emitUpgradeEvent(event, {
+            eventsDbPath: path.join(teamagentHome(), "events.db"),
+          });
+        },
       });
       log("updater exit");
       return undefined;

@@ -1,7 +1,9 @@
 import {
   type UpdateState,
   type PendingBanner,
+  makeUpdateInstalledEvent,
 } from "@teamagent/core";
+import type { UpdateInstalledEvent } from "@teamagent/types";
 import type { FetchShaResult } from "./github-api.js";
 
 export interface UpdaterDeps {
@@ -18,6 +20,16 @@ export interface UpdaterDeps {
   now(): number;
   acquireLock(): boolean;
   releaseLock(): void;
+  /**
+   * Issue #245 — fired once after a successful npm install + migrate, with
+   * elapsed time spanning both. Optional so existing tests stay green
+   * without injecting an emit stub.
+   *
+   * Returns void or Promise<void>; runUpdater awaits the result so the
+   * detached bin-updater process doesn't exit before the events.db row
+   * lands (same lifetime concern as the snooze/never CLI commands).
+   */
+  emitInstalled?: (event: UpdateInstalledEvent) => void | Promise<void>;
 }
 
 export async function runUpdater(deps: UpdaterDeps): Promise<void> {
@@ -87,6 +99,10 @@ export async function runUpdater(deps: UpdaterDeps): Promise<void> {
 
     deps.log(`update available: ${state.last_installed_sha || "(none)"} -> ${remoteSha}`);
     const backupDir = deps.backupCurrentInstall(state.last_installed_sha);
+    // Issue #245: track elapsed time across install + migrate so the
+    // emitted update-installed event carries a real durationMs (CEO
+    // 关心装机率, 但同样关心 install 是否在退化变慢)。
+    const installStartMs = deps.now();
 
     const installRes = await deps.runNpmInstall();
     if (!installRes.ok) {
@@ -111,16 +127,38 @@ export async function runUpdater(deps: UpdaterDeps): Promise<void> {
     }
 
     const fromSha = state.last_installed_sha;
-    const banner: PendingBanner = { from: fromSha, to: remoteSha, at: deps.now(), shown: false };
+    const installedAtMs = deps.now();
+    const banner: PendingBanner = { from: fromSha, to: remoteSha, at: installedAtMs, shown: false };
     const success: UpdateState = {
       ...state,
       last_installed_sha: remoteSha,
-      installed_at: deps.now(),
+      installed_at: installedAtMs,
       consecutive_install_failures: 0,
       last_install_error: null,
       pending_banner: banner,
     };
     deps.writeState(success);
+    // Issue #245 review iter-1 P2 fix: emit BEFORE pruneOldBackups. Backup
+    // pruning is a maintenance side effect that can throw on disk-full /
+    // permission-denied; if it does, the function exits via finally and
+    // the install event is silently dropped — telemetry would miss real
+    // installs whenever rollback dir cleanup blows up. Emit must follow
+    // the persist (so events.db only carries committed installs) but
+    // precede the maintenance call.
+    if (deps.emitInstalled) {
+      try {
+        await deps.emitInstalled(
+          makeUpdateInstalledEvent({
+            fromVer: state.last_installed_version || fromSha.slice(0, 7) || "(none)",
+            toVer: remoteSha.slice(0, 7),
+            durationMs: installedAtMs - installStartMs,
+            nowMs: installedAtMs,
+          }),
+        );
+      } catch (err) {
+        deps.log(`emitInstalled failed: ${(err as Error).message}`);
+      }
+    }
     deps.pruneOldBackups();
     deps.log(`updated to ${remoteSha}`);
   } finally {

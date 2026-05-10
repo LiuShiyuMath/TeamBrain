@@ -7,10 +7,16 @@ import {
   defaultUpdateState,
   nextSnooze,
   parseUpdateState,
+  makeUpdateSnoozedEvent,
+  makeUpdateNeverSetEvent,
   type UpdateState,
 } from "@teamagent/core";
 import type { FetchShaFailure } from "../github-api.js";
 import { withUpdateStateLock } from "../lib/update-state-lock.js";
+import {
+  emitUpgradeEvent,
+  type EmitUpgradeOptions,
+} from "../lib/upgrade-event-emitter.js";
 
 /**
  * Resolve a GitHub token for authenticated API calls.
@@ -95,16 +101,29 @@ export async function runUpdateCommand(sub: UpdateSubcommand, args: string[] = [
   }
 }
 
+// Issue #245 review iter-1 P2 fix: short-lived CLI processes (`teamagent
+// update --snooze` / `--never`) call `emitUpgradeEventSync` and immediately
+// return; the inner `void emitUpgradeEvent(event).catch(...)` fire-and-forget
+// would lose the events.db row when the process exits before the dynamic
+// `@teamagent/adapters` import + sqlite open finishes. We instead resolve
+// the persisted-row write upfront via `emitUpgradeEvent` (async), so the
+// surrounding `await runUpdateCommand("snooze")` blocks the CLI exit until
+// the row lands. Keeps the existing eventLog-injection path for tests.
+
 /**
  * Issue #225 — soft-force upgrade snooze advance.
  *
  * Reads `state.snooze_level`, calls `nextSnooze` to compute the new
  * `snooze_until_ts`, persists. Returns a one-line confirmation telling
  * the user how long the banner will stay silent.
+ *
+ * Issue #245: also emit `update-snoozed` to AttributionBus + events.db
+ * so the snooze 转化率 telemetry has a row per snooze action.
  */
-function snoozeCmd(): UpdateRunResult {
+async function snoozeCmd(emitOpts: EmitUpgradeOptions = {}): Promise<UpdateRunResult> {
   const s = readState();
-  const result = nextSnooze(s.snooze_level, Date.now());
+  const nowMs = Date.now();
+  const result = nextSnooze(s.snooze_level, nowMs);
   writeState({
     ...s,
     snooze_level: result.snooze_level,
@@ -113,7 +132,21 @@ function snoozeCmd(): UpdateRunResult {
     // stops re-firing across SessionStarts (until a new version's banner lands).
     prompt_dismissed_for_to: s.pending_banner?.to ?? "",
   });
-  const hours = Math.round((result.snooze_until_ts - Date.now()) / (60 * 60 * 1000));
+  // Issue #245 review iter-1: await emit so the events.db row is persisted
+  // before the CLI returns and the process exits. Without await, the
+  // dynamic adapters import + sqlite open is racing with process exit.
+  await emitUpgradeEvent(
+    makeUpdateSnoozedEvent({
+      level: result.snooze_level,
+      untilTs: result.snooze_until_ts,
+      nowMs,
+    }),
+    {
+      eventsDbPath: path.join(home(), "events.db"),
+      ...emitOpts,
+    },
+  );
+  const hours = Math.round((result.snooze_until_ts - nowMs) / (60 * 60 * 1000));
   const human =
     hours >= 24 ? `${Math.round(hours / 24)} 天` : `${hours} 小时`;
   return {
@@ -130,9 +163,13 @@ function snoozeCmd(): UpdateRunResult {
  * banner). Does NOT touch the auto-update.disabled marker — auto-update
  * itself stays enabled (user can still run `teamagent update --now`),
  * only the SessionStart prompt is silenced.
+ *
+ * Issue #245: emit `update-never-set` so the permanent-opt-out conversion
+ * shows up in 装机率 telemetry.
  */
-function neverCmd(): UpdateRunResult {
+async function neverCmd(emitOpts: EmitUpgradeOptions = {}): Promise<UpdateRunResult> {
   const s = readState();
+  const nowMs = Date.now();
   writeState({
     ...s,
     never_prompt: true,
@@ -141,6 +178,14 @@ function neverCmd(): UpdateRunResult {
     // re-fire (a brand new pending_banner.to will fire fresh).
     prompt_dismissed_for_to: s.pending_banner?.to ?? "",
   });
+  // Issue #245 review iter-1: await emit (see snoozeCmd note above).
+  await emitUpgradeEvent(
+    makeUpdateNeverSetEvent({ nowMs }),
+    {
+      eventsDbPath: path.join(home(), "events.db"),
+      ...emitOpts,
+    },
+  );
   return {
     ok: true,
     output:
