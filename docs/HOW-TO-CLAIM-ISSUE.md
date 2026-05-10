@@ -35,6 +35,28 @@ claim 完 issue 之后的第一动作是：
 - 立刻开 worktree / branch / PR；
 - 跳过 grill 评论与 related PR / issue。
 
+## 如果 issue 有 `ready-for-human` label — 先暂停联系 maintainer
+
+`ready-for-human` label 表示该 issue **需要 maintainer 手动协调** scope / merge order / sub-PR 拆分，不是 single AFK-agent 可以一口气吃下的工作单元。常见场景：
+
+- multi-part epic（≥ 2 个 child PR）
+- 跨 area 的协调（前端 + 后端 + infra）
+- 需要 stakeholder 参与的设计 / API decision
+
+看到该 label 的 claimant **不应直接走三步流程**，而是：
+
+1. 在该 issue 评论里 ping 现 assignees / maintainer，说明你打算 claim；
+2. 等明确 ack（"go ahead" / "ok"）；
+3. ack 之后再开 worktree，按三步流程推进。
+
+### AI-triage retroactive labeling 禁止
+
+AI-triage 绑定到 issue 创建后的初次扫描；**禁止**给已有 merged work 的 issue 补贴 `ready-for-human`。理由：retroactive labeling 制造 phantom role — claim 时无标签可见的 contributor 无法预见 maintainer 后补 epic 协调约束，违反"contributor 行动时点的可见 docs/labels 是唯一约束源"原则。
+
+实证：issue #146 是 2026-05-08 06:06Z 由 contributor 自 claim、2026-05-09 04:29Z 完成 5 个 child PR (spec PR-1..PR-5) 的 ship（外加一个 stacked-PR 翻车后的 cherry-pick re-land #197，使 comment 7 timeline 列出 6 行）；AI-triage 在 ship 完成 50 分钟后（05:19Z）补贴 `ready-for-human` + epic 框架。该 retroactive 操作**不产生约束效力**，contributor 的 claim 与 ship 行为合规。issue #146 comment 7 把它框成 "Epic-coordinator 角色被 bypass" 是 mis-framed（见 `docs/POSTMORTEM.md` hard rule #6）。
+
+maintainer 在 issue 创建之初判定为 epic / 需要 human coordination 时：必须在 issue body 里直接说，并在创建时点贴 `ready-for-human` label，最好同步指名 coordinator（见 `docs/FIXEDFLOW.md` epic carve-out 段）。
+
 ## 三步流程
 
 ### STEP 1 — 派 explore agent 摸清现场
@@ -159,4 +181,5 @@ env -u GITHUB_TOKEN gh issue list --repo libz-renlab-ai/TeamBrain --search "<key
 - `docs/PR-PLAN.md` — PR 已开后才发现 issue 的修复路径。
 - `docs/POSTPR.md` — `/review` PASS 之后的 squash-merge + cleanup。
 - `docs/FASTPROBE.md` — `claudefast -p` 探针配方。
+- `docs/POSTMORTEM.md` — multi-PR recap comment 规则（`ready-for-human` retroactive ban 在本文件，对应 POSTMORTEM hard rule #6 "role bypass 必须引 role-defining doc"）。
 - `~/.claude/CLAUDE.md` 第 17 条 — `issues` zsh 函数：列当前仓库 open & unassigned issues（claim 入口）。
