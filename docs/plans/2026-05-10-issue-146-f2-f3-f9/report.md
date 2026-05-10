@@ -17,7 +17,7 @@
 
 | 字段 | 值 |
 |------|-----|
-| issue | [#146](https://github.com/libz-renlab-ai/TeamBrain/issues/146) (multi-part — F1 already merged via #252; F2/F3/F9 closed by this PR; F4-F8 not in this batch) |
+| issue | [#146](https://github.com/libz-renlab-ai/TeamBrain/issues/146) (multi-part — F1 已 PR #252 · F2 + F3 + F9 由本 PR closed · 仅剩 install-hook TODO；canonical F-list = F1/F2/F3/F9 共 4 条，无 F4-F8) |
 | PR | [#263](https://github.com/libz-renlab-ai/TeamBrain/pull/263) |
 | squash commit | `c2def24` on `main` |
 | branch | `feat/issue-146-f2-f3-f9` (local + remote both deleted) |
@@ -48,7 +48,7 @@
 1. **No FIXEDFLOW**：用户 option B 明确说跳过 grill / driver；本 PR 是普通 maintainer-driven PR，不是 fixed-flow-driver skill 输出。F-series sub-tasks 没单独开 issue，因为 #146 的 mental model 把 F1-F9 视作一个 multi-part umbrella，给每个 F# 单独开 issue 反而违反「一个 issue 一句话」原则（实际 spec 在 PR description + report.md 里）。
 2. **No /review iter**：option B 把 /review 留给 reviewer 在 PR review 阶段做（CI 的 `claude-review` cloud bot 提供了 informational pass）。本地 /review skill 没在这条链上跑——若后续发现 P1/P2 finding，按 `docs/PR-PLAN.md` 在同 PR branch 修；但 PR 已 squash-merged，新 finding 走 follow-up F# 子 issue。
 3. **`recording_temp/` 目录保留**：F3 把新 recordings 改写到 `pending/`，但没删 `digitalTwinPaths.recordingTempDir` 字段——pre-F3 leftover OGGs 仍然能被诊断工具读到。Follow-up housekeeping PR 在下一个 release cycle 后可移除。
-4. **F4-F8 不在本 PR**：仅 F2+F3+F9。F4 (recording-not-attached-to-daemon) 的 PR-4 描述其实已部分覆盖；本 PR 把那条线收口（recordings 进 daemon）。F4 标签和 F3 在 report.md 的 mapping 有歧义（PR-252 body 说 F4，report 说 F3），统一按 report.md 的 F3 = recording attachment 处理。
+4. **F-series 编号澄清（早期 report 草稿勘误）**：本 report 早期版本（commit `d3213cf`）里写了「F4-F8 仍 OPEN」「F4-F8 不在本 PR」——这是错误信息。真实 canonical 列表来自 `docs/plans/issue-146-f1/report.md` 「Open follow-ups」段，**只列三条**：F2 envelope、F3 recording、F9 zero-touch。PR #252 body 的 "Did not" 段也只列三条（旧 labeling F3/F4/F9，对齐到现行 F2/F3/F9）。**没有任何 doc 定义过 F4/F5/F6/F7/F8** —— 全仓 grep 出来的 F4-F8 全部属于其他 issue 的本地编号（#194 HTTP timeout、#218 init banner、PR-148 review）。issue-146 series 的 F-series 状态：F1（PR #252 已 closed）/ F2/F3/F9（PR #263 已 closed）/ install-hook TODO（仍 open，列在 F1 report 里）。
 
 ## Verification evidence
 
@@ -67,7 +67,7 @@
 
 ## 后续 / 风险
 
-- **F4-F8 仍 open**：`docs/plans/issue-146-f1/report.md` 没列 F4-F8 的明确 scope；用户后续若要推进，需要 (a) 给每个 F# 单独 ≤50 字 issue + grill 走 FIXEDFLOW，或 (b) 像本 PR 一样 option B 直接干。
+- **issue-146 series F-list 收口状态**：F1 (PR #252) ✅ · F2 + F3 + F9 (PR #263) ✅ · 没有 F4-F8（早期 report 草稿误称这些"仍 open"，已在 §4 勘误）。**仍 open 的实际项**只有 F1 report 里列的 install-hook TODO（手装 `bin-uploader.cjs` 升级管线，目前靠 self-install 兜底）。下次有人想推 #146 的时候，要么收掉 install-hook TODO 把整 issue close，要么开一个 ≤50 字 fixed-flow issue（比如 "extend install-hook to manage bin-uploader.cjs"）走 FIXEDFLOW。
 - **`consented_at` 写两次**：pre-F9 enabled=true&token=null 路径 `save(patched)`；fresh-create 路径 `save(fresh)`。两条路径都对，但 pre-F9 enabled=false 的 silent backfill 也走了 `save(backfilled)`——三条 save 都是单 field 添加，不影响其他 field。Follow-up 可以合成 helper，但当前重复极小。
 - **`recording_temp/` 双轨**：tooling 仍能读 pre-F3 leftovers；新的 record stop/import 不写它。一旦确认无 leftover，可以从 `digitalTwinPaths` 删字段。
 - **`uploadCcSession` deprecated alias**：`export const uploadCcSession = uploadEntry` 留作 back-compat 转向 outside callers；本仓库内部已统一成 `uploadEntry`。下一个 release 后可删 alias。
