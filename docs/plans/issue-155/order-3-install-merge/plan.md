@@ -1,3 +1,21 @@
+> **AMENDMENT 2026-05-10 (issue #155 grill, worktree-146)**
+>
+> Authoritative scope changes from grill Q1–Q6:
+> - **不创建** `pnpm teamagent install` TS CLI 子命令 (Q3 决议: chicken-and-egg)
+> - 实际工作分两块:
+>   - (a) 增强 `release/install.sh`: 末尾 auto-run `teamagent init` (Q2 决议) → Path A V1=1
+>   - (b) 新建 `scripts/bootstrap.sh` (Q4 决议): `pnpm install && pnpm build && pnpm teamagent init` 串跑 → Path B V1=1
+> - **不依赖** Order 2 `installState.checkpoint(...)` (Order 2 CANCELLED per ADR-0011); 重入安全靠底层幂等
+> - `--skip-vector-model` 加在两个 shell 脚本上, 不再是 CLI flag
+> - Manifest reprint 改为 cat `docs/install-manifest.txt` (bootstrap.sh) 或 embed heredoc (install.sh)
+> - INSTALL.md 4-step 降级为 dev fallback appendix (Order 4 处理)
+>
+> Treat AMENDMENT as authoritative. See `docs/CONTEXT.md` Install paths section
+> + `docs/adr/0011-install-resumption-via-idempotency.md` for full grill outcome.
+> Original plan body below preserved for history.
+
+---
+
 ```
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║  Issue #155 · 6-Order Fix Chain                                              ║

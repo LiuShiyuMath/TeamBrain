@@ -1,3 +1,18 @@
+> **AMENDMENT 2026-05-10 (issue #155 grill, worktree-146)**
+>
+> Authoritative scope changes from grill Q1–Q6:
+> - **不创建** `pnpm teamagent install --preview` TS CLI flag (Q3 cancelled the new CLI)
+> - `--preview` 改为 **shell flag**: `bash release/install.sh --preview` 与 `bash scripts/bootstrap.sh --preview`
+> - Manifest 源 = `docs/install-manifest.txt` (NEW, single source of truth per Q6=B)
+> - `renderInstallManifest()` TS function NOT needed (no caller after Q3)
+> - 6-order chain → 5-order chain (Order 2 CANCELLED per ADR-0011)
+>
+> Treat AMENDMENT as authoritative. See `docs/CONTEXT.md` Install paths section
+> + `docs/adr/0011-install-resumption-via-idempotency.md` for full grill outcome.
+> Original plan body below preserved for history.
+
+---
+
 ```
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║  Issue #155 · 6-Order Fix Chain                                              ║

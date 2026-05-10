@@ -22,31 +22,44 @@ TeamAgent 解决这件事：从你纠正它的每一次对话里，自动**提�
 
 ---
 
-### 快速安装
+### 快速安装（V1=1 单 prompt，issue #155 落地后）
 
 ```bash
-# 推荐：先下载 install.sh，确认内容后再执行
-curl -fsSL https://raw.githubusercontent.com/libz-renlab-ai/TeamBrain/release/install.sh -o /tmp/teambrain-install.sh
-cat /tmp/teambrain-install.sh          # 建议先 review，确认脚本内容符合预期
-bash /tmp/teambrain-install.sh
-```
-
-也支持直接执行（适合已熟悉该脚本、或在 CI 中使用）：
-
-```bash
+# 推荐：直接 curl|bash — 装完自动跑 teamagent init，1 个授权弹窗就够
 curl -fsSL https://raw.githubusercontent.com/libz-renlab-ai/TeamBrain/release/install.sh | bash
 ```
+
+或者先 review 再执行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/libz-renlab-ai/TeamBrain/release/install.sh -o /tmp/teambrain-install.sh
+bash /tmp/teambrain-install.sh --preview          # 看 5 段清单不装
+bash /tmp/teambrain-install.sh                    # 装好再用
+```
+
+可选 flag：
+- `--preview` 仅打印 5 段安装清单 (`[config]/[skills]/[kb]/[download]/[refusal]`)，不装；
+- `--skip-vector-model` opt-out 120 MB 向量模型加载（写 `~/.teamagent/.skip-vector-model` marker）；
+- `--skip-init` 装 binary 但不自动 `teamagent init`（CI / 高级用户用）。
+
+5 段清单 canonical 源：[`docs/install-manifest.txt`](docs/install-manifest.txt)。
+中断后重跑 = 自动续（幂等；详见 [`docs/adr/0011-install-resumption-via-idempotency.md`](docs/adr/0011-install-resumption-via-idempotency.md)）。
 
 校验文件（SHA256）：[`install.sh.sha256`](https://raw.githubusercontent.com/libz-renlab-ai/TeamBrain/release/install.sh.sha256) — 由 `release-branch.yml` 工作流随 release 分支自动发布；GitHub Release 资产里也附带一份同名文件。
 参考：[release-prep/install-sh-checklist.md](release-prep/install-sh-checklist.md)
 
-安装完成后进入你的项目目录，初始化：
+#### Contributor / 想改源码
 
 ```bash
-teamagent init
+git clone https://github.com/libz-renlab-ai/TeamBrain.git
+cd TeamBrain
+bash scripts/bootstrap.sh        # pnpm install + pnpm build + pnpm teamagent init (V1=1)
 ```
 
-`init` 约 30 秒完成：注册 PreToolUse hook、注入 universal pack（~15 条跨语言
+bootstrap.sh 同样支持 `--preview` / `--skip-vector-model` / `--skip-init` flag。
+若想分步看每条命令的输出，参见 [`INSTALL.md` 的 dev fallback](INSTALL.md)（4 步 pnpm 流程，issue #155 之前的推荐路径，现保留作 dev fallback）。
+
+`teamagent init` 约 30 秒完成：注册 PreToolUse hook、注入 universal pack（~15 条跨语言
 avoidance 规则）、立即可拦截。背景任务将在 ~10 分钟内静默升级为 BM25+dense 语义匹配。
 
 ---

@@ -1,3 +1,19 @@
+> **AMENDMENT 2026-05-10 (issue #155 grill, worktree-146)**
+>
+> Authoritative scope changes from grill Q1–Q6:
+> - CI 测试目标改成 **shell 入口** (`release/install.sh` + `scripts/bootstrap.sh`), 不是 TS CLI
+> - **V1=1** 测的是 Claude Code strict mode 下两个 shell 入口各自只触发 1 个 Bash permission prompt
+> - **V2** 测两个 shell 入口启动时都打印完整 5-section manifest (install.sh 测 embedded heredoc; bootstrap.sh 测 `cat docs/install-manifest.txt` 输出)
+> - **V3** Ctrl-C + rerun 在**幂等架构**下自然续 (no resume notebook 需要; 测试不再 assert state file 内容; 测试 assert "rerun 完成 + health check 通过")
+> - **V4 timing** 测的是 shell 入口的 wall time, 基线 = post-#227 main 的 install.sh 现状
+> - Depends on: 现在是 Order 1 (shell `--preview`) + Order 3 (install.sh + bootstrap.sh) 着陆;Order 2 CANCELLED 不再为依赖
+>
+> Treat AMENDMENT as authoritative. See `docs/CONTEXT.md` Install paths section
+> + `docs/adr/0011-install-resumption-via-idempotency.md` for full grill outcome.
+> Original plan body below preserved for history.
+
+---
+
 ```
 ╔══════════════════════════════════════════════════════════════════════════════════════╗
 ║  Issue #155 — Strict-permission-mode install: CI auto-verification V1–V4            ║

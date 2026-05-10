@@ -1,3 +1,23 @@
+> **AMENDMENT 2026-05-10 (issue #155 grill, worktree-146)**
+>
+> Authoritative scope changes from grill Q1–Q6:
+> - 推荐路径不再是 `teamagent preview` + `sh /tmp/teambrain-install.sh`
+> - 推荐路径 = 两条 (Q1 Hybrid + Q2 + Q4):
+>   - **End user / AI**: `curl -fsSL .../release/install.sh | bash` (Path A 强化版, auto-init)
+>   - **Contributor**: `git clone && bash scripts/bootstrap.sh` (Path B, 新文件)
+> - INSTALL.md 4-step **保留作 dev fallback appendix** (不删, 想分步看输出时手动跑)
+> - README.md 顶部"快速安装"指 install.sh; "贡献者安装"指 bootstrap.sh
+> - 5-section manifest 引用 `docs/install-manifest.txt` (NEW, Q6=B)
+> - V5 anchors 须考虑 post-#227 binary (vector deps default-installed; ADR-0001 v2)
+> - Order 2 CANCELLED, doc 中不引用 resume notebook 概念 (改为"靠底层幂等续")
+> - 依赖关系: 这张 PR 在 1+3 着陆后 ship (与原计划一致)
+>
+> Treat AMENDMENT as authoritative. See `docs/CONTEXT.md` Install paths section
+> + `docs/adr/0011-install-resumption-via-idempotency.md` for full grill outcome.
+> Original plan body below preserved for history.
+
+---
+
 ```
 Order 1        Order 2        Order 3        [Order 4: DOC-SYNC]        Order 5        Order 6
 preview cmd  → resume state → install merge → rewrite README/INSTALL  → CI v1-v4    → CI v5

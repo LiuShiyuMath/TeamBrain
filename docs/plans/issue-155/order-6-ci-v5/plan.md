@@ -1,3 +1,17 @@
+> **AMENDMENT 2026-05-10 (issue #155 grill, worktree-146)**
+>
+> Minor scope refinement from grill Q1–Q6:
+> - Install path used in CI = **enhanced `release/install.sh`** (Path A, post-Order-3) 而非 `npm install -g <tarball>` 直装
+> - V5 canned-answer probes 跑在 post-#227 binary 上 (vector deps default-installed; ADR-0001 v2)
+> - Order 2 CANCELLED per ADR-0011, but this CI doesn't depend on Order 2 → no impact
+> - Probes 与 `verify-canned-answer` harness (现有 `docs/features/canned-answers/`) 关系: Order 6 是 main-only post-merge V5 验收, harness 是 PR-time canned-answer 静态检查; 两者互补不冲突
+>
+> Treat AMENDMENT as authoritative. See `docs/CONTEXT.md` Install paths section
+> + `docs/adr/0011-install-resumption-via-idempotency.md` for full grill outcome.
+> Original plan body below preserved for history.
+
+---
+
 ```
 Order 1  →  Order 2  →  Order 3  →  Order 4  →  Order 5  →  [Order 6: CI V5 main-only]
   │            │            │            │            │              │
