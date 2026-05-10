@@ -245,3 +245,23 @@ _Avoid_: prompt（与 LLM prompt 撞名）, confirmation（语义太宽）, dial
 - **"4-step install vs 4 sub-steps of init"** — issue #155 body 与多份 order plan 在 "4" 是 Path B 的 4 条 pnpm 命令、还是 `teamagent init` 内部的 4 个子步骤之间摇摆。**Resolution**: canonical "**4-step install**" = Path B 的 pnpm 4 步；init 内部的子步骤不另起数字
 - **"strict permission mode"** — issue #155 body 暗示这是 TeamBrain 可调的安装行为模式；实际是 **Claude Code 自己的 permission mode**，TeamBrain 完全无法影响。**Resolution**: 任何文档讨论 prompt 数时显式标 "Claude Code 的严格权限模式"，不简写
 - **"resume notebook (续命小本本)"** — Order 2 plan 设计了一个 `packages/core/src/install-state/` 模块作 per-project resume 状态机；CEO 鸭 decision 3 "断了能续" 也暗示需要这种小本本。grill 阶段发现 install 全程都已天然幂等 (tar/ln -sf/pnpm 缓存/curl -C -/init 步骤 skip-if-exists)，专门写小本本属过度设计。**Resolution**: 取消 Order 2，靠幂等达成 V3 验收；如未来出现非幂等步骤再回头加，独立 ADR 决议
+
+## Testing channels
+
+新增（ADR-0013，2026-05-10）。
+
+**Inner-loop testing**:
+工作进行中的全量测试套件运行通道；由 `wip/**` 分支推送触发 `.github/workflows/inner-loop.yml` 执行 `pnpm test` + `pnpm verify`。
+_Avoid_: developer-loop testing、quick-test、`pnpm test` 本地直跑（后者已被 ADR-0013 禁掉）
+
+**wip 分支**:
+临时分支命名空间 `wip/<topic>`，用于 inner-loop CI 触发；非 PR 分支，PR merge 后即可删除。
+_Avoid_: feature branch、scratch branch、dev branch（这些都是更宽语义）
+
+**Single-file targeted exception**:
+inner-loop testing 规则的本地例外：单文件运行（`pnpm vitest run path/to/x.test.ts` 或 `--testNamePattern` 过滤）允许本地，因 vitest 只起 1 worker 不进 scheduler-overload 区。
+_Avoid_: dev-mode test、quick local test、targeted vitest（无主语易混 PR-gate）
+
+**Scheduler-overload**:
+N 个并发 session 各自跑全套测试时 OS scheduler 队列饱和的现象；表现为 loadavg 飙升（>200）但 CPU 使用率不高（<20%），用户体感为"机器太热"但 thermal level 仍 "normal"。`toohot` 命令观测到的根因；不是 thermal throttle。
+_Avoid_: thermal throttle、CPU contention、heat（这三个都是症状层；机制层 canonical 是 scheduler-overload）
