@@ -271,3 +271,185 @@ describe("statusline issue #168 — labelled fields + de-overlap + warning suppr
     }
   });
 });
+
+// Worktree handling: when cwd is a git worktree, PROJECT_DB used to be
+// resolved purely from `process.cwd()/.teamagent/knowledge.db`. Worktrees
+// share state with their main checkout (`.git` is a FILE pointing to
+// `<main>/.git/worktrees/<name>`), so the project DB lives in the main
+// checkout — not under the worktree. The statusline must walk the .git
+// pointer to find the main checkout's DB instead of falsely flagging the
+// project as uninitialised every time the user opens a worktree session.
+function seedProjectKnowledge(
+  projectRoot: string,
+  rows: Array<{ status: string; type: string | null }>,
+): void {
+  const dir = path.join(projectRoot, ".teamagent");
+  fs.mkdirSync(dir, { recursive: true });
+  const db = new DatabaseSync(path.join(dir, "knowledge.db"));
+  db.exec("CREATE TABLE knowledge (status TEXT, type TEXT, created_at TEXT)");
+  const ins = db.prepare("INSERT INTO knowledge VALUES (?, ?, ?)");
+  const ts = new Date().toISOString();
+  for (const r of rows) ins.run(r.status, r.type, ts);
+  db.close();
+}
+
+function makeFakeWorktree(): { home: string; main: string; worktree: string } {
+  const home = mkTmpHome();
+  const main = fs.mkdtempSync(path.join(os.tmpdir(), "statusline-main-"));
+  const worktree = fs.mkdtempSync(path.join(os.tmpdir(), "statusline-wt-"));
+  fs.mkdirSync(path.join(main, ".git", "worktrees", "wt1"), { recursive: true });
+  fs.writeFileSync(
+    path.join(worktree, ".git"),
+    `gitdir: ${path.join(main, ".git", "worktrees", "wt1")}\n`,
+    "utf-8",
+  );
+  return { home, main, worktree };
+}
+
+function cleanupFakeWorktree(dirs: { home: string; main: string; worktree: string }): void {
+  for (const d of [dirs.home, dirs.main, dirs.worktree]) {
+    fs.rmSync(d, { recursive: true, force: true });
+  }
+}
+
+describe("statusline worktree handling — resolve project DB via main checkout", () => {
+  it("reads project DB from the main checkout when cwd is a git worktree", () => {
+    const dirs = makeFakeWorktree();
+    try {
+      // Seed 7 rules into the MAIN checkout, NOT the worktree
+      seedProjectKnowledge(
+        dirs.main,
+        Array.from({ length: 7 }, () => ({ status: "active", type: "avoidance" })),
+      );
+      const r = runStatusline(dirs.home, dirs.worktree);
+      expect(r.stdout).not.toContain("TeamAgent 未初始化本项目");
+      // Rule count must come from the main checkout's project DB
+      expect(r.stdout).toContain("规则:7");
+    } finally {
+      cleanupFakeWorktree(dirs);
+    }
+  });
+
+  it("still warns when the worktree's main checkout has no project DB", () => {
+    const dirs = makeFakeWorktree();
+    try {
+      // No seedProjectKnowledge call — main checkout is NOT init'd.
+      const r = runStatusline(dirs.home, dirs.worktree);
+      // The warning must still fire, telling the user to run `teamagent init`
+      // (in the main checkout — `teamagent init` itself is responsible for
+      // landing the DB at the canonical location).
+      expect(r.stdout).toContain("TeamAgent 未初始化本项目");
+    } finally {
+      cleanupFakeWorktree(dirs);
+    }
+  });
+
+  it("prefers project DB inside the worktree over the main checkout when both exist", () => {
+    // If somebody explicitly init'd inside the worktree (unusual), the local
+    // DB wins — the resolver's first probe is always cwd itself, so non-
+    // worktree behaviour is preserved.
+    const dirs = makeFakeWorktree();
+    try {
+      seedProjectKnowledge(
+        dirs.main,
+        Array.from({ length: 3 }, () => ({ status: "active", type: "avoidance" })),
+      );
+      seedProjectKnowledge(
+        dirs.worktree,
+        Array.from({ length: 11 }, () => ({ status: "active", type: "avoidance" })),
+      );
+      const r = runStatusline(dirs.home, dirs.worktree);
+      expect(r.stdout).not.toContain("TeamAgent 未初始化本项目");
+      expect(r.stdout).toContain("规则:11");
+    } finally {
+      cleanupFakeWorktree(dirs);
+    }
+  });
+
+  it("does not follow submodule .git files (gitdir: <super>/.git/modules/<name>)", () => {
+    // Submodules also write `.git` as a FILE pointing back to the super-
+    // project, but the gitdir path contains `.git/modules/<name>`, NOT
+    // `.git/worktrees/<name>`. The resolver must NOT walk it as a worktree —
+    // otherwise we'd bleed across module boundaries.
+    const home = mkTmpHome();
+    const superRoot = fs.mkdtempSync(path.join(os.tmpdir(), "statusline-super-"));
+    const submodule = fs.mkdtempSync(path.join(os.tmpdir(), "statusline-sub-"));
+    try {
+      fs.mkdirSync(path.join(superRoot, ".git", "modules", "sub"), { recursive: true });
+      // Seed knowledge in the super-project so a buggy resolver would
+      // wrongly suppress the uninitialised warning.
+      seedProjectKnowledge(superRoot, [{ status: "active", type: "avoidance" }]);
+      fs.writeFileSync(
+        path.join(submodule, ".git"),
+        `gitdir: ${path.join(superRoot, ".git", "modules", "sub")}\n`,
+        "utf-8",
+      );
+      const r = runStatusline(home, submodule);
+      expect(r.stdout).toContain("TeamAgent 未初始化本项目");
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+      fs.rmSync(superRoot, { recursive: true, force: true });
+      fs.rmSync(submodule, { recursive: true, force: true });
+    }
+  });
+
+  it("parses multi-line .git files (gitdir: <path>\\ncommondir: ...)", () => {
+    // Some git versions / third-party tooling emit a multi-line `.git` file:
+    //   gitdir: <main>/.git/worktrees/<name>
+    //   commondir: <main>/.git
+    // The regex must still match the gitdir line in that shape.
+    const dirs = makeFakeWorktree();
+    try {
+      seedProjectKnowledge(
+        dirs.main,
+        Array.from({ length: 5 }, () => ({ status: "active", type: "avoidance" })),
+      );
+      const gitdir = path.join(dirs.main, ".git", "worktrees", "wt1");
+      const commondir = path.join(dirs.main, ".git");
+      fs.writeFileSync(
+        path.join(dirs.worktree, ".git"),
+        `gitdir: ${gitdir}\ncommondir: ${commondir}\n`,
+        "utf-8",
+      );
+      const r = runStatusline(dirs.home, dirs.worktree);
+      expect(r.stdout).not.toContain("TeamAgent 未初始化本项目");
+      expect(r.stdout).toContain("规则:5");
+    } finally {
+      cleanupFakeWorktree(dirs);
+    }
+  });
+
+  it("rejects relative gitdir paths to close path-traversal vector", () => {
+    // A hostile `.git` file in an attacker-writable cwd with a relative
+    // `gitdir: ../../../some/path/.git/worktrees/x` could otherwise be
+    // resolved against cwd to redirect us to read an arbitrary DB. Real
+    // `git worktree add` always writes absolute paths, so rejecting
+    // relative entries is safe and closes the attack surface.
+    const home = mkTmpHome();
+    const sibling = fs.mkdtempSync(path.join(os.tmpdir(), "statusline-sibling-"));
+    const hostile = fs.mkdtempSync(path.join(os.tmpdir(), "statusline-hostile-"));
+    try {
+      // Put a real DB at `sibling/.teamagent/knowledge.db` and shape a
+      // `.git/worktrees/...` directory under it, then point a relative
+      // gitdir from hostile cwd to it.
+      fs.mkdirSync(path.join(sibling, ".git", "worktrees", "wt1"), { recursive: true });
+      seedProjectKnowledge(
+        sibling,
+        Array.from({ length: 99 }, () => ({ status: "active", type: "avoidance" })),
+      );
+      const relGitdir = path.relative(
+        hostile,
+        path.join(sibling, ".git", "worktrees", "wt1"),
+      );
+      fs.writeFileSync(path.join(hostile, ".git"), `gitdir: ${relGitdir}\n`, "utf-8");
+      const r = runStatusline(home, hostile);
+      // The traversal must fail: warning fires, no spoofed rule count.
+      expect(r.stdout).toContain("TeamAgent 未初始化本项目");
+      expect(r.stdout).not.toContain("规则:99");
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+      fs.rmSync(sibling, { recursive: true, force: true });
+      fs.rmSync(hostile, { recursive: true, force: true });
+    }
+  });
+});

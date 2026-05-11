@@ -29,7 +29,60 @@ try {
 // node_modules/teamagent/dist/ 之后 ../.teamagent/knowledge.db 指向
 // 包内部（无 db），就会错报 0 条。
 const fs = require("node:fs");
-const PROJECT_DB = path.resolve(process.cwd(), ".teamagent/knowledge.db");
+
+// `teamagent init` is repo-scoped: it lands `.teamagent/knowledge.db` in the
+// main checkout, not in every git worktree spawned from it. A worktree's
+// `.git` entry is a FILE pointing to `<main>/.git/worktrees/<name>`; without
+// walking that pointer the statusline saw no project DB under the worktree
+// cwd and printed "TeamAgent 未初始化本项目" every time the user opened a
+// worktree session. resolveProjectDbPath probes cwd first (preserves
+// non-worktree behaviour and lets explicit per-worktree init still win),
+// then follows the .git pointer to the main checkout if cwd has no DB.
+const PROJECT_DB_RELPATH = path.join(".teamagent", "knowledge.db");
+
+function findMainCheckoutFromWorktree(cwd) {
+  try {
+    const gitEntry = path.join(cwd, ".git");
+    const st = fs.statSync(gitEntry);
+    if (!st.isFile()) return null;
+    const content = fs.readFileSync(gitEntry, "utf-8");
+    // /m flag so we still match when git (or third-party tools) emit a
+    // multi-line `.git` file like `gitdir: <path>\ncommondir: <path>`.
+    const m = content.match(/^gitdir:\s*(.+?)\s*$/m);
+    if (!m) return null;
+    const gitdir = m[1];
+    // Real `git worktree add` always writes absolute paths. Rejecting
+    // relative entries closes a path-traversal vector where a hostile
+    // `.git` file in an attacker-writable cwd could redirect us to read
+    // an arbitrary `.teamagent/knowledge.db`.
+    if (!path.isAbsolute(gitdir)) return null;
+    // Only follow `<main>/.git/worktrees/<name>` shape — submodules use
+    // `<super>/.git/modules/<name>` and must be ignored.
+    const segs = gitdir.split(/[\\/]/);
+    const wtIdx = segs.lastIndexOf("worktrees");
+    if (wtIdx < 1 || segs[wtIdx - 1] !== ".git") return null;
+    return path.resolve(gitdir, "..", "..", "..");
+  } catch {
+    return null;
+  }
+}
+
+function resolveProjectDbPath(cwd) {
+  const direct = path.resolve(cwd, PROJECT_DB_RELPATH);
+  try {
+    if (fs.existsSync(direct)) return direct;
+  } catch { /* ignore */ }
+  const mainRoot = findMainCheckoutFromWorktree(cwd);
+  if (mainRoot) {
+    const fromMain = path.join(mainRoot, PROJECT_DB_RELPATH);
+    try {
+      if (fs.existsSync(fromMain)) return fromMain;
+    } catch { /* ignore */ }
+  }
+  return direct;
+}
+
+const PROJECT_DB = resolveProjectDbPath(process.cwd());
 const GLOBAL_DB = path.join(os.homedir(), ".teamagent", "global.db");
 const EVENTS_DB = path.join(os.homedir(), ".teamagent", "events.db");
 
