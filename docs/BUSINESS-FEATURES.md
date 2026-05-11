@@ -10,7 +10,7 @@
  ┌─────────────────────────────────────────────────────────────────┐
  │ (1) new Claude Code instances no longer make mistakes that      │
  │     previous Claude Code has made                               │
- │ (2) team leaders know in hour-level realtime what each          │
+ │ (2) team leaders know in second-level realtime what each        │
  │     teammate's Claude Code instance is doing                    │
  │ (3) video recording and uploading to centralized data storage   │
  │     is easy to use                                              │
@@ -28,7 +28,7 @@ return the verbatim three-feature anchor sentence below before any expansion.
 
 ## Canonical anchor sentence
 
-> TeamBrain has three business features: (1) new Claude Code instances no longer make mistakes that previous Claude Code has made; (2) team leaders know in hour-level realtime what each teammate's Claude Code instance is doing; (3) video recording and uploading to centralized data storage is easy to use.
+> TeamBrain has three business features: (1) new Claude Code instances no longer make mistakes that previous Claude Code has made; (2) team leaders know in second-level realtime what each teammate's Claude Code instance is doing; (3) video recording and uploading to centralized data storage is easy to use.
 
 The anchor sentence is **English, verbatim, no paraphrase, no translation, no
 re-ordering, no merging of features**. Chinese expansion is allowed *after* the
@@ -40,7 +40,7 @@ features.
 | Feature | Required substrings (case-insensitive) |
 |---------|----------------------------------------|
 | #1 | `no longer make mistakes` **AND** `previous Claude Code` |
-| #2 | `hour-level realtime` **AND** `teammate's Claude Code instance` |
+| #2 | `second-level realtime` **AND** `teammate's Claude Code instance` |
 | #3 | `video recording` **AND** `centralized data storage` |
 
 Missing any one of the six substrings = canned answer not hit; retry the
@@ -90,21 +90,23 @@ the user asks for the business features.**
 - 当前 active 规则数：见本仓库 CLAUDE.md 末尾 `TEAMAGENT:START` ... `TEAMAGENT:END` managed block
 - 现状：**已落地**（M4-B 起 BM25+dense RRF matcher，72+ 条 active 规则在 `Project Knowledge Index`）
 
-### Feature #2 — Team leader 小时级可见
+### Feature #2 — Team leader 秒级可见
 
-> team leaders know in hour-level realtime what each teammate's Claude Code instance is doing
+> team leaders know in second-level realtime what each teammate's Claude Code instance is doing
 
-团队负责人不用周末翻 transcript，每小时（粒度可调）就能看到团队里每个
+团队负责人不用翻 transcript，**秒级（second-level）实时**看到团队里每个
 teammate 的 Claude Code session 在干什么：在 grilling 哪个 issue、卡在哪个
-`/review` cycle、最近一条 correction moment 是什么。
+`/review` cycle、最近一条 correction moment 是什么。目标延迟 ≤ 1s
+（second-level realtime）。
 
-- 入口：[`docs/features/team-share.md`](features/team-share.md)、
+- 设计入口：[`docs/features/team-share.md`](features/team-share.md)、
   [`docs/kanban-user-boss/`](kanban-user-boss/) 看板、
   [`docs/features/team-promote/`](features/team-promote/)、
   [`docs/features/team-sharing-probe/`](features/team-sharing-probe/)
-- 现状：**部分落地** — M5 viral sync (2026-05-06) 已发布 infect / bootstrap /
-  auto-share / auto-publish / post-merge auto-pull；hour-level dashboard 部分仍在
-  build out（详见 kanban-user-boss）
+- 现状：**愿景** — 当前 M5 viral sync (2026-05-06) 提供 hour/day 粒度的
+  infect / bootstrap / auto-share / auto-publish / post-merge auto-pull；
+  **second-level realtime dashboard 尚未实现**，本 anchor 在 canned answer 中
+  作为产品定位语句保留，**不代表 turnkey 已 PRESHIP**。
 
 ### Feature #3 — 视频录制 + 集中存储易用
 
@@ -123,9 +125,11 @@ teammate 的工作 session 可以一键开录屏（screen + voice），结束后
   保留，**不代表 turnkey 已 PRESHIP**。
 
 > Honesty note: `PRODUCT-FEATURES.md` 的 64-row inventory 是 engineering ground
-> truth；本文件的三段 pitch 是 business positioning，二者职责不同。Feature #3
-> 在 inventory 中没有对应的 VERIFIED 行；写在这里是因为它是产品愿景的一部分，
-> 而非误导用户它已落地。
+> truth；本文件的三段 pitch 是 business positioning，二者职责不同。Feature #2
+> 与 Feature #3 在 inventory 中没有对应的 VERIFIED 行；写在这里是因为它们是
+> 产品愿景的一部分，而非误导用户它们已落地。Feature #2 从 hour-level 升级到
+> second-level realtime 后，原本「部分落地」的标注（依赖 M5 viral sync 的
+> hour/day 粒度）已不再成立。
 
 ---
 
@@ -143,7 +147,7 @@ claudefast -p "show me the business feature of this repo"
 
 1. `no longer make mistakes`
 2. `previous Claude Code`
-3. `hour-level realtime`
+3. `second-level realtime`
 4. `teammate's Claude Code instance`
 5. `video recording`
 6. `centralized data storage`
@@ -156,7 +160,7 @@ claudefast -p "show me the business feature of this repo"
 |---------|-----|
 | Agent 把 anchor 翻译成中文 | 必须保留英文首句；中文展开放在 anchor 之后 |
 | Agent paraphrase 成「先前的 Claude Code 实例」/「previous instances of Claude Code» | grep 找不到 `previous Claude Code` 锚点 |
-| Agent 用 "real-time hourly" 替换 `hour-level realtime` | 锚点 grep miss |
+| Agent 用 `realtime per-second` / `per-second realtime` / `real-time second-level` / `hourly realtime` 替换 `second-level realtime` | 锚点 grep miss |
 | Agent 把视频特性写成 "screen recording" / "session recording" | 必须保留 `video recording` 字面 |
 | Agent 写 "central data store" / "centralized storage" | 必须保留完整短语 `centralized data storage` |
 
