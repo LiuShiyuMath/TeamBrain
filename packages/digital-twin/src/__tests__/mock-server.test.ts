@@ -438,3 +438,147 @@ describe('mock-server dashboard', () => {
   });
 });
 
+describe('issue-283 quota', () => {
+  let server: MockServerHandle;
+  let outputDir: string;
+
+  // Reused valid quota block — shape mirrors CcSessionQuotaBlock.
+  const validQuota = {
+    subscription_tier: 'max:default_claude_max_20x',
+    five_hour_utilization: 0.42,
+    seven_day_utilization: 0.18,
+    five_hour_reset_at: 1746766800,
+    seven_day_reset_at: 1747198800,
+    probed_at: '2026-05-09T03:00:00.000Z',
+    stale: false,
+  };
+
+  beforeEach(async () => {
+    outputDir = mkdtempSync(join(tmpdir(), 'dt-quota-'));
+    server = await startMockServer({ port: 0, outputDir, now: () => FROZEN });
+  });
+
+  afterEach(async () => {
+    await server.close();
+  });
+
+  async function postSession(
+    sessionId: string,
+    userId: string,
+    quota: unknown | undefined,
+  ): Promise<Response> {
+    const transcript = '{"role":"user","content":"hi"}\n';
+    const compressed = gzipSync(Buffer.from(transcript));
+    const envelope: Record<string, unknown> = {
+      session_id: sessionId,
+      user_id: userId,
+      captured_at: '2026-05-09T03:00:00.000Z',
+    };
+    if (quota !== undefined) envelope.quota = quota;
+    return fetch(`${server.url}/v1/cc-sessions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        schema_version: 1,
+        envelope,
+        transcript: { content: compressed.toString('base64') },
+      }),
+    });
+  }
+
+  it('POST with valid envelope.quota writes quota.json sidecar', async () => {
+    const res = await postSession('s1', 'thomas@libz.ai', validQuota);
+    expect(res.status).toBe(200);
+    const quotaFile = join(outputDir, 'thomas@libz.ai', FROZEN_DATE, 'quota.json');
+    expect(existsSync(quotaFile)).toBe(true);
+    const parsed = JSON.parse(readFileSync(quotaFile, 'utf8'));
+    expect(parsed).toEqual(validQuota);
+  });
+
+  it('POST without envelope.quota does not create quota.json', async () => {
+    const res = await postSession('s2', 'alice@libz.ai', undefined);
+    expect(res.status).toBe(200);
+    const quotaFile = join(outputDir, 'alice@libz.ai', FROZEN_DATE, 'quota.json');
+    expect(existsSync(quotaFile)).toBe(false);
+  });
+
+  it('POST with malformed envelope.quota still lands transcript, no sidecar', async () => {
+    // Missing five_hour_reset_at + seven_day_reset_at + wrong type for stale.
+    const badQuota = {
+      subscription_tier: 'max',
+      five_hour_utilization: 0.1,
+      seven_day_utilization: 0.2,
+      probed_at: '2026-05-09T03:00:00.000Z',
+      stale: 'no', // wrong type — string instead of boolean
+    };
+    const res = await postSession('s3', 'bob@libz.ai', badQuota);
+    expect(res.status).toBe(200);
+    const transcriptFile = join(
+      outputDir,
+      'bob@libz.ai',
+      FROZEN_DATE,
+      's3.jsonl',
+    );
+    const quotaFile = join(outputDir, 'bob@libz.ai', FROZEN_DATE, 'quota.json');
+    expect(existsSync(transcriptFile)).toBe(true);
+    expect(existsSync(quotaFile)).toBe(false);
+  });
+
+  it('GET /api/quota after POST returns parsed quota JSON', async () => {
+    const postRes = await postSession('s4', 'carol@libz.ai', validQuota);
+    expect(postRes.status).toBe(200);
+    const res = await fetch(
+      `${server.url}/api/quota?user=${encodeURIComponent('carol@libz.ai')}&date=${FROZEN_DATE}`,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as typeof validQuota;
+    expect(body).toEqual(validQuota);
+  });
+
+  it('GET /api/quota with no prior POST returns 404 {error: "not found"}', async () => {
+    const res = await fetch(
+      `${server.url}/api/quota?user=ghost&date=${FROZEN_DATE}`,
+    );
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe('not found');
+  });
+
+  it('GET /api/quota with traversal user returns 400', async () => {
+    const res = await fetch(
+      `${server.url}/api/quota?user=${encodeURIComponent('..')}&date=${FROZEN_DATE}`,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('GET /api/quota with unsafe-char user returns 400', async () => {
+    // safeUserId would mutate this (`%` -> `_`), so validateUserParam rejects it.
+    const res = await fetch(
+      `${server.url}/api/quota?user=${encodeURIComponent('bad%user')}&date=${FROZEN_DATE}`,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('POST quota twice overwrites the prior sidecar', async () => {
+    const first = await postSession('s5a', 'dave@libz.ai', validQuota);
+    expect(first.status).toBe(200);
+    const updated = {
+      ...validQuota,
+      five_hour_utilization: 0.99,
+      stale: true,
+      probed_at: '2026-05-09T04:00:00.000Z',
+    };
+    const second = await postSession('s5b', 'dave@libz.ai', updated);
+    expect(second.status).toBe(200);
+    const quotaFile = join(outputDir, 'dave@libz.ai', FROZEN_DATE, 'quota.json');
+    const parsed = JSON.parse(readFileSync(quotaFile, 'utf8'));
+    expect(parsed).toEqual(updated);
+    // And the GET endpoint reflects the latest.
+    const getRes = await fetch(
+      `${server.url}/api/quota?user=${encodeURIComponent('dave@libz.ai')}&date=${FROZEN_DATE}`,
+    );
+    expect(getRes.status).toBe(200);
+    expect(await getRes.json()).toEqual(updated);
+  });
+});
+

@@ -41,6 +41,21 @@ function enableConfigInHome(home: string): void {
   saveConfig(cfg, digitalTwinPaths(home).configFile);
 }
 
+// Issue #283 — most existing tests pre-date the hourly orchestrator and
+// assert exact queue counts after the single-session tap. They must mock
+// out runHourlyScanIfDue so it doesn't ALSO enqueue based on real-fs walks
+// over the tmp home. Tests that exercise the orchestrator pass their own.
+const noopHourly = async () =>
+  ({ kind: 'skipped' as const, reason: 'too-soon' as const });
+
+async function mainQuiet(stdin: () => Promise<string>, home: string): Promise<void> {
+  await main({
+    stdinReader: stdin,
+    homedir: () => home,
+    runHourlyScanIfDue: noopHourly,
+  });
+}
+
 describe('bin-digital-twin-tap main', () => {
   let home: string;
   beforeEach(() => {
@@ -58,7 +73,7 @@ describe('bin-digital-twin-tap main', () => {
     const stdin = makeStdinReader(
       JSON.stringify({ session_id: sessionId, transcript_path: '', cwd }),
     );
-    await main(stdin, () => home);
+    await mainQuiet(stdin, home);
 
     // Config file was auto-created with the team-shared sentinel token.
     expect(existsSync(paths.configFile)).toBe(true);
@@ -87,7 +102,7 @@ describe('bin-digital-twin-tap main', () => {
     const stdin = makeStdinReader(
       JSON.stringify({ session_id: sessionId, transcript_path: '', cwd }),
     );
-    await main(stdin, () => home);
+    await mainQuiet(stdin, home);
 
     // Config file untouched.
     expect(readFileSync(paths.configFile, 'utf-8')).toBe(before);
@@ -114,7 +129,7 @@ describe('bin-digital-twin-tap main', () => {
     const stdin = makeStdinReader(
       JSON.stringify({ session_id: sessionId, transcript_path: '', cwd }),
     );
-    await main(stdin, () => home);
+    await mainQuiet(stdin, home);
 
     const persisted = JSON.parse(readFileSync(paths.configFile, 'utf-8'));
     expect(persisted.uploader.token).toBe(TEAM_SHARED_TOKEN);
@@ -139,7 +154,7 @@ describe('bin-digital-twin-tap main', () => {
     const stdin = makeStdinReader(
       JSON.stringify({ session_id: sessionId, transcript_path: '', cwd }),
     );
-    await main(stdin, () => home);
+    await mainQuiet(stdin, home);
 
     // File untouched.
     expect(readFileSync(paths.configFile, 'utf-8')).toBe(before);
@@ -159,7 +174,7 @@ describe('bin-digital-twin-tap main', () => {
     writeTranscript(home, cwd, sessionId, 'x');
     enableConfigInHome(home);
 
-    await main(makeStdinReader(''), () => home);
+    await mainQuiet(makeStdinReader(''), home);
 
     const paths = digitalTwinPaths(home);
     let entries: string[] = [];
@@ -177,7 +192,7 @@ describe('bin-digital-twin-tap main', () => {
     writeTranscript(home, cwd, sessionId, 'x');
     enableConfigInHome(home);
 
-    await main(makeStdinReader('not-json'), () => home);
+    await mainQuiet(makeStdinReader('not-json'), home);
 
     const paths = digitalTwinPaths(home);
     let entries: string[] = [];
@@ -198,7 +213,7 @@ describe('bin-digital-twin-tap main', () => {
     const stdin = makeStdinReader(
       JSON.stringify({ session_id: sessionId, transcript_path: '', cwd }),
     );
-    await main(stdin, () => home);
+    await mainQuiet(stdin, home);
 
     const paths = digitalTwinPaths(home);
     const entries = readdirSync(paths.pendingDir);
@@ -216,7 +231,7 @@ describe('bin-digital-twin-tap main', () => {
     const stdin = makeStdinReader(
       JSON.stringify({ session_id: sessionId, transcript_path: '', cwd }),
     );
-    await main(stdin, () => home);
+    await mainQuiet(stdin, home);
 
     const paths = digitalTwinPaths(home);
     let entries: string[] = [];
@@ -236,7 +251,7 @@ describe('bin-digital-twin-tap main', () => {
 
     // Missing session_id
     const stdin = makeStdinReader(JSON.stringify({ transcript_path: '', cwd }));
-    await main(stdin, () => home);
+    await mainQuiet(stdin, home);
 
     const paths = digitalTwinPaths(home);
     let entries: string[] = [];
@@ -246,6 +261,78 @@ describe('bin-digital-twin-tap main', () => {
       entries = [];
     }
     expect(entries.length).toBe(0);
+  });
+
+  // Issue #283 — Stop hook tap kicks off the hourly orchestrator AFTER the
+  // current-session tapSession completes. Verified through dep injection.
+  it('invokes runHourlyScanIfDue after the current-session tap', async () => {
+    const cwd = '/proj/hourly';
+    const sessionId = 'sess-hourly';
+    writeTranscript(home, cwd, sessionId, 'x');
+    enableConfigInHome(home);
+
+    const calls: { home: string; user_id: string }[] = [];
+    const stdin = makeStdinReader(
+      JSON.stringify({ session_id: sessionId, transcript_path: '', cwd }),
+    );
+    await main({
+      stdinReader: stdin,
+      homedir: () => home,
+      runHourlyScanIfDue: async (input) => {
+        calls.push({ home: input.home, user_id: input.config.identity.user_id });
+        return { kind: 'skipped', reason: 'too-soon' };
+      },
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.home).toBe(home);
+    expect(calls[0]!.user_id).toBe('u@h');
+  });
+
+  it('swallows hourly orchestrator throws — never blocks Stop hook close', async () => {
+    const cwd = '/proj/hourly-boom';
+    const sessionId = 'sess-boom';
+    writeTranscript(home, cwd, sessionId, 'x');
+    enableConfigInHome(home);
+
+    const stdin = makeStdinReader(
+      JSON.stringify({ session_id: sessionId, transcript_path: '', cwd }),
+    );
+
+    // Must not reject.
+    await expect(
+      main({
+        stdinReader: stdin,
+        homedir: () => home,
+        runHourlyScanIfDue: async () => {
+          throw new Error('hourly boom');
+        },
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('does not invoke hourly orchestrator when config disables uploader', async () => {
+    const cwd = '/proj/paused';
+    const sessionId = 'sess-paused';
+    writeTranscript(home, cwd, sessionId, 'x');
+    const cfg = defaultConfig({ user_id: 'u@h', machine_id: 'm-1' });
+    cfg.uploader.enabled = false;
+    cfg.uploader.token = 't';
+    saveConfig(cfg, digitalTwinPaths(home).configFile);
+
+    let called = false;
+    const stdin = makeStdinReader(
+      JSON.stringify({ session_id: sessionId, transcript_path: '', cwd }),
+    );
+    await main({
+      stdinReader: stdin,
+      homedir: () => home,
+      runHourlyScanIfDue: async () => {
+        called = true;
+        return { kind: 'skipped', reason: 'paused' };
+      },
+    });
+    // isEnabled short-circuit means we don't reach the orchestrator.
+    expect(called).toBe(false);
   });
 });
 

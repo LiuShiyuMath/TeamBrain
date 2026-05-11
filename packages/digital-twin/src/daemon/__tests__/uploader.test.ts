@@ -180,6 +180,53 @@ describe('uploadEntry', () => {
     expect(typeof body.audio.content).toBe('string');
   });
 
+  // Issue #283 — defaultBuildEnvelope forwards metadata.quota into the
+  // wire envelope when present, omits it when absent (back-compat).
+  it('cc-session: forwards metadata.quota onto envelope.quota when present', async () => {
+    const capture: { url?: string; init?: Parameters<FetchLike>[1] } = {};
+    const metaWithQuota = {
+      ...meta,
+      quota: {
+        subscription_tier: 'max/default_claude_max_20x',
+        five_hour_utilization: 0.35,
+        seven_day_utilization: 0.42,
+        five_hour_reset_at: 1778481000,
+        seven_day_reset_at: 1778626800,
+        probed_at: '2026-05-11T03:00:00.000Z',
+        stale: false,
+      },
+    };
+    await uploadEntry(
+      {
+        metadata: metaWithQuota,
+        payloadBytes: Buffer.from('hi'),
+        endpoint: 'http://h:8080',
+        token: 'tk',
+        identity: { user_id: 'u', machine_id: 'm' },
+      },
+      { fetchFn: fetchStub(200, '', capture) },
+    );
+    const body = JSON.parse(capture.init!.body);
+    expect(body.quota).toEqual(metaWithQuota.quota);
+  });
+
+  it('cc-session: omits envelope.quota entirely when metadata.quota is absent', async () => {
+    const capture: { url?: string; init?: Parameters<FetchLike>[1] } = {};
+    await uploadEntry(
+      {
+        metadata: meta,
+        payloadBytes: Buffer.from('hi'),
+        endpoint: 'http://h:8080',
+        token: 'tk',
+        identity: { user_id: 'u', machine_id: 'm' },
+      },
+      { fetchFn: fetchStub(200, '', capture) },
+    );
+    const body = JSON.parse(capture.init!.body);
+    expect(body.quota).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(body, 'quota')).toBe(false);
+  });
+
   it('uses injected buildEnvelope (cc-session shape)', async () => {
     const capture: { url?: string; init?: Parameters<FetchLike>[1] } = {};
     let buildCalled = 0;

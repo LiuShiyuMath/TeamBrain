@@ -11,6 +11,19 @@ export interface DigitalTwinPaths {
   deadLetterDir: string;
   recordingTempDir: string;
   daemonPidFile: string;
+  /**
+   * Issue #283 — sentinel file written every time the hourly scan fires.
+   * Contains a single ISO timestamp. Acts as the time fence so the Stop
+   * hook can decide whether the hourly slot has elapsed without spawning a
+   * separate daemon.
+   */
+  lastHourlyScanFile: string;
+  /**
+   * Issue #283 — local cache of the most recent successful quota probe.
+   * Persisted as a serialized `CcSessionQuotaBlock` so a probe failure
+   * (401/429/network) can still attach a stale snapshot to the envelope.
+   */
+  quotaCacheFile: string;
 }
 
 export function digitalTwinPaths(home: string = homedir()): DigitalTwinPaths {
@@ -27,6 +40,8 @@ export function digitalTwinPaths(home: string = homedir()): DigitalTwinPaths {
     deadLetterDir: join(queueDir, 'dead-letter'),
     recordingTempDir: join(queueDir, 'recording_temp'),
     daemonPidFile: join(digitalTwinDir, 'daemon.pid'),
+    lastHourlyScanFile: join(digitalTwinDir, 'last-hourly-scan.txt'),
+    quotaCacheFile: join(digitalTwinDir, 'quota-cache.json'),
   };
 }
 

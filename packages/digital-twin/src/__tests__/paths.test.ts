@@ -39,6 +39,17 @@ describe('paths', () => {
       const p = digitalTwinPaths('/x');
       expect(p.daemonPidFile).toBe(join(p.digitalTwinDir, 'daemon.pid'));
     });
+
+    // Issue #283 — hourly scheduler fence + quota cache locations.
+    it('lastHourlyScanFile is at digitalTwinDir/last-hourly-scan.txt', () => {
+      const p = digitalTwinPaths('/x');
+      expect(p.lastHourlyScanFile).toBe(join(p.digitalTwinDir, 'last-hourly-scan.txt'));
+    });
+
+    it('quotaCacheFile is at digitalTwinDir/quota-cache.json', () => {
+      const p = digitalTwinPaths('/x');
+      expect(p.quotaCacheFile).toBe(join(p.digitalTwinDir, 'quota-cache.json'));
+    });
   });
 
   describe('DEFAULT_PATHS', () => {

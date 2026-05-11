@@ -98,6 +98,37 @@ describe('tapSession', () => {
     expect(meta.host).toEqual({ os: 'linux', arch: 'x64', hostname: 'host-1' });
     expect(meta.teamagent_version).toBe('0.9.5');
     expect(meta.schema_version).toBe(1);
+    // Issue #283 — no quota passed; metadata.json must not have a quota field.
+    expect(meta.quota).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(meta, 'quota')).toBe(false);
+  });
+
+  // Issue #283 — Stop hook tap can carry a Max-quota snapshot.
+  it('persists quota onto metadata when input.quota is provided', () => {
+    const cwd = '/Users/test/proj-q';
+    const sessionId = 'sess-q';
+    const dir = join(home, '.claude', 'projects', projectDirForCwd(cwd));
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `${sessionId}.jsonl`), 'x', 'utf-8');
+    const quota = {
+      subscription_tier: 'max/default_claude_max_20x',
+      five_hour_utilization: 0.35,
+      seven_day_utilization: 0.42,
+      five_hour_reset_at: 1778481000,
+      seven_day_reset_at: 1778626800,
+      probed_at: '2026-05-11T03:00:00.000Z',
+      stale: false,
+    };
+    const result = tapSession(
+      { cwd, sessionId, quota },
+      { homedir: () => home, ulid: () => 'q-ulid' },
+    );
+    expect(result.status).toBe('tapped');
+    const meta = JSON.parse(readFileSync(result.metadataPath!, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
+    expect(meta.quota).toEqual(quota);
   });
 
   it('does not spawn daemon when daemonBin is missing/undefined', () => {

@@ -75,10 +75,14 @@ const defaultBuildEnvelope = (input: UploadInput): UploadEntryEnvelope => {
       identity: input.identity,
     });
   }
+  // Issue #283: forward optional quota from metadata into the wire envelope
+  // so the collector writes the sibling quota.json. Absent on pre-#283
+  // entries — buildCcSessionEnvelope omits the field entirely when undefined.
   return buildCcSessionEnvelope({
     metadata: input.metadata,
     payloadBytes: input.payloadBytes,
     identity: input.identity,
+    quota: input.metadata.quota,
   });
 };
 

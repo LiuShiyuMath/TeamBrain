@@ -30,6 +30,51 @@ export interface DigitalTwinConfig {
    * (we backfill on first patch / load-and-save touchpoint).
    */
   consented_at?: string | null;
+  /**
+   * Issue #283 — hourly scan opt-out + window tuning. Both fields are
+   * optional; defaults via `quotaProbeSettings()`.
+   */
+  quota_probe?: QuotaProbeConfig;
+}
+
+export interface QuotaProbeConfig {
+  /** Default: true. Set false to disable hourly scan + probe entirely. */
+  enabled?: boolean;
+  /**
+   * Minimum minutes between hourly scans. Default: 55 (a small slack
+   * under 60 so Stop ticks landing within the last 5min of an hour are
+   * still recognized as eligible).
+   */
+  window_minutes?: number;
+}
+
+/** Resolved settings with defaults applied. */
+export interface ResolvedQuotaProbeSettings {
+  enabled: boolean;
+  windowMinutes: number;
+}
+
+export const DEFAULT_QUOTA_PROBE_WINDOW_MINUTES = 55;
+
+/**
+ * Issue #283 — read the quota_probe block from config and fill in defaults.
+ * Pure: takes a config (or null) and returns a fully-resolved settings
+ * object. Used by the scheduler + Stop hook to decide whether to fire.
+ */
+export function quotaProbeSettings(
+  config: DigitalTwinConfig | null,
+): ResolvedQuotaProbeSettings {
+  const raw = config?.quota_probe;
+  const enabled = raw?.enabled ?? true;
+  let windowMinutes = raw?.window_minutes ?? DEFAULT_QUOTA_PROBE_WINDOW_MINUTES;
+  if (
+    typeof windowMinutes !== 'number' ||
+    !Number.isFinite(windowMinutes) ||
+    windowMinutes <= 0
+  ) {
+    windowMinutes = DEFAULT_QUOTA_PROBE_WINDOW_MINUTES;
+  }
+  return { enabled, windowMinutes };
 }
 
 export interface DefaultConfigInput {

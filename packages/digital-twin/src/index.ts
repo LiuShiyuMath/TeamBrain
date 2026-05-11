@@ -13,9 +13,13 @@ export {
   isEnabled,
   ensureDefaultConfig,
   TEAM_SHARED_TOKEN,
+  quotaProbeSettings,
+  DEFAULT_QUOTA_PROBE_WINDOW_MINUTES,
   type DigitalTwinConfig,
   type DefaultConfigInput,
   type EnsureDefaultConfigDeps,
+  type QuotaProbeConfig,
+  type ResolvedQuotaProbeSettings,
 } from './config.js';
 
 export {
@@ -45,7 +49,56 @@ export {
   isCcSessionMetadata,
   type CcSessionEnvelope,
   type CcSessionMetadata,
+  type CcSessionQuotaBlock,
+  type BuildEnvelopeInput,
 } from './schemas/cc-session.js';
+
+// Issue #283 — quota subsystem public surface.
+export {
+  probeQuota,
+  parseQuotaHeaders,
+  type ProbeQuotaInput,
+  type ProbeQuotaDeps,
+  type ProbeQuotaResult,
+} from './quota/probe.js';
+
+export {
+  claudeCredentialsPath,
+  loadOAuthCredentials,
+  loadQuotaCache,
+  saveQuotaCache,
+  markStale,
+  type OAuthCredentials,
+  type FsReadDeps,
+  type FsWriteDeps,
+} from './quota/state.js';
+
+export {
+  shouldRunHourlyScan,
+  loadLastHourlyScanAt,
+  recordHourlyScanFired,
+  type SchedulerReadDeps,
+  type SchedulerWriteDeps,
+} from './quota/scheduler.js';
+
+export {
+  listLocalSessions,
+  filterToUtcDate,
+  planIncrementalUpload,
+  type LocalSession,
+  type ScanLocalDeps,
+} from './incremental/scan.js';
+
+export {
+  runHourlyScanIfDue,
+  utcDateString,
+  projectDirFromTranscriptPath,
+  type HourlyScanInput,
+  type HourlyScanDeps,
+  type HourlyScanOutcome,
+} from './quota/hourly.js';
+
+export { quotaBucket } from './dashboard-html.js';
 
 export {
   uploadCcSession,

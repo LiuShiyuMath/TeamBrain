@@ -123,6 +123,32 @@ export function validateIdParam(raw: string | undefined): string | null {
 }
 
 /**
+ * Issue #283 — defensive type guard for the optional `envelope.quota` block.
+ * All six fields must be present with the exact expected primitive type. Numeric
+ * fields additionally must be finite (rejects NaN / Infinity). Returning false
+ * here causes the POST handler to silently skip writing the quota.json sidecar
+ * while still persisting the transcript — quota is non-critical metadata, a
+ * malformed block must not 4xx the whole upload.
+ */
+export function isValidQuotaBlock(v: unknown): boolean {
+  if (typeof v !== 'object' || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o.subscription_tier === 'string' &&
+    typeof o.five_hour_utilization === 'number' &&
+    Number.isFinite(o.five_hour_utilization) &&
+    typeof o.seven_day_utilization === 'number' &&
+    Number.isFinite(o.seven_day_utilization) &&
+    typeof o.five_hour_reset_at === 'number' &&
+    Number.isFinite(o.five_hour_reset_at) &&
+    typeof o.seven_day_reset_at === 'number' &&
+    Number.isFinite(o.seven_day_reset_at) &&
+    typeof o.probed_at === 'string' &&
+    typeof o.stale === 'boolean'
+  );
+}
+
+/**
  * Atomic write via tmp + rename. Prevents the dashboard from reading a
  * half-written file and also avoids data loss on concurrent writes.
  */
@@ -264,6 +290,39 @@ function handleGet(
       return;
     }
     send(res, 200, { sessions: listSessions(dir) });
+    return;
+  }
+
+  if (path === '/api/quota') {
+    const user = validateUserParam(q.get('user') ?? undefined);
+    const date = validateDateParam(q.get('date') ?? undefined);
+    if (!user) {
+      send(res, 400, { error: 'invalid user' });
+      return;
+    }
+    if (!date) {
+      send(res, 400, { error: 'invalid date' });
+      return;
+    }
+    const quotaFile = join(outputDir, user, date, 'quota.json');
+    if (!isUnder(outputDir, quotaFile)) {
+      send(res, 400, { error: 'invalid path' });
+      return;
+    }
+    if (!existsSync(quotaFile)) {
+      send(res, 404, { error: 'not found' });
+      return;
+    }
+    try {
+      const raw = readFileSync(quotaFile, 'utf8');
+      const parsed = JSON.parse(raw);
+      send(res, 200, parsed);
+    } catch (err) {
+      send(res, 500, {
+        error: 'read failed',
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
     return;
   }
 
@@ -422,6 +481,27 @@ export async function startMockServer(opts: MockServerOptions): Promise<MockServ
         }
         mkdirSync(targetDir, { recursive: true });
         atomicWriteFileSync(targetFile, decoded);
+
+        // Issue #283 — write quota.json sidecar when envelope carries a
+        // well-formed quota block. Latest write per <user>/<date>/ wins
+        // (overwrites). Malformed quota is silently skipped; the transcript
+        // is the primary payload and must not 4xx because of a bad sidecar.
+        if (isLog) {
+          const quotaCandidate = (obj.envelope as Record<string, unknown> | undefined)?.quota;
+          if (isValidQuotaBlock(quotaCandidate)) {
+            const quotaFile = join(targetDir, 'quota.json');
+            if (isUnder(outputDir, quotaFile)) {
+              try {
+                const quotaBuf = Buffer.from(JSON.stringify(quotaCandidate), 'utf8');
+                atomicWriteFileSync(quotaFile, quotaBuf);
+              } catch {
+                // Defense-in-depth: never let a quota sidecar failure 5xx the
+                // transcript upload. Best-effort write only.
+              }
+            }
+          }
+        }
+
         send(res, 200, { ok: true, id, user_id: userIdSafe, date });
       } catch (err) {
         send(res, 500, {

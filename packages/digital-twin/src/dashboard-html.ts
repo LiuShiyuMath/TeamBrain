@@ -7,6 +7,19 @@
  * Avoid using literal "</script>" or "</style>" inside this template — it
  * would break the inline <script>/<style> blocks. We don't.
  */
+
+/**
+ * Issue #283 — color bucket for a utilization value (0-1).
+ * <50% → "ok" (green), 50-80% → "warn" (yellow), >=80% → "hot" (red).
+ * Caller uses the bucket name as a CSS class suffix.
+ */
+export function quotaBucket(util: number): 'ok' | 'warn' | 'hot' {
+  if (!Number.isFinite(util) || util < 0) return 'ok';
+  if (util >= 0.8) return 'hot';
+  if (util >= 0.5) return 'warn';
+  return 'ok';
+}
+
 export const DASHBOARD_HTML = `<!doctype html>
 <html lang="en">
 <head>
@@ -39,6 +52,16 @@ header button:hover { background: #1d4ed8; }
 .preview audio { width: 100%; }
 .empty { color: #9ca3af; font-size: 13px; padding: 8px; }
 .err { color: #dc2626; font-size: 12px; padding: 8px; }
+.user-row { display: flex; align-items: center; gap: 6px; }
+.user-row .uname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-row .qslot { display: inline-flex; align-items: center; gap: 4px; }
+.qbar { display: inline-block; width: 60px; height: 8px; background: #e5e7eb; border-radius: 3px; overflow: hidden; vertical-align: middle; }
+.qbar > span { display: block; height: 100%; width: 0%; background: #9ca3af; transition: width 0.2s ease; }
+.qbar.ok > span { background: #10b981; }
+.qbar.warn > span { background: #f59e0b; }
+.qbar.hot > span { background: #ef4444; }
+.qbar.stale { border: 1px dashed #9ca3af; opacity: 0.5; }
+.qbadge { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px; color: #6b7280; min-width: 30px; text-align: right; }
 </style>
 </head>
 <body>
@@ -89,6 +112,47 @@ header button:hover { background: #1d4ed8; }
     var ul = $(ulId);
     ul.innerHTML = '<li class="err">' + escHtml(msg) + '</li>';
   }
+  function quotaBucket(util) {
+    if (typeof util !== 'number' || !isFinite(util) || util < 0) return 'ok';
+    if (util >= 0.8) return 'hot';
+    if (util >= 0.5) return 'warn';
+    return 'ok';
+  }
+  function todayUtc() {
+    return new Date().toISOString().slice(0, 10);
+  }
+  function quotaSlotHtml(util, stale) {
+    var bucket = quotaBucket(util);
+    var pct = Math.max(0, Math.min(1, util)) * 100;
+    var pctText = Math.round(pct) + '%';
+    var staleCls = stale ? ' stale' : '';
+    return '<span class="qslot">'
+      + '<span class="qbar ' + bucket + staleCls + '"><span style="width:' + pct.toFixed(1) + '%"></span></span>'
+      + '<span class="qbadge">' + pctText + '</span>'
+      + '</span>';
+  }
+  function quotaPendingHtml() {
+    return '<span class="qslot">'
+      + '<span class="qbar"><span></span></span>'
+      + '<span class="qbadge">—</span>'
+      + '</span>';
+  }
+  function fetchQuotaFor(u, li) {
+    var url = '/api/quota?user=' + encodeURIComponent(u) + '&date=' + encodeURIComponent(todayUtc());
+    fetch(url).then(function (r) {
+      if (!r.ok) return null;
+      return r.json();
+    }).then(function (q) {
+      if (!q || !li) return;
+      var slots = li.querySelectorAll('.qslot');
+      if (slots.length < 2) return;
+      var stale = !!q.stale;
+      var h5 = quotaSlotHtml(Number(q.five_hour_utilization) || 0, stale);
+      var h7 = quotaSlotHtml(Number(q.seven_day_utilization) || 0, stale);
+      slots[0].outerHTML = h5;
+      slots[1].outerHTML = h7;
+    }).catch(function () { /* keep — placeholder */ });
+  }
   function loadUsers() {
     sel.user = sel.date = sel.sid = sel.sext = null;
     $('dates').innerHTML = '<li class="empty">select a user</li>';
@@ -96,11 +160,22 @@ header button:hover { background: #1d4ed8; }
     $('pv').innerHTML = '<div class="empty">select a session</div>';
     $('ph').textContent = 'Preview';
     fetch('/api/users').then(function (r) { return r.json(); }).then(function (d) {
+      var liByUser = {};
       render('users', d.users, function (li, u) {
-        li.textContent = u;
+        li.innerHTML = '<div class="user-row">'
+          + '<span class="uname">' + escHtml(u) + '</span>'
+          + quotaPendingHtml()
+          + quotaPendingHtml()
+          + '</div>';
         li.onclick = function () { selectUser(u, li); };
+        liByUser[u] = li;
       });
       setTs();
+      if (d.users && d.users.length) {
+        d.users.forEach(function (u) {
+          fetchQuotaFor(u, liByUser[u]);
+        });
+      }
     }).catch(function (e) { showErr('users', 'failed: ' + e.message); });
   }
   function selectUser(u, li) {

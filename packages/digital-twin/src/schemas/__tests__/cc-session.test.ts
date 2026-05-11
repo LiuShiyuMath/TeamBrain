@@ -4,6 +4,7 @@ import {
   buildCcSessionEnvelope,
   isCcSessionMetadata,
   type CcSessionMetadata,
+  type CcSessionQuotaBlock,
 } from '../cc-session.js';
 
 const sampleMeta: CcSessionMetadata = {
@@ -93,6 +94,58 @@ describe('buildCcSessionEnvelope', () => {
       identity: { user_id: 'u', machine_id: 'm' },
     });
     expect(env.envelope.consented_at).toBeNull();
+  });
+
+  // Issue #283: quota block is optional and piggy-backs on the envelope.
+  it('omits quota when input.quota is not provided', () => {
+    const env = buildCcSessionEnvelope({
+      metadata: sampleMeta,
+      payloadBytes: Buffer.from('x'),
+      identity: { user_id: 'u', machine_id: 'm' },
+    });
+    expect(env.quota).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(env, 'quota')).toBe(false);
+  });
+
+  it('forwards quota block onto envelope when provided', () => {
+    const quota: CcSessionQuotaBlock = {
+      subscription_tier: 'max/default_claude_max_20x',
+      five_hour_utilization: 0.35,
+      seven_day_utilization: 0.42,
+      five_hour_reset_at: 1778481000,
+      seven_day_reset_at: 1778626800,
+      probed_at: '2026-05-11T03:00:00.000Z',
+      stale: false,
+    };
+    const env = buildCcSessionEnvelope({
+      metadata: sampleMeta,
+      payloadBytes: Buffer.from('x'),
+      identity: { user_id: 'u', machine_id: 'm' },
+      quota,
+    });
+    expect(env.quota).toEqual(quota);
+    const parsed = JSON.parse(JSON.stringify(env));
+    expect(parsed.quota.five_hour_utilization).toBe(0.35);
+    expect(parsed.quota.stale).toBe(false);
+  });
+
+  it('preserves stale=true when probe failed and cache is used', () => {
+    const quota: CcSessionQuotaBlock = {
+      subscription_tier: 'max/default_claude_max_20x',
+      five_hour_utilization: 0.9,
+      seven_day_utilization: 0.7,
+      five_hour_reset_at: 1778481000,
+      seven_day_reset_at: 1778626800,
+      probed_at: '2026-05-11T02:00:00.000Z',
+      stale: true,
+    };
+    const env = buildCcSessionEnvelope({
+      metadata: sampleMeta,
+      payloadBytes: Buffer.from('x'),
+      identity: { user_id: 'u', machine_id: 'm' },
+      quota,
+    });
+    expect(env.quota?.stale).toBe(true);
   });
 });
 

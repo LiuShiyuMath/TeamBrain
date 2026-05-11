@@ -9,6 +9,8 @@ import {
   isEnabled,
   ensureDefaultConfig,
   TEAM_SHARED_TOKEN,
+  quotaProbeSettings,
+  DEFAULT_QUOTA_PROBE_WINDOW_MINUTES,
   type DigitalTwinConfig,
 } from '../config.js';
 import { digitalTwinPaths } from '../paths.js';
@@ -343,6 +345,47 @@ describe('config', () => {
       expect(notifications).toHaveLength(0);
       // File byte-identical (idempotent path).
       expect(readFileSync(file, 'utf-8')).toBe(before);
+    });
+  });
+
+  // Issue #283 — quota_probe defaults + tuning.
+  describe('quotaProbeSettings', () => {
+    it('returns enabled=true, windowMinutes=55 on null config', () => {
+      expect(quotaProbeSettings(null)).toEqual({
+        enabled: true,
+        windowMinutes: 55,
+      });
+    });
+
+    it('defaults to enabled=true when quota_probe block missing', () => {
+      const cfg = defaultConfig({ user_id: 'u', machine_id: 'm' });
+      expect(quotaProbeSettings(cfg).enabled).toBe(true);
+      expect(quotaProbeSettings(cfg).windowMinutes).toBe(DEFAULT_QUOTA_PROBE_WINDOW_MINUTES);
+    });
+
+    it('honors explicit enabled=false (opt-out)', () => {
+      const cfg = defaultConfig({ user_id: 'u', machine_id: 'm' });
+      cfg.quota_probe = { enabled: false };
+      expect(quotaProbeSettings(cfg).enabled).toBe(false);
+      // Window stays default — value carries no meaning when disabled but
+      // settings stay readable for diagnostics.
+      expect(quotaProbeSettings(cfg).windowMinutes).toBe(DEFAULT_QUOTA_PROBE_WINDOW_MINUTES);
+    });
+
+    it('honors explicit window_minutes override', () => {
+      const cfg = defaultConfig({ user_id: 'u', machine_id: 'm' });
+      cfg.quota_probe = { window_minutes: 30 };
+      expect(quotaProbeSettings(cfg).windowMinutes).toBe(30);
+    });
+
+    it('falls back to default window when value is zero / negative / non-finite', () => {
+      const cfg = defaultConfig({ user_id: 'u', machine_id: 'm' });
+      for (const bad of [0, -1, Number.POSITIVE_INFINITY, Number.NaN]) {
+        cfg.quota_probe = { window_minutes: bad as number };
+        expect(quotaProbeSettings(cfg).windowMinutes).toBe(
+          DEFAULT_QUOTA_PROBE_WINDOW_MINUTES,
+        );
+      }
     });
   });
 });

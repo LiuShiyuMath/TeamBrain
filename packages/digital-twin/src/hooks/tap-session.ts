@@ -5,10 +5,18 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import type { SpawnOptions, ChildProcess } from 'node:child_process';
 import { ulid as defaultUlid } from 'ulid';
 import { digitalTwinPaths } from '../paths.js';
+import type { CcSessionQuotaBlock, CcSessionMetadata } from '../schemas/cc-session.js';
 
 export interface TapSessionInput {
   cwd: string;
   sessionId: string;
+  /**
+   * Issue #283 — optional Max-tier quota snapshot to persist on this
+   * entry's metadata.json. Passed through to the wire envelope by the
+   * uploader's defaultBuildEnvelope. Absent on Stop-hook taps; present
+   * on hourly scan taps.
+   */
+  quota?: CcSessionQuotaBlock;
 }
 
 export interface TapSessionDeps {
@@ -93,7 +101,7 @@ export function tapSession(
     }
 
     const projectName = input.cwd.split(/[/\\]/).filter(Boolean).pop() ?? '';
-    const metadata = {
+    const metadata: CcSessionMetadata = {
       id,
       kind: 'cc-session' as const,
       session_id: input.sessionId,
@@ -106,6 +114,9 @@ export function tapSession(
       host: { os: platform, arch, hostname: host },
       teamagent_version: deps.teamagentVersion ?? 'unknown',
       schema_version: 1 as const,
+      // Issue #283: forward quota only when caller provided one — keeps the
+      // field absent from the JSON on pre-#283 Stop taps (no JSON churn).
+      ...(input.quota ? { quota: input.quota } : {}),
     };
     writeFileSync(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
 

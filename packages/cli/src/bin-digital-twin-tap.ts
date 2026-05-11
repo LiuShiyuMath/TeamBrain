@@ -31,6 +31,7 @@ import {
   isEnabled,
   tapSession,
   digitalTwinPaths,
+  runHourlyScanIfDue,
 } from '@teamagent/digital-twin';
 
 interface StopHookInput {
@@ -164,10 +165,29 @@ export function resolveDaemonBin(
   }
 }
 
+export interface MainDeps {
+  stdinReader?: () => Promise<string>;
+  homedir?: () => string;
+  /**
+   * Issue #283 — injectable hourly-scan hook so the Stop-hook tap test
+   * can assert wire-up without spinning up the real orchestrator
+   * (which would need credentials + fetch + fs to all line up).
+   */
+  runHourlyScanIfDue?: typeof runHourlyScanIfDue;
+  /** Injectable clock for issue #283 hourly path. */
+  now?: () => Date;
+}
+
 export async function main(
-  stdinReader: () => Promise<string> = readStdin,
-  homedirFn: () => string = homedir,
+  arg1: (() => Promise<string>) | MainDeps = readStdin,
+  arg2: (() => string) = homedir,
 ): Promise<void> {
+  // Back-compat positional signature: (stdinReader, homedirFn).
+  // New signature: (deps: MainDeps).
+  const deps: MainDeps =
+    typeof arg1 === 'function' ? { stdinReader: arg1, homedir: arg2 } : arg1;
+  const stdinReader = deps.stdinReader ?? readStdin;
+  const homedirFn = deps.homedir ?? homedir;
   const home = homedirFn();
   // Zero-touch onboarding: auto-create a default config on first invocation
   // so newly-installed teammates don't need to run `teamagent digital-twin
@@ -179,7 +199,7 @@ export async function main(
   } catch {
     return;
   }
-  if (!isEnabled(cfg)) return;
+  if (!isEnabled(cfg) || !cfg) return;
 
   let raw: string;
   try {
@@ -205,6 +225,19 @@ export async function main(
       daemonBin,
     },
   );
+
+  // Issue #283 — piggy-back hourly scan onto Stop hook. The orchestrator
+  // is the gatekeeper: it decides whether the hourly slot has elapsed,
+  // probes the quota, and enqueues today's incremental sessions. All
+  // failures bubble out as a tagged outcome (no throw), so the Stop hook
+  // contract (never exits non-zero) is preserved.
+  const runHourly = deps.runHourlyScanIfDue ?? runHourlyScanIfDue;
+  const now = deps.now ?? (() => new Date());
+  try {
+    await runHourly({ home, config: cfg, now: now() });
+  } catch {
+    /* never block session close */
+  }
 }
 
 async function readStdin(): Promise<string> {
