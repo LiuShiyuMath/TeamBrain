@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { execSync } from "node:child_process";
+import { execSync, spawn as nodeSpawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { openDb } from "@teamagent/adapters";
 import {
@@ -51,6 +51,25 @@ export interface DoctorResult {
 export type CodexProbe = (env?: NodeJS.ProcessEnv) => ClaudeProbeResult;
 export type McpProbe = (url: string) => Promise<{ reachable: boolean; detail: string }>;
 
+/**
+ * Issue #280: result of probing whether the SessionStart hook script
+ * actually spawns and exits cleanly. `checkHookScript` only verifies
+ * the .cjs file is present — a script can exist and still crash on
+ * `require()` of a missing transitive dep, leaving SessionStart
+ * silently dead while doctor reports ✅.
+ */
+export interface HookProbeResult {
+  exitCode: number | null;
+  stderr: string;
+  timedOut: boolean;
+  spawnError?: string;
+}
+
+export type HookProbe = (
+  scriptPath: string,
+  opts?: { timeoutMs?: number },
+) => Promise<HookProbeResult>;
+
 export interface DoctorOptions {
   fix?: boolean;
   /** Issue #172: when true with `fix`, compute fix preview (unified diff) without writing anything. */
@@ -64,6 +83,8 @@ export interface DoctorOptions {
   claudeProbe?: ClaudeProbe;
   codexProbe?: CodexProbe;
   mcpProbe?: McpProbe;
+  /** Issue #280: injectable hook spawn probe for `checkHookSpawn`. Default uses real child_process. */
+  hookProbe?: HookProbe;
 }
 
 export function parseDoctorArgs(argv: string[]): DoctorOptions {
@@ -272,6 +293,28 @@ export async function executeDoctor(opts: DoctorOptions = {}): Promise<DoctorRes
   const hookScriptCheck = checkHookScript(settingsPath);
   checks.push(hookScriptCheck);
   await tryFix(hookScriptCheck);
+
+  // Check 7b (issue #280): real hook spawn — strict.
+  // checkHookScript only verifies the .cjs file exists; a script can still
+  // crash at module-load on `require()` of a missing transitive dep (#158
+  // removed web-tree-sitter et al. from teamagent's dependencies, but the
+  // postinstall hook copy was still pulling them in indirectly via
+  // bin-session-start's import chain). When that happens, every real
+  // SessionStart silently dies — auto-update never runs, analyze
+  // learning halts — while doctor reports ✅ green. The hook-spawn probe
+  // catches that gap by actually starting the process once with empty
+  // stdin (so bin-session-start's parseInput returns null and the hook
+  // fast-exits 0 without running auto-init / cleanup / decideAction).
+  //
+  // Now strict (commit 4 — was warn-only in commit 1): probe failures
+  // return `status: "fail"`, flipping allPassed and forcing the user to
+  // act. The underlying spawn fix (commit 2: Windows shell:true) and
+  // import-graph contract (commit 3: chaos test + extended scan) keep
+  // the false-positive rate at zero on healthy installs, so promoting
+  // to a strict gate no longer paints green installs red.
+  if (hookScriptCheck.status === "pass") {
+    checks.push(await checkHookSpawn(hookScriptCheck.detail, opts.hookProbe));
+  }
 
   // Check 8: settings.json scope (project vs user, PreToolUse vs SessionStart)
   checks.push(checkSettingsJsonScope(settingsPath, path.join(home, ".claude", "settings.json")));
@@ -688,6 +731,118 @@ function checkHookScript(settingsPath: string): DoctorCheckResult {
       fix: "teamagent install-hook",
     };
   }
+}
+
+/**
+ * Issue #280: default probe that actually spawns the SessionStart hook
+ * with empty stdin and no Claude Code signal env vars, expecting the
+ * hook's `parseInput` to return null and fast-exit 0. Any non-zero exit,
+ * timeout, or spawn error means the hook can't load — usually a missing
+ * transitive dep crashing `require()` at module top, which is invisible
+ * to `checkHookScript` (the file exists, but the process dies before it
+ * can do anything).
+ *
+ * The probe strips signal env vars (CLAUDE_PROJECT_DIR /
+ * TEAMAGENT_ALLOW_BARE_SESSIONSTART) so `parseInput` short-circuits and
+ * the hook does not touch auto-init / cleanup / decideAction. We are
+ * verifying that all top-level imports load, not that any business logic
+ * runs.
+ */
+const defaultHookProbe: HookProbe = (scriptPath, opts = {}) => {
+  const timeoutMs = opts.timeoutMs ?? 5_000;
+  return new Promise<HookProbeResult>((resolve) => {
+    const env = { ...process.env };
+    delete env["CLAUDE_PROJECT_DIR"];
+    delete env["TEAMAGENT_ALLOW_BARE_SESSIONSTART"];
+
+    let child;
+    try {
+      child = nodeSpawn(process.execPath, [scriptPath], {
+        stdio: ["pipe", "pipe", "pipe"],
+        env,
+        windowsHide: true,
+      });
+    } catch (err) {
+      resolve({ exitCode: null, stderr: "", timedOut: false, spawnError: String(err) });
+      return;
+    }
+
+    let stderr = "";
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try { child.kill("SIGKILL"); } catch { /* already dead */ }
+      resolve({ exitCode: null, stderr, timedOut: true });
+    }, timeoutMs);
+
+    child.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ exitCode: null, stderr, timedOut: false, spawnError: String(err) });
+    });
+    child.stderr?.on("data", (d) => { stderr += d.toString("utf-8"); });
+    child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ exitCode: code, stderr, timedOut: false });
+    });
+
+    // Empty stdin → parseInput returns null → hook fast-exits 0.
+    child.stdin?.end();
+  });
+};
+
+/**
+ * Issue #280: strict health check that actually spawns the SessionStart
+ * hook script. Returns `pass` when the process starts and exits 0;
+ * any failure (spawn error / timeout / non-zero exit) returns
+ * `status: "fail"`, which flips `allPassed` and surfaces the regression
+ * to the user.
+ *
+ * Strict since commit 4 of the issue #280 chain. Commit 1 introduced
+ * this check as warn-only (`status: "skip"`) so it could ship and be
+ * observed before the underlying spawn (commit 2) and import-graph
+ * (commit 3) work landed. With those fixes in place, healthy installs
+ * have zero false-positive surface, so we promote the gate to strict.
+ */
+export async function checkHookSpawn(
+  scriptPath: string,
+  probe: HookProbe = defaultHookProbe,
+): Promise<DoctorCheckResult> {
+  const result = await probe(scriptPath);
+  if (result.spawnError) {
+    return {
+      name: "hook-spawn",
+      status: "fail",
+      detail: `hook spawn 启动失败: ${result.spawnError.slice(0, 200)}`,
+      fix: "重装 teamagent (npm install -g teamagent) 或检查 node 是否可用",
+    };
+  }
+  if (result.timedOut) {
+    return {
+      name: "hook-spawn",
+      status: "fail",
+      detail: `hook spawn 超过 5s 未退出 — 可能卡在 require/import 链`,
+      fix: "检查 ~/.teamagent/postinstall.log 中的 stage=install-user-hook 与依赖完整性",
+    };
+  }
+  if (result.exitCode === 0) {
+    return {
+      name: "hook-spawn",
+      status: "pass",
+      detail: "hook 进程能成功启动并退出 (probe: empty-stdin → fast-exit 0)",
+    };
+  }
+  const stderrTail = result.stderr.trim().split("\n").slice(-5).join(" | ").slice(-400);
+  return {
+    name: "hook-spawn",
+    status: "fail",
+    detail: `hook spawn exit=${result.exitCode} — ${stderrTail || "(no stderr)"}`,
+    fix: "重装 teamagent 或检查 ~/.teamagent/postinstall.log",
+  };
 }
 
 /**

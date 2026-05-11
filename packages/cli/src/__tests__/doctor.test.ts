@@ -12,6 +12,7 @@ import {
   parseDoctorArgs,
   backupFile,
   checkClaudeCode,
+  checkHookSpawn,
   checkTeamSharingStatus,
   pathContainsNodeModulesBin,
   checkSettingsJsonScope,
@@ -21,6 +22,8 @@ import {
   type ClaudeProbe,
   type ClaudeProbeResult,
   type CodexProbe,
+  type HookProbe,
+  type HookProbeResult,
   type McpProbe,
   type DoctorCheckResult,
   type DoctorResult,
@@ -785,5 +788,91 @@ describe("doctor --fix safety net (issue #172)", () => {
     expect(out).toContain(
       `还原: cp "/tmp/home/.teamagent/backups/CLAUDE.md.2026-05-09T16-22-34-000Z.bak" "/tmp/proj/CLAUDE.md"`,
     );
+  });
+});
+
+/**
+ * Issue #280: `checkHookSpawn` strict contract (since commit 4 of the
+ * issue-280 chain). Probe is injectable so tests do not touch real
+ * child_process.
+ */
+describe("checkHookSpawn (issue #280)", () => {
+  function makeProbe(result: HookProbeResult): HookProbe {
+    return async () => result;
+  }
+
+  it("passes when the probe reports exit code 0", async () => {
+    const probe = makeProbe({ exitCode: 0, stderr: "", timedOut: false });
+    const out = await checkHookSpawn("/fake/bin-session-start.cjs", probe);
+    expect(out.name).toBe("hook-spawn");
+    expect(out.status).toBe("pass");
+    expect(out.detail).toContain("成功启动");
+    expect(out.detail).toContain("fast-exit 0");
+    expect(out.fix).toBeUndefined();
+  });
+
+  it("fails on non-zero exit and surfaces the last stderr line", async () => {
+    const stderr = [
+      "node:internal/modules/cjs/loader:1248",
+      "  throw err;",
+      "  ^",
+      "Error: Cannot find module 'web-tree-sitter'",
+    ].join("\n");
+    const probe = makeProbe({ exitCode: 1, stderr, timedOut: false });
+    const out = await checkHookSpawn("/fake/bin-session-start.cjs", probe);
+    expect(out.status).toBe("fail");
+    expect(out.detail).toContain("exit=1");
+    expect(out.detail).toContain("Cannot find module 'web-tree-sitter'");
+    expect(out.fix).toBeDefined();
+  });
+
+  it("fails when the probe reports a spawn error", async () => {
+    const probe = makeProbe({
+      exitCode: null,
+      stderr: "",
+      timedOut: false,
+      spawnError: "Error: ENOENT: no such file or directory, open '/missing/node'",
+    });
+    const out = await checkHookSpawn("/fake/bin-session-start.cjs", probe);
+    expect(out.status).toBe("fail");
+    expect(out.detail).toContain("启动失败");
+    expect(out.detail).toContain("ENOENT");
+    expect(out.fix).toContain("npm install -g teamagent");
+  });
+
+  it("fails when the probe times out", async () => {
+    const probe = makeProbe({ exitCode: null, stderr: "", timedOut: true });
+    const out = await checkHookSpawn("/fake/bin-session-start.cjs", probe);
+    expect(out.status).toBe("fail");
+    expect(out.detail).toContain("5s");
+    expect(out.detail).toContain("require/import");
+  });
+
+  it("truncates long stderr tails so doctor output stays readable", async () => {
+    const longLine = "a".repeat(2_000);
+    const probe = makeProbe({ exitCode: 1, stderr: longLine, timedOut: false });
+    const out = await checkHookSpawn("/fake/bin-session-start.cjs", probe);
+    expect(out.status).toBe("fail");
+    // Detail prefix + truncated stderr should be bounded.
+    expect(out.detail.length).toBeLessThan(600);
+  });
+
+  it("strictly fails on every non-pass variant — flipping allPassed", async () => {
+    // After commit 4 the warn-only era is over: spawn-error / timeout /
+    // non-zero exit all return `fail`, so an installation with a broken
+    // hook surfaces red. The underlying spawn fix (commit 2) + import-
+    // graph contract (commit 3) keep healthy installs at zero
+    // false-positive rate, so this strict gate does not paint green
+    // installs red.
+    const variants: HookProbeResult[] = [
+      { exitCode: 1, stderr: "Error: ...", timedOut: false },
+      { exitCode: null, stderr: "", timedOut: false, spawnError: "EACCES" },
+      { exitCode: null, stderr: "", timedOut: true },
+    ];
+    for (const v of variants) {
+      const r = await checkHookSpawn("/x", makeProbe(v));
+      expect(r.status).toBe("fail");
+      expect(r.status).not.toBe("skip");
+    }
   });
 });
