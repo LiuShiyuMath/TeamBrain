@@ -18,6 +18,9 @@ import {
   removeEntry,
   moveToDeadLetter,
   enforceCapacity,
+  isEntryTooLarge,
+  writeMetadataAtomic,
+  type LoadedEntry,
   type QueueEntry,
 } from './queue.js';
 import { uploadEntry, type UploadOutcome, type FetchLike } from './uploader.js';
@@ -37,12 +40,33 @@ export interface PidFileContent {
   start_at: string;
 }
 
+/**
+ * Outcome for one queue entry in one cycle.
+ *
+ * Issue #266 F7: failure bookkeeping switched from an in-RAM count
+ * (`failures: number`) to a persisted ISO timestamp (`first_failed_at`)
+ * because the daemon idle-self-exits every 15 min and the in-RAM
+ * counter was being reset before pathological entries could ever reach
+ * the dead-letter threshold. The dead-letter reason for stale entries
+ * is therefore renamed `'too-old'` (was `'too-many-failures'`).
+ */
 export type CyclePerEntryOutcome =
   | { id: string; outcome: 'uploaded' }
-  | { id: string; outcome: 'transient'; failures: number; status?: number; error?: string }
-  | { id: string; outcome: 'dead-letter'; reason: 'permanent-failure' | 'too-many-failures'; failures: number; status?: number }
+  | { id: string; outcome: 'transient'; first_failed_at: string; status?: number; error?: string }
+  | {
+      id: string;
+      outcome: 'dead-letter';
+      reason: 'permanent-failure' | 'too-old';
+      first_failed_at?: string;
+      status?: number;
+    }
   | { id: string; outcome: 'auth-failed' }
-  | { id: string; outcome: 'invalid-metadata' };
+  | { id: string; outcome: 'invalid-metadata' }
+  /**
+   * Issue #266 F8 — entry's `.payload` is over the size cap. Moved to
+   * dead-letter without ever being read into memory.
+   */
+  | { id: string; outcome: 'too-large'; payload_size: number };
 
 export interface CycleSummary {
   scanned: number;
@@ -86,8 +110,16 @@ export interface AcquirePidLockDeps {
 
 /**
  * Try to acquire the daemon PID lock. Returns true on success (lock acquired),
- * false if another live daemon already owns it. Stale locks (from a dead PID
- * or with a malformed pid file) are forcibly replaced.
+ * false if another live daemon already owns it or if we lost an EEXIST race
+ * during stale-lock recovery. Stale locks (from a dead PID or with a
+ * malformed pid file) are forcibly replaced.
+ *
+ * Issue #266 F6: the previous read-then-write implementation was a TOCTOU
+ * race — two daemons starting concurrently could both read "no live owner"
+ * and both write their own pid. The atomic path here uses
+ * `writeFileSync(..., { flag: 'wx' })` so the kernel rejects with EEXIST
+ * when the file already exists. EEXIST then triggers a single inspect +
+ * unlink + retry, mirroring the prior stale-takeover semantics.
  */
 export function acquirePidLock(
   home: string = osHomedir(),
@@ -100,17 +132,43 @@ export function acquirePidLock(
 
   mkdirSync(paths.digitalTwinDir, { recursive: true });
 
+  const payload = JSON.stringify({
+    pid: myPid,
+    start_at: now().toISOString(),
+  } satisfies PidFileContent);
+
+  // Fast path: atomic create succeeds iff nobody held the lock.
+  if (tryWritePidLockAtomic(paths.daemonPidFile, payload)) return true;
+
+  // EEXIST — inspect the existing record.
   const existing = readPidFile(home);
-  if (existing && existing.pid !== myPid && aliveCheck(existing.pid)) {
+  if (existing?.pid === myPid) {
+    // Already ours (e.g. crash-recovery resume in the same process). Idempotent.
+    return true;
+  }
+  if (existing && aliveCheck(existing.pid)) {
     return false;
   }
 
-  const content: PidFileContent = {
-    pid: myPid,
-    start_at: now().toISOString(),
-  };
-  writeFileSync(paths.daemonPidFile, JSON.stringify(content), 'utf-8');
-  return true;
+  // Stale (dead pid or unreadable record). Best-effort unlink then retry the
+  // atomic create exactly once. A second EEXIST means we lost a race to
+  // another would-be daemon — back off rather than loop.
+  try {
+    unlinkSync(paths.daemonPidFile);
+  } catch {
+    // best-effort
+  }
+  return tryWritePidLockAtomic(paths.daemonPidFile, payload);
+}
+
+function tryWritePidLockAtomic(path: string, payload: string): boolean {
+  try {
+    writeFileSync(path, payload, { flag: 'wx', encoding: 'utf-8' });
+    return true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'EEXIST') return false;
+    throw err;
+  }
 }
 
 export function releasePidLock(home: string = osHomedir()): void {
@@ -124,32 +182,42 @@ export function releasePidLock(home: string = osHomedir()): void {
 
 export interface RunCycleDeps {
   fetchFn?: FetchLike;
-  failures?: Map<string, number>;
   uploader?: typeof uploadEntry;
+  /**
+   * Issue #266 F7 — current clock injector. Defaults to `new Date()`.
+   * Tests pin the clock to deterministically exercise the 24h window.
+   */
+  now?: () => Date;
+  /**
+   * Issue #266 F8 — payload-size cap injector. Defaults to
+   * `MAX_PAYLOAD_BYTES` (100MB). Tests pass a smaller value so they can
+   * exercise the 'too-large' path without writing 100MB files.
+   */
+  maxPayloadBytes?: number;
 }
 
 /**
  * Run one upload cycle: scan pending/, upload each, classify outcomes.
  *
- * `deps.failures` is a per-id failure counter that the caller maintains
- * across cycles. The daemon's main loop owns it (in-memory). On daemon
- * restart the counter resets — note this in PR description as accepted
- * tradeoff for v1.
+ * Issue #266 F7: the previous in-RAM failure counter (`Map<id, count>`)
+ * was removed. Failure bookkeeping is now persisted on the metadata
+ * file so the 24h dead-letter window survives daemon restarts.
  */
 export async function runUploadCycle(
   config: DaemonConfig,
   home: string = osHomedir(),
   deps: RunCycleDeps = {},
 ): Promise<CycleSummary> {
-  const failures = deps.failures ?? new Map<string, number>();
   const uploader = deps.uploader ?? uploadEntry;
+  const now = deps.now ?? (() => new Date());
+  const maxBytes = deps.maxPayloadBytes;
   const entries = listPending(home);
   const outcomes: CyclePerEntryOutcome[] = [];
   let authFailed = false;
 
   for (const entry of entries) {
     if (authFailed) break;
-    const out = await processEntry(entry, config, failures, uploader, deps.fetchFn, home);
+    const out = await processEntry(entry, config, uploader, deps.fetchFn, home, now, maxBytes);
     outcomes.push(out);
     if (out.outcome === 'auth-failed') {
       authFailed = true;
@@ -162,11 +230,21 @@ export async function runUploadCycle(
 async function processEntry(
   entry: QueueEntry,
   config: DaemonConfig,
-  failures: Map<string, number>,
   uploader: typeof uploadEntry,
   fetchFn: FetchLike | undefined,
   home: string,
+  now: () => Date,
+  maxPayloadBytes: number | undefined,
 ): Promise<CyclePerEntryOutcome> {
+  // Issue #266 F8: size-check the file before any readFileSync, so an
+  // oversize payload never lands in RAM. Oversize entries go straight to
+  // dead-letter as a distinct outcome (kept separate from
+  // 'invalid-metadata' so dashboards can see the real reason).
+  if (isEntryTooLarge(entry, maxPayloadBytes)) {
+    moveToDeadLetter(entry, home);
+    return { id: entry.id, outcome: 'too-large', payload_size: entry.payloadSize };
+  }
+
   const loaded = loadEntry(entry);
   if (!loaded) {
     // unparseable metadata — move out of pending to avoid infinite churn
@@ -189,19 +267,19 @@ async function processEntry(
     { fetchFn },
   );
 
-  return classifyAndAct(entry, result, failures, home);
+  return classifyAndAct(entry, loaded, result, home, now());
 }
 
 function classifyAndAct(
   entry: QueueEntry,
+  loaded: LoadedEntry,
   result: UploadOutcome,
-  failures: Map<string, number>,
   home: string,
+  now: Date,
 ): CyclePerEntryOutcome {
   switch (result.kind) {
     case 'success': {
       removeEntry(entry);
-      failures.delete(entry.id);
       return { id: entry.id, outcome: 'uploaded' };
     }
     case 'auth-failed': {
@@ -209,35 +287,56 @@ function classifyAndAct(
     }
     case 'permanent-failure': {
       moveToDeadLetter(entry, home);
-      const f = (failures.get(entry.id) ?? 0) + 1;
-      failures.delete(entry.id);
-      return {
+      const out: CyclePerEntryOutcome = {
         id: entry.id,
         outcome: 'dead-letter',
         reason: 'permanent-failure',
-        failures: f,
         status: result.status,
       };
+      if (loaded.metadata.first_failed_at) {
+        out.first_failed_at = loaded.metadata.first_failed_at;
+      }
+      return out;
     }
     case 'transient':
     case 'network-error': {
-      const f = (failures.get(entry.id) ?? 0) + 1;
-      failures.set(entry.id, f);
-      if (shouldDeadLetter(f)) {
+      // Issue #266 F7: persist first_failed_at on the first transient/network
+      // failure so the 24h dead-letter window survives daemon restarts. The
+      // metadata write uses temp + rename so an interrupted write never
+      // leaves a half-parsed JSON file on disk.
+      //
+      // Best-effort: if the metadata write itself fails (disk full, EPERM,
+      // etc.) we MUST NOT crash the daemon — a thrown error here would
+      // bubble all the way through runUploadCycle → mainLoop and kill the
+      // process, which the Stop hook would respawn → crash → respawn loop.
+      // Instead we keep the in-cycle timestamp for the current outcome and
+      // let the next cycle retry the persist.
+      let firstFailedAt = loaded.metadata.first_failed_at ?? null;
+      if (!firstFailedAt) {
+        firstFailedAt = now.toISOString();
+        try {
+          writeMetadataAtomic(entry.metadataPath, {
+            ...loaded.metadata,
+            first_failed_at: firstFailedAt,
+          });
+        } catch {
+          // best-effort persist; cycle continues with in-memory timestamp.
+        }
+      }
+      if (shouldDeadLetter(firstFailedAt, now)) {
         moveToDeadLetter(entry, home);
-        failures.delete(entry.id);
         return {
           id: entry.id,
           outcome: 'dead-letter',
-          reason: 'too-many-failures',
-          failures: f,
+          reason: 'too-old',
+          first_failed_at: firstFailedAt,
           status: 'status' in result ? result.status : undefined,
         };
       }
       return {
         id: entry.id,
         outcome: 'transient',
-        failures: f,
+        first_failed_at: firstFailedAt,
         status: 'status' in result ? result.status : undefined,
         error: 'error' in result ? result.error : undefined,
       };
@@ -282,14 +381,13 @@ export async function mainLoop(
   const shouldStop = deps.shouldStop ?? (() => false);
   const pollMs = deps.pollIntervalMs ?? POLL_INTERVAL_MS;
   const idleMs = deps.idleExitMs ?? IDLE_EXIT_MS;
-  const failures = new Map<string, number>();
 
   let idleAccumulatedMs = 0;
 
   while (!shouldStop()) {
     enforceCapacity(home);
 
-    const summary = await runCycle(config, home, { fetchFn: deps.fetchFn, failures });
+    const summary = await runCycle(config, home, { fetchFn: deps.fetchFn });
     deps.onCycle?.(summary);
 
     if (summary.authFailed) {

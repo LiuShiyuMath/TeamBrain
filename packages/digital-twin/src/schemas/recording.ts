@@ -49,6 +49,11 @@ export interface RecordingMetadata {
   host: { os: string; arch: string; hostname: string };
   teamagent_version: string;
   schema_version: 1;
+  /**
+   * Issue #266 F7 — ISO timestamp of the first transient/network upload
+   * failure. Same semantics as CcSessionMetadata.first_failed_at.
+   */
+  first_failed_at?: string;
 }
 
 /** Inner envelope block — what mock-server.ts reads under `obj.envelope` for /v1/recordings. */

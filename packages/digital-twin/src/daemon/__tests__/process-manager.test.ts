@@ -14,7 +14,6 @@ import {
   type CycleSummary,
 } from '../process-manager.js';
 import { digitalTwinPaths } from '../../paths.js';
-import { MAX_FAILURES_BEFORE_DEAD_LETTER } from '../backoff.js';
 
 function freshHome(): string {
   const home = join(tmpdir(), `dt-pm-${ulid()}`);
@@ -104,6 +103,33 @@ describe('acquirePidLock + releasePidLock', () => {
     releasePidLock(home);
     expect(existsSync(paths.daemonPidFile)).toBe(false);
   });
+
+  // Issue #266 F6 — atomic acquire with EEXIST.
+  describe('issue #266 F6: atomic acquire', () => {
+    it('re-acquire by the same pid is idempotent', () => {
+      expect(acquirePidLock(home, { pid: 1234, isPidAlive: () => true })).toBe(true);
+      expect(acquirePidLock(home, { pid: 1234, isPidAlive: () => true })).toBe(true);
+      expect(readPidFile(home)?.pid).toBe(1234);
+    });
+
+    it('does not double-write a fresh start_at when re-acquiring as the same pid', () => {
+      // Confirms the EEXIST branch is taken rather than a non-atomic overwrite.
+      acquirePidLock(home, { pid: 1234, now: () => new Date('2026-01-01T00:00:00Z') });
+      const first = readPidFile(home)?.start_at;
+      acquirePidLock(home, { pid: 1234, now: () => new Date('2030-01-01T00:00:00Z') });
+      expect(readPidFile(home)?.start_at).toBe(first);
+    });
+
+    it('takes over a stale lock whose pid file is unreadable', () => {
+      // Write a garbage pid file directly — readPidFile() will return null.
+      const paths = digitalTwinPaths(home);
+      mkdirSync(paths.digitalTwinDir, { recursive: true });
+      writeFileSync(paths.daemonPidFile, 'not json', 'utf-8');
+      const got = acquirePidLock(home, { pid: 9999, isPidAlive: () => false });
+      expect(got).toBe(true);
+      expect(readPidFile(home)?.pid).toBe(9999);
+    });
+  });
 });
 
 describe('runUploadCycle', () => {
@@ -128,34 +154,87 @@ describe('runUploadCycle', () => {
     expect(existsSync(join(paths.pendingDir, 'ok-1.payload'))).toBe(false);
   });
 
-  it('keeps entry on transient failure and bumps failure count', async () => {
+  it('keeps entry on transient failure and persists first_failed_at on metadata', async () => {
     writeQueueEntry(home, 'tx-1');
-    const failures = new Map<string, number>();
-    await runUploadCycle(cfg, home, {
+    const fixedNow = new Date('2026-05-11T10:00:00Z');
+    const summary = await runUploadCycle(cfg, home, {
       uploader: async () => ({ kind: 'transient', status: 500 }),
-      failures,
+      now: () => fixedNow,
     });
-    expect(failures.get('tx-1')).toBe(1);
+    expect(summary.outcomes[0]).toMatchObject({
+      id: 'tx-1',
+      outcome: 'transient',
+      first_failed_at: fixedNow.toISOString(),
+    });
     const paths = digitalTwinPaths(home);
     expect(existsSync(join(paths.pendingDir, 'tx-1.payload'))).toBe(true);
+    // first_failed_at was written back to the persisted metadata.
+    const persisted = JSON.parse(
+      readFileSync(join(paths.pendingDir, 'tx-1.json'), 'utf-8'),
+    );
+    expect(persisted.first_failed_at).toBe(fixedNow.toISOString());
   });
 
-  it('moves to dead-letter after MAX_FAILURES_BEFORE_DEAD_LETTER transient failures', async () => {
+  it('moves to dead-letter once 24h has elapsed since the persisted first_failed_at', async () => {
     writeQueueEntry(home, 'fail-1');
-    const failures = new Map<string, number>([['fail-1', MAX_FAILURES_BEFORE_DEAD_LETTER - 1]]);
+    const paths = digitalTwinPaths(home);
+
+    // Pretend the entry first failed 25 hours ago.
+    const oldFailure = '2026-05-10T00:00:00Z';
+    const meta = JSON.parse(
+      readFileSync(join(paths.pendingDir, 'fail-1.json'), 'utf-8'),
+    );
+    meta.first_failed_at = oldFailure;
+    writeFileSync(
+      join(paths.pendingDir, 'fail-1.json'),
+      JSON.stringify(meta),
+      'utf-8',
+    );
+
     const summary = await runUploadCycle(cfg, home, {
       uploader: async () => ({ kind: 'transient', status: 503 }),
-      failures,
+      now: () => new Date('2026-05-11T01:00:00Z'), // 25h later
     });
     expect(summary.outcomes[0]).toMatchObject({
       id: 'fail-1',
       outcome: 'dead-letter',
-      reason: 'too-many-failures',
+      reason: 'too-old',
+      first_failed_at: oldFailure,
     });
-    const paths = digitalTwinPaths(home);
     expect(existsSync(join(paths.pendingDir, 'fail-1.payload'))).toBe(false);
     expect(existsSync(join(paths.deadLetterDir, 'fail-1.payload'))).toBe(true);
-    expect(failures.has('fail-1')).toBe(false);
+  });
+
+  it('persisted first_failed_at survives a fresh runUploadCycle invocation (daemon restart proxy)', async () => {
+    writeQueueEntry(home, 'restart-1');
+    // First daemon "run": fail once at T0.
+    await runUploadCycle(cfg, home, {
+      uploader: async () => ({ kind: 'transient', status: 500 }),
+      now: () => new Date('2026-05-11T00:00:00Z'),
+    });
+    // Second daemon "run": same entry, fails again at T+25h. No in-memory state
+    // is reused — we rely on the timestamp being on disk.
+    const summary = await runUploadCycle(cfg, home, {
+      uploader: async () => ({ kind: 'transient', status: 500 }),
+      now: () => new Date('2026-05-12T01:00:00Z'),
+    });
+    expect(summary.outcomes[0]).toMatchObject({
+      id: 'restart-1',
+      outcome: 'dead-letter',
+      reason: 'too-old',
+      first_failed_at: '2026-05-11T00:00:00.000Z',
+    });
+  });
+
+  it('does not leave a .tmp metadata sidecar after a transient failure write', async () => {
+    writeQueueEntry(home, 'tmp-1');
+    await runUploadCycle(cfg, home, {
+      uploader: async () => ({ kind: 'transient', status: 500 }),
+      now: () => new Date('2026-05-11T10:00:00Z'),
+    });
+    const paths = digitalTwinPaths(home);
+    expect(existsSync(join(paths.pendingDir, 'tmp-1.json.tmp'))).toBe(false);
+    expect(existsSync(join(paths.pendingDir, 'tmp-1.json'))).toBe(true);
   });
 
   it('moves to dead-letter immediately on permanent-failure', async () => {
@@ -196,6 +275,39 @@ describe('runUploadCycle', () => {
     const summary = await runUploadCycle(cfg, home2);
     expect(summary.outcomes[0]).toEqual({ id: 'bad', outcome: 'invalid-metadata' });
     expect(existsSync(join(paths.deadLetterDir, 'bad.payload'))).toBe(true);
+  });
+
+  // Issue #266 F8 — oversize payload short-circuits to dead-letter without
+  // ever being read into memory.
+  it('routes oversize payload to dead-letter as a distinct too-large outcome', async () => {
+    writeQueueEntry(home, 'huge-1');
+    const paths = digitalTwinPaths(home);
+    // Overwrite payload with > 1KB so the test-injected 1KB cap triggers.
+    writeFileSync(
+      join(paths.pendingDir, 'huge-1.payload'),
+      'x'.repeat(2048),
+      'utf-8',
+    );
+
+    let uploaderCalls = 0;
+    const summary = await runUploadCycle(cfg, home, {
+      maxPayloadBytes: 1024, // 1KB cap, payload is 2KB → too-large
+      uploader: async () => {
+        uploaderCalls += 1;
+        return { kind: 'success', status: 200 };
+      },
+    });
+
+    expect(summary.outcomes[0]).toMatchObject({
+      id: 'huge-1',
+      outcome: 'too-large',
+      payload_size: 2048,
+    });
+    // Critically: the uploader was never called — we short-circuited.
+    expect(uploaderCalls).toBe(0);
+    // Entry moved to dead-letter, not stuck in pending/.
+    expect(existsSync(join(paths.pendingDir, 'huge-1.payload'))).toBe(false);
+    expect(existsSync(join(paths.deadLetterDir, 'huge-1.payload'))).toBe(true);
   });
 });
 

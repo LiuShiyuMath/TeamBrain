@@ -131,6 +131,29 @@ describe('tapSession', () => {
     expect(meta.quota).toEqual(quota);
   });
 
+  // Issue #266 F8 — source transcript size guard.
+  it('returns too-large when the source transcript exceeds maxPayloadBytes', () => {
+    const cwd = '/Users/test/proj-huge';
+    const sessionId = 'sess-huge';
+    const dir = join(home, '.claude', 'projects', projectDirForCwd(cwd));
+    mkdirSync(dir, { recursive: true });
+    const transcriptPath = join(dir, `${sessionId}.jsonl`);
+    writeFileSync(transcriptPath, 'x'.repeat(2048), 'utf-8'); // 2KB
+
+    const result = tapSession(
+      { cwd, sessionId },
+      { homedir: () => home, maxPayloadBytes: 1024 }, // 1KB cap
+    );
+
+    expect(result.status).toBe('too-large');
+    expect(result.payload_size).toBe(2048);
+    expect(result.payloadPath).toBeUndefined();
+    expect(result.metadataPath).toBeUndefined();
+    // The queue/pending dir must not have been polluted with a partial copy.
+    const pendingDir = join(home, '.teamagent', 'digital-twin', 'queue', 'pending');
+    expect(existsSync(pendingDir)).toBe(false);
+  });
+
   it('does not spawn daemon when daemonBin is missing/undefined', () => {
     const cwd = '/Users/test/proj2';
     const sessionId = 'sess-xyz';

@@ -4,7 +4,7 @@ import {
   shouldDeadLetter,
   BASE_BACKOFF_MS,
   MAX_BACKOFF_MS,
-  MAX_FAILURES_BEFORE_DEAD_LETTER,
+  DEAD_LETTER_AFTER_MS,
 } from '../backoff.js';
 
 describe('backoffMs', () => {
@@ -38,15 +38,28 @@ describe('backoffMs', () => {
 });
 
 describe('shouldDeadLetter', () => {
-  it('false below 10 failures', () => {
-    for (let i = 0; i < MAX_FAILURES_BEFORE_DEAD_LETTER; i++) {
-      expect(shouldDeadLetter(i)).toBe(false);
-    }
+  it('returns false for an entry that has not failed yet (firstFailedAt = null)', () => {
+    expect(shouldDeadLetter(null, new Date('2026-05-11T00:00:00Z'))).toBe(false);
   });
 
-  it('true at 10 failures and above', () => {
-    expect(shouldDeadLetter(MAX_FAILURES_BEFORE_DEAD_LETTER)).toBe(true);
-    expect(shouldDeadLetter(11)).toBe(true);
-    expect(shouldDeadLetter(100)).toBe(true);
+  it('returns false within the 24h window', () => {
+    const firstFailedAt = '2026-05-10T00:00:00Z';
+    expect(shouldDeadLetter(firstFailedAt, new Date('2026-05-10T00:00:00Z'))).toBe(false);
+    expect(shouldDeadLetter(firstFailedAt, new Date('2026-05-10T12:00:00Z'))).toBe(false);
+    expect(shouldDeadLetter(firstFailedAt, new Date('2026-05-10T23:59:59Z'))).toBe(false);
+  });
+
+  it('returns true at or beyond 24h since first failure', () => {
+    const firstFailedAt = '2026-05-10T00:00:00Z';
+    expect(shouldDeadLetter(firstFailedAt, new Date('2026-05-11T00:00:00Z'))).toBe(true);
+    expect(shouldDeadLetter(firstFailedAt, new Date('2026-05-12T00:00:00Z'))).toBe(true);
+  });
+
+  it('returns false when firstFailedAt is unparseable', () => {
+    expect(shouldDeadLetter('not-a-date', new Date('2026-05-11T00:00:00Z'))).toBe(false);
+  });
+
+  it('DEAD_LETTER_AFTER_MS is exactly 24h', () => {
+    expect(DEAD_LETTER_AFTER_MS).toBe(24 * 60 * 60 * 1000);
   });
 });

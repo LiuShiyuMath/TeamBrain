@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mkdirSync, writeFileSync, existsSync, readFileSync, utimesSync } from 'node:fs';
+import {
+  mkdirSync,
+  writeFileSync,
+  existsSync,
+  readFileSync,
+  readdirSync,
+  utimesSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ulid } from 'ulid';
@@ -9,8 +16,10 @@ import {
   removeEntry,
   moveToDeadLetter,
   enforceCapacity,
+  isEntryTooLarge,
   DEFAULT_QUEUE_CAPACITY_BYTES,
 } from '../queue.js';
+import { MAX_PAYLOAD_BYTES } from '../../limits.js';
 import { digitalTwinPaths } from '../../paths.js';
 import type { CcSessionMetadata } from '../../schemas/cc-session.js';
 
@@ -186,5 +195,106 @@ describe('enforceCapacity', () => {
 
   it('default capacity is 5000 MB', () => {
     expect(DEFAULT_QUEUE_CAPACITY_BYTES).toBe(5000 * 1024 * 1024);
+  });
+
+  // Issue #266 F5 — pair-aware deletion + orphan tolerance.
+  describe('issue #266 F5: pair-aware', () => {
+    it('removes the entire <id> pair atomically (no orphans left behind)', () => {
+      const home = freshHome();
+      writeEntry(home, 'old', 'x'.repeat(500), new Date('2026-05-01T00:00:00Z'));
+      writeEntry(home, 'new', 'x'.repeat(500), new Date('2026-05-02T00:00:00Z'));
+
+      enforceCapacity(home, 700); // forces eviction of at least one pair
+
+      const paths = digitalTwinPaths(home);
+      const oldPayload = join(paths.pendingDir, 'old.payload');
+      const oldMeta = join(paths.pendingDir, 'old.json');
+      // The oldest pair must be deleted *together* — never one half without the other.
+      expect(existsSync(oldPayload)).toBe(existsSync(oldMeta));
+    });
+
+    it('leaves zero orphans across pending/ + dead-letter/ after eviction', () => {
+      const home = freshHome();
+      // Three pairs in pending/, plenty over budget.
+      writeEntry(home, 'p1', 'x'.repeat(400), new Date('2026-05-01T00:00:00Z'));
+      writeEntry(home, 'p2', 'x'.repeat(400), new Date('2026-05-02T00:00:00Z'));
+      writeEntry(home, 'p3', 'x'.repeat(400), new Date('2026-05-03T00:00:00Z'));
+
+      enforceCapacity(home, 500); // keep only the newest pair
+
+      const paths = digitalTwinPaths(home);
+      const names = readdirSync(paths.pendingDir);
+      const payloadIds = names
+        .filter((n) => n.endsWith('.payload'))
+        .map((n) => n.slice(0, -'.payload'.length))
+        .sort();
+      const metaIds = names
+        .filter((n) => n.endsWith('.json'))
+        .map((n) => n.slice(0, -'.json'.length))
+        .sort();
+      expect(payloadIds).toEqual(metaIds);
+    });
+
+    it('tolerates pre-existing orphans (from older daemon versions)', () => {
+      const home = freshHome();
+      const paths = digitalTwinPaths(home);
+      mkdirSync(paths.pendingDir, { recursive: true });
+      // Half-pair from an older buggy run: payload without metadata.
+      writeFileSync(join(paths.pendingDir, 'lonely.payload'), 'x'.repeat(1000), 'utf-8');
+      utimesSync(
+        join(paths.pendingDir, 'lonely.payload'),
+        new Date('2026-04-01T00:00:00Z'),
+        new Date('2026-04-01T00:00:00Z'),
+      );
+      writeEntry(home, 'fresh', 'x'.repeat(400), new Date('2026-05-01T00:00:00Z'));
+
+      expect(() => enforceCapacity(home, 500)).not.toThrow();
+      // The oldest unit — the orphan — must be evicted first.
+      expect(existsSync(join(paths.pendingDir, 'lonely.payload'))).toBe(false);
+    });
+
+    it('evicts oldest pair first (sorted by oldest mtime across the pair)', () => {
+      const home = freshHome();
+      writeEntry(home, 'A', 'x'.repeat(500), new Date('2026-05-01T00:00:00Z'));
+      writeEntry(home, 'B', 'x'.repeat(500), new Date('2026-05-02T00:00:00Z'));
+      writeEntry(home, 'C', 'x'.repeat(500), new Date('2026-05-03T00:00:00Z'));
+
+      const deleted = enforceCapacity(home, 1100);
+      // Should evict 'A' (oldest pair) first; both its files appear in the deletion list.
+      const paths = digitalTwinPaths(home);
+      const deletedA = deleted.filter((p) =>
+        p === join(paths.pendingDir, 'A.payload') ||
+        p === join(paths.pendingDir, 'A.json'),
+      );
+      expect(deletedA.length).toBe(2);
+    });
+  });
+});
+
+// Issue #266 F8 — payload-size predicate.
+describe('isEntryTooLarge (issue #266 F8)', () => {
+  it('returns false when payloadSize is at or below the cap', () => {
+    const home = freshHome();
+    writeEntry(home, 'small', 'x'.repeat(10));
+    const [e] = listPending(home);
+    if (!e) throw new Error('expected entry');
+    expect(isEntryTooLarge(e, 1024)).toBe(false);
+  });
+
+  it('returns true when payloadSize exceeds the cap', () => {
+    const home = freshHome();
+    writeEntry(home, 'big', 'x'.repeat(2048));
+    const [e] = listPending(home);
+    if (!e) throw new Error('expected entry');
+    expect(isEntryTooLarge(e, 1024)).toBe(true);
+  });
+
+  it('defaults to MAX_PAYLOAD_BYTES (100MB) when no override is passed', () => {
+    expect(MAX_PAYLOAD_BYTES).toBe(100 * 1024 * 1024);
+    const home = freshHome();
+    writeEntry(home, 'small', 'x'.repeat(10));
+    const [e] = listPending(home);
+    if (!e) throw new Error('expected entry');
+    expect(isEntryTooLarge(e)).toBe(false);
   });
 });

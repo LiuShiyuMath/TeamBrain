@@ -47,6 +47,7 @@ import {
 } from 'node:os';
 import { ulid as defaultUlid } from 'ulid';
 import { digitalTwinPaths } from '../paths.js';
+import { MAX_PAYLOAD_BYTES } from '../limits.js';
 import {
   RECORDING_CODEC_DEFAULTS,
   type RecordingMetadata,
@@ -132,14 +133,26 @@ export interface StopDeps {
   teamagentVersion?: string;
   maxWaitMs?: number;
   pollIntervalMs?: number;
+  /** Issue #266 F8 — override the size cap for tests. Defaults to MAX_PAYLOAD_BYTES. */
+  maxPayloadBytes?: number;
 }
 
-export type StopStatus = 'stopped' | 'timeout' | 'no-pid' | 'error';
+/**
+ * Issue #266 F8 — `'too-large'` is a distinct status (kept out of `'error'`)
+ * so the CLI can render a clean "oversize recording, left at <path>"
+ * message instead of a generic error. The OGG file is NOT enqueued; the
+ * caller can manually inspect or delete it.
+ */
+export type StopStatus = 'stopped' | 'timeout' | 'no-pid' | 'too-large' | 'error';
 
 export interface StopResult {
   status: StopStatus;
   payloadPath?: string;
   metadataPath?: string;
+  /** Path to the oversize OGG when status = 'too-large' (file left in place). */
+  oversizePath?: string;
+  /** Size in bytes of the oversize OGG when status = 'too-large'. */
+  payload_size?: number;
   error?: string;
 }
 
@@ -393,16 +406,29 @@ export async function stop(
   // fully-written entries.
   mkdirSync(paths.pendingDir, { recursive: true });
 
-  const newId = ulidFn();
-  const payloadPath = join(paths.pendingDir, `${newId}.payload`);
-  const metadataPath = join(paths.pendingDir, `${newId}.json`);
-
   let payloadSize = 0;
   try {
     payloadSize = statSync(oggPath).size;
   } catch {
     /* keep 0 */
   }
+
+  // Issue #266 F8: refuse to enqueue an oversize recording. The OGG stays
+  // where ffmpeg wrote it; sidecars (.pid, .start.json) are still cleaned
+  // up so the recording session doesn't look "live" forever.
+  const sizeCap = deps.maxPayloadBytes ?? MAX_PAYLOAD_BYTES;
+  if (payloadSize > sizeCap) {
+    cleanupTempFiles(pidFile, startMetaFile);
+    return {
+      status: 'too-large',
+      oversizePath: oggPath,
+      payload_size: payloadSize,
+    };
+  }
+
+  const newId = ulidFn();
+  const payloadPath = join(paths.pendingDir, `${newId}.payload`);
+  const metadataPath = join(paths.pendingDir, `${newId}.json`);
 
   // Move OGG into pending/ so the daemon's listPending picks it up.
   try {

@@ -39,6 +39,13 @@ export interface CcSessionMetadata {
    * Absent on entries enqueued by the existing single-session Stop tap.
    */
   quota?: CcSessionQuotaBlock;
+  /**
+   * Issue #266 F7 — ISO timestamp of the first transient/network upload
+   * failure. Persisted into the queue metadata file so the 24h
+   * dead-letter window survives daemon idle-self-exits. Absent on
+   * entries that have never failed.
+   */
+  first_failed_at?: string;
 }
 
 /** Inner envelope block — what mock-server.ts reads under `obj.envelope`. */

@@ -357,6 +357,49 @@ describe('stop()', () => {
     const result = await stop({ id: 'rec-nopid', output }, deps);
     expect(result.status).toBe('no-pid');
   });
+
+  // Issue #266 F8 — oversize OGG is not enqueued; left in place for manual handling.
+  it('returns too-large and leaves OGG in place when recording exceeds maxPayloadBytes', async () => {
+    const output = join(tmp, 'rec-huge');
+    const oggPath = `${output}.ogg`;
+    writeFileSync(`${output}.pid`, '8888', 'utf-8');
+    writeFileSync(
+      `${output}.start.json`,
+      JSON.stringify({ id: 'rec-huge', started_at: '2026-05-08T12:00:00.000Z' }),
+      'utf-8',
+    );
+    // 2KB recording; we'll cap at 1KB.
+    writeFileSync(oggPath, Buffer.alloc(2048));
+
+    const home = freshTmp();
+    const deps: StopDeps = {
+      kill: () => true,
+      isAlive: () => false,
+      sleep: () => Promise.resolve(),
+      now: () => new Date('2026-05-08T12:00:05.000Z'),
+      homedir: () => home,
+      ulid: () => 'rec-huge-ulid',
+      platform: 'linux',
+      maxPayloadBytes: 1024,
+    };
+
+    const result = await stop({ id: 'rec-huge', output }, deps);
+    expect(result.status).toBe('too-large');
+    expect(result.oversizePath).toBe(oggPath);
+    expect(result.payload_size).toBe(2048);
+
+    // OGG must stay where ffmpeg wrote it — not moved into pending/.
+    expect(existsSync(oggPath)).toBe(true);
+    const pendingDir = join(home, '.teamagent', 'digital-twin', 'queue', 'pending');
+    if (existsSync(pendingDir)) {
+      // dir may exist from mkdir, but it must be empty.
+      const { readdirSync } = await import('node:fs');
+      expect(readdirSync(pendingDir)).toEqual([]);
+    }
+    // Sidecars cleaned up so the session doesn't look "live".
+    expect(existsSync(`${output}.pid`)).toBe(false);
+    expect(existsSync(`${output}.start.json`)).toBe(false);
+  });
 });
 
 describe('importRecording()', () => {

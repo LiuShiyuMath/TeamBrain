@@ -5,6 +5,7 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import type { SpawnOptions, ChildProcess } from 'node:child_process';
 import { ulid as defaultUlid } from 'ulid';
 import { digitalTwinPaths } from '../paths.js';
+import { MAX_PAYLOAD_BYTES } from '../limits.js';
 import type { CcSessionQuotaBlock, CcSessionMetadata } from '../schemas/cc-session.js';
 
 export interface TapSessionInput {
@@ -34,14 +35,23 @@ export interface TapSessionDeps {
   arch?: string;
   hostname?: string;
   nodeBin?: string;
+  /** Issue #266 F8 — override the size cap for tests. Defaults to MAX_PAYLOAD_BYTES. */
+  maxPayloadBytes?: number;
 }
 
-export type TapSessionStatus = 'tapped' | 'no-log' | 'error';
+/**
+ * Issue #266 F8 — `'too-large'` is a distinct status (kept out of `'error'`)
+ * so the bin-digital-twin-tap caller can emit a clean "oversize transcript
+ * skipped" diagnostic instead of a generic exception text.
+ */
+export type TapSessionStatus = 'tapped' | 'no-log' | 'too-large' | 'error';
 
 export interface TapSessionResult {
   status: TapSessionStatus;
   payloadPath?: string;
   metadataPath?: string;
+  /** Size in bytes of the source transcript that was rejected (when status = 'too-large'). */
+  payload_size?: number;
   error?: string;
 }
 
@@ -82,6 +92,21 @@ export function tapSession(
     const transcriptPath = claudeTranscriptPath(home, input.cwd, input.sessionId);
     if (!existsSync(transcriptPath)) {
       return { status: 'no-log' };
+    }
+
+    // Issue #266 F8: size-check the source transcript before we copy it
+    // into the queue, so an accidentally huge `.jsonl` never gets read into
+    // RAM downstream.
+    let sourceSize = 0;
+    try {
+      sourceSize = statSync(transcriptPath).size;
+    } catch {
+      // best-effort: if stat fails we still attempt the copy; downstream
+      // size-check on the queue file will catch it.
+    }
+    const sizeCap = deps.maxPayloadBytes ?? MAX_PAYLOAD_BYTES;
+    if (sourceSize > sizeCap) {
+      return { status: 'too-large', payload_size: sourceSize };
     }
 
     const paths = digitalTwinPaths(home);
