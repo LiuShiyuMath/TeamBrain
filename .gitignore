@@ -57,6 +57,8 @@ docs/dogfood/.last-verify.out
 .dogfood/
 # VERIFY judge-harness raw stdout/stderr/coverage/judge.json (transient evidence; bundle into PR if needed).
 .judge/
+# REVERIFICATION evidence (transient raw stdout/responses/JSON captured by the by-hand /reverification skill; regenerated per invocation).
+.reverification/
 # feature-verify-kit LLM output (regenerated per run by verify-claude-stream-json.sh).
 docs/feature-verify-kit/runs/
 .gstack/
