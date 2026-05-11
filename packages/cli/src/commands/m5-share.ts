@@ -7,6 +7,9 @@ import {
   mergeLwwBatch,
   isSafeRuleId,
   isSafeAuthor,
+  isTeamRulePathLengthSafe,
+  estimateTeamRulePathLength,
+  WINDOWS_MAX_PATH_BUDGET,
   type ShareAction,
   type TeamRuleFile,
 } from "@teamagent/core";
@@ -59,6 +62,17 @@ export async function runM5Share(
   const author = opts.author ?? gitUserName() ?? "unknown";
   const now = opts.now ?? new Date().toISOString();
   const confidence = opts.confidence ?? 0.85;
+  // W15-010: defense-in-depth — internal callers can also pass an
+  // out-of-range value; validate here regardless of the parser path.
+  if (
+    !Number.isFinite(confidence) ||
+    confidence < 0 ||
+    confidence > 1
+  ) {
+    throw new M5ShareValidationError(
+      `confidence "${confidence}" is not a finite number in [0,1]`,
+    );
+  }
 
   // B-114/B-115: reject path-traversal / ANSI / shell-injection in rule_id and author
   if (!isSafeRuleId(ruleId)) {
@@ -69,6 +83,17 @@ export async function runM5Share(
   if (!isSafeAuthor(author)) {
     throw new M5ShareValidationError(
       `--author "${author}" contains illegal characters; allowed: [A-Za-z0-9._-], length 1..100`,
+    );
+  }
+  // W15-012: rule_id at the SAFE_RULE_ID_RE boundary (200 chars) plus a
+  // long projectRoot prefix can produce an absolute path > Windows
+  // MAX_PATH (260) without long-path support. Refuse early so writeFile
+  // does not silently leave a half-formed file or an unreadable path.
+  if (!isTeamRulePathLengthSafe(opts.projectRoot, author, ruleId)) {
+    const len = estimateTeamRulePathLength(opts.projectRoot, author, ruleId);
+    throw new M5ShareValidationError(
+      `rule path would be ${len} chars long, exceeding the Windows MAX_PATH budget of ${WINDOWS_MAX_PATH_BUDGET}; ` +
+        `shorten --rule-id (currently ${ruleId.length} chars) or move the project to a shorter path`,
     );
   }
   // B-140: reject future timestamps (> now + 60s tolerance for clock skew)
@@ -166,6 +191,20 @@ export function parseM5ShareArgs(args: readonly string[]): M5ShareOptions {
     const ts = take("--now");
     if (ts !== undefined) {
       opts.now = ts;
+      continue;
+    }
+    // W15-010: parse --confidence (was previously silently ignored, so
+    // calls like `--confidence=0.42` ran with the default 0.85 fallback
+    // and `--confidence=NaN|2|-1` succeeded without complaint).
+    const c = take("--confidence");
+    if (c !== undefined) {
+      const n = Number(c);
+      if (!Number.isFinite(n) || n < 0 || n > 1) {
+        throw new M5ShareValidationError(
+          `--confidence "${c}" is not a finite number in [0,1]`,
+        );
+      }
+      opts.confidence = n;
       continue;
     }
   }

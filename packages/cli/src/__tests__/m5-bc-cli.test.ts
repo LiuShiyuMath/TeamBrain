@@ -2,8 +2,15 @@ import { describe, it, expect } from "vitest";
 import { promises as fs } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { runM5Share } from "../commands/m5-share.js";
-import { runM5Sync } from "../commands/m5-sync.js";
+import {
+  M5ShareValidationError,
+  parseM5ShareArgs,
+  runM5Share,
+} from "../commands/m5-share.js";
+import {
+  renderM5SyncResult,
+  runM5Sync,
+} from "../commands/m5-sync.js";
 import { runM5Delete } from "../commands/m5-delete.js";
 import { runM5Status } from "../commands/m5-status.js";
 import { runM5Infect } from "../commands/m5-infect.js";
@@ -300,6 +307,109 @@ describe("m5-sync command (LWW + tombstone)", () => {
       const r = sync.merged.find((m) => m.rule_id === "R-rez")!;
       expect(r.state).toBe("alive");
       expect(r.summary).toContain("改回");
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("W15-010: --confidence is parsed and stored as the rule's confidence", async () => {
+    const root = await tmpProject();
+    try {
+      const opts = parseM5ShareArgs([
+        "--text=PR 后必须 fetch codex review",
+        "--rule-id=R-w15010",
+        "--scope=team",
+        "--author=tester",
+        "--confidence=0.42",
+        `--project-root=${root}`,
+      ]);
+      expect(opts.confidence).toBe(0.42);
+
+      const r = await runM5Share({
+        ...opts,
+        now: "2026-05-08T10:00:00Z",
+      });
+      expect(r.action.kind).toBe("promote_to_l2");
+
+      const written = JSON.parse(
+        await fs.readFile(
+          path.join(root, ".teamagent", "team", "tester", "R-w15010.json"),
+          "utf8",
+        ),
+      );
+      expect(written.current.confidence).toBe(0.42);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("W15-010: invalid --confidence values throw validation error", () => {
+    for (const bad of ["NaN", "2", "-1", "abc"]) {
+      expect(() => parseM5ShareArgs([`--confidence=${bad}`])).toThrow(
+        M5ShareValidationError,
+      );
+    }
+  });
+
+  it("W15-010: runM5Share rejects out-of-range confidence from internal caller", async () => {
+    const root = await tmpProject();
+    try {
+      await expect(
+        runM5Share({
+          projectRoot: root,
+          text: "x",
+          author: "tester",
+          confidence: 5,
+          now: "2026-05-08T10:00:00Z",
+        }),
+      ).rejects.toThrow(M5ShareValidationError);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("W15-012: rule_id at 200 chars under a long projectRoot is rejected", async () => {
+    const longRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "m5-w15012-very-long-root-prefix-"),
+    );
+    try {
+      await expect(
+        runM5Share({
+          projectRoot: longRoot,
+          text: "x",
+          ruleId: "a".repeat(200),
+          scope: "team",
+          author: "tester",
+          now: "2026-05-08T10:00:00Z",
+        }),
+      ).rejects.toThrow(/Windows MAX_PATH/);
+    } finally {
+      await fs.rm(longRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("W15-014: surfaces every skipped file (no truncation) + reason breakdown", async () => {
+    const root = await tmpProject();
+    try {
+      const dir = path.join(root, ".teamagent", "team", "alice");
+      await fs.mkdir(dir, { recursive: true });
+      // 30 corrupt JSON files — pre-fix only the first was listed.
+      for (let i = 0; i < 30; i++) {
+        await fs.writeFile(
+          path.join(dir, `corrupt-${String(i).padStart(2, "0")}.json`),
+          "this is not json",
+        );
+      }
+      const sync = await runM5Sync({ projectRoot: root });
+      expect(sync.skipped_files?.length).toBe(30);
+
+      const rendered = renderM5SyncResult(sync);
+      // every file path appears in the rendered output
+      for (let i = 0; i < 30; i++) {
+        expect(rendered).toContain(`corrupt-${String(i).padStart(2, "0")}.json`);
+      }
+      // reason-category breakdown surfaces the count by category
+      expect(rendered).toMatch(/skipped 30 file\(s\)/);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
