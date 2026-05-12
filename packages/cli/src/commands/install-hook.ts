@@ -125,7 +125,11 @@ interface HookCommand {
   timeout?: number;
 }
 
-function cliRoot(): string {
+/**
+ * Issue #299: exported so `teamagent doctor` can resolve the same dist root
+ * the install pipeline uses when walking the install table. Behaviour unchanged.
+ */
+export function cliRoot(): string {
   // 从当前文件位置向上走，找到包含 dist/bin-pre-tool-use.cjs 的目录。
   // - Dev (source, tsx):  .../packages/cli/src/commands/install-hook.ts
   //                       → .../packages/cli/
@@ -398,7 +402,10 @@ type ChannelDef = {
   readonly scopes: ReadonlyArray<"project" | "user">;
 };
 
-const ALL_CHANNELS: ReadonlyArray<ChannelDef> = [
+// Issue #299: exported so `teamagent doctor` (and unit tests asserting tsup
+// build entries) can iterate the install table without duplicating the
+// channel definitions. Treat as read-only.
+export const ALL_CHANNELS: ReadonlyArray<ChannelDef> = [
   { channel: "PreToolUse",       tag: HOOK_TAG,           bundleFilename: "bin-pre-tool-use.cjs",       matcher: "Bash|Write|Edit|WebFetch", timeout: 30, scopes: ["project", "user"] },
   { channel: "PostToolUse",      tag: POST_HOOK_TAG,      bundleFilename: "bin-post-tool-use.cjs",      matcher: "Bash|Write|Edit|WebFetch", timeout: 30, scopes: ["project", "user"] },
   { channel: "UserPromptSubmit", tag: USER_PROMPT_TAG,    bundleFilename: "bin-user-prompt-submit.cjs",                                       timeout: 10, scopes: ["project", "user"] },
@@ -412,6 +419,33 @@ const ALL_CHANNELS: ReadonlyArray<ChannelDef> = [
   { channel: "SessionStart",     tag: SESSION_START_TAG,  bundleFilename: "bin-session-start.cjs",                                            timeout: 10, scopes: ["user"] },
   { channel: "Stop",             tag: DIGITAL_TWIN_TAG,   bundleFilename: "bin-digital-twin-tap.cjs",                                         timeout: 5,  scopes: ["user"] },
 ];
+
+/**
+ * Issue #299: each install-table entry resolved to its expected absolute
+ * dist path. `teamagent doctor` walks this and `existsSync`s each `absPath`
+ * to verify the released tarball actually shipped every bundle declared by
+ * `ALL_CHANNELS`. The silent-skip branch in `applyChannelOps` used to
+ * swallow missing bundles entirely, leaving `doctor` and the install command
+ * both green while the hook never registered.
+ */
+export interface InstallTableBundleEntry {
+  channel: HookChannel;
+  tag: string;
+  bundleFilename: string;
+  absPath: string;
+  scopes: ReadonlyArray<"project" | "user">;
+}
+
+export function enumerateInstallTableBundlePaths(): InstallTableBundleEntry[] {
+  const root = cliRoot();
+  return ALL_CHANNELS.map((def) => ({
+    channel: def.channel,
+    tag: def.tag,
+    bundleFilename: def.bundleFilename,
+    absPath: path.join(root, "dist", def.bundleFilename),
+    scopes: def.scopes,
+  }));
+}
 
 const ALL_HOOK_CHANNELS: ReadonlyArray<HookChannel> = [
   "PreToolUse",
@@ -494,7 +528,21 @@ function applyChannelOps(opts: {
     }
 
     const bundlePath = resolveBundle(def.bundleFilename);
-    if (!bundlePath || !fs.existsSync(bundlePath)) continue;
+    if (!bundlePath || !fs.existsSync(bundlePath)) {
+      // Issue #299: previously a silent `continue` — the user-level
+      // digital-twin Stop tap was dropped without trace when 0.11.0 shipped
+      // without its bundle. Now we emit one stderr line so the user (and
+      // CI logs) can see exactly which channel was skipped and why. Install
+      // still continues — partial install is better than a hard failure for
+      // the cross-version-compat case the silent skip originally guarded
+      // against (older dist missing a newer bundle).
+      // The strict gate moved to `teamagent doctor` (checkInstallTableBundles),
+      // which fails-loud with exit non-zero on any missing install-table bundle.
+      process.stderr.write(
+        `teamagent: skipping channel ${def.channel} — bundle ${def.bundleFilename} not found\n`,
+      );
+      continue;
+    }
 
     let command: string;
     if (scope === "user") {

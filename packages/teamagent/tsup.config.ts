@@ -2,7 +2,11 @@ import { defineConfig } from "tsup";
 import fs from "node:fs";
 import path from "node:path";
 
-const ENTRIES = {
+// Issue #299: exported so packages/cli tests can assert parity with
+// install-hook.ts's ALL_CHANNELS install table. Every user-installable
+// bundleFilename declared in that table MUST appear as a key here,
+// otherwise the released dist silently drops the corresponding hook.
+export const ENTRIES = {
   bin:                      "../cli/src/bin.ts",
   "bin-pre-tool-use":       "../cli/src/bin-pre-tool-use.ts",
   "bin-post-tool-use":      "../cli/src/bin-post-tool-use.ts",
@@ -12,6 +16,12 @@ const ENTRIES = {
   "bin-pre-compact":        "../cli/src/bin-pre-compact.ts",
   "bin-user-prompt-submit": "../cli/src/bin-user-prompt-submit.ts",
   "bin-updater":            "../cli/src/bin-updater.ts",
+  // Issue #299: the user-level Stop tap (digital-twin) was declared in
+  // install-hook.ts's ALL_CHANNELS install table but never built into dist/,
+  // so applyChannelOps silently skipped it after every install. Adding it
+  // here + to the cjs block below + noExternal-ing @teamagent/digital-twin
+  // makes the bundle land alongside the other bin-*.cjs files.
+  "bin-digital-twin-tap":   "../cli/src/bin-digital-twin-tap.ts",
 };
 
 const NATIVE_EXTERNAL = [
@@ -100,6 +110,9 @@ export default defineConfig([
       "bin-pre-compact":        ENTRIES["bin-pre-compact"],
       "bin-user-prompt-submit": ENTRIES["bin-user-prompt-submit"],
       "bin-updater":            ENTRIES["bin-updater"],
+      // Issue #299: bundle the user-level digital-twin Stop tap into the cjs
+      // block so install-hook.ts's ALL_CHANNELS entry can actually register.
+      "bin-digital-twin-tap":   ENTRIES["bin-digital-twin-tap"],
     },
     format: ["cjs"],
     platform: "node",
@@ -113,6 +126,12 @@ export default defineConfig([
       "@teamagent/core",
       "@teamagent/adapters",
       "@teamagent/cli",
+      // Issue #299: bin-digital-twin-tap.ts imports from @teamagent/digital-twin
+      // (tapSession, ensureDefaultConfig, runHourlyScanIfDue, …). Without
+      // noExternal-ing the workspace package, the produced cjs would still
+      // call `require("@teamagent/digital-twin")` at runtime, which is not
+      // installed in the npm-flat layout of the published tarball.
+      "@teamagent/digital-twin",
       "zod",
       "@xenova/transformers",
     ],

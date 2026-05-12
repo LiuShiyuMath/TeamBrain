@@ -31,6 +31,35 @@ artifacts the user sees) do NOT need an entry.
   `friendlyError` now also passes the full detail through (was truncated at 120 chars
   before, losing the path the user needs to act on).
 
+- **`dist/bin-digital-twin-tap.cjs` is now actually built and shipped** (issue #299).
+  0.11.0's install table and CHANGELOG referenced this bundle as a user-level
+  Stop hook, but `packages/teamagent/tsup.config.ts` `ENTRIES` dict (and the cjs
+  block's `entry` list) never declared it, so the file was never emitted to
+  `dist/`. `applyChannelOps` then silently `continue`d past the missing bundle
+  and the user-level digital-twin Stop tap was dropped from
+  `~/.claude/settings.json` without trace. The 0.11.0 CHANGELOG claim
+  "v0.11.0 drops the `.sh` wrapper and collapses to the `.cjs` user-level path
+  alone — net 1 spawn per Stop in TeamBrain" was therefore a no-op for
+  downstream users until this fix (the .sh wrapper inside the TeamBrain repo
+  kept the tap alive in dogfood mode, masking the regression).
+
+  Defense-in-depth added alongside the build entry fix:
+
+  - **`teamagent doctor` now walks every install-table-referenced bundle.**
+    The new check (`install-table-bundles`) iterates `install-hook.ts`'s
+    `ALL_CHANNELS`, resolves each `bundleFilename` to its expected dist path
+    via `enumerateInstallTableBundlePaths()`, and `fs.existsSync` each. Any
+    missing file → `status: "fail"` listing every absent filename → doctor
+    exits non-zero. Catches future build-config regressions of the same
+    shape before release.
+
+  - **`applyChannelOps` no longer silently skips missing bundles.**
+    Replaced the silent `continue` with a single stderr line
+    `teamagent: skipping channel <channel> — bundle <bundle-filename> not found`,
+    then continues. Install still proceeds with whatever bundles exist
+    (partial install > hard failure for genuine cross-version-compat cases).
+    Warn is NOT silenced under CI.
+
 ## 0.11.0 — 2026-05-09
 
 Closes the three follow-ups captured in PR #232 § 8 ("Follow-up captured for next major version") via one bundled cleanup PR. See `docs/plans/2026-05-09-install-hook-cleanup-v0.11/plan.md` for the full scope decision. Bumps from 0.10.x with one user-visible deprecation and one performance fix specific to working inside the TeamBrain repo itself.

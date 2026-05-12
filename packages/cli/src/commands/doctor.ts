@@ -11,6 +11,10 @@ import {
   stripLegacyTeamagentBlock,
 } from "@teamagent/core";
 import { unifiedDiff } from "./doctor-diff.js";
+import {
+  enumerateInstallTableBundlePaths,
+  type InstallTableBundleEntry,
+} from "./install-hook.js";
 
 const _require = createRequire(import.meta.url);
 
@@ -52,6 +56,13 @@ export type CodexProbe = (env?: NodeJS.ProcessEnv) => ClaudeProbeResult;
 export type McpProbe = (url: string) => Promise<{ reachable: boolean; detail: string }>;
 
 /**
+ * Issue #299: re-export the install-table entry shape so tests can construct
+ * synthetic enumerations without depending on install-hook.ts internals.
+ */
+export type InstallTableEntry = InstallTableBundleEntry;
+export type InstallTableEnumerator = () => InstallTableEntry[];
+
+/**
  * Issue #280: result of probing whether the SessionStart hook script
  * actually spawns and exits cleanly. `checkHookScript` only verifies
  * the .cjs file is present — a script can exist and still crash on
@@ -85,6 +96,14 @@ export interface DoctorOptions {
   mcpProbe?: McpProbe;
   /** Issue #280: injectable hook spawn probe for `checkHookSpawn`. Default uses real child_process. */
   hookProbe?: HookProbe;
+  /**
+   * Issue #299: injection points for `checkInstallTableBundles`. Tests pass
+   * synthetic enumerators + existsFn to avoid touching the real dist tree.
+   * Real-world use: defaults walk the live `ALL_CHANNELS` install table and
+   * `fs.existsSync`.
+   */
+  installTableEnumerator?: InstallTableEnumerator;
+  bundleExistsFn?: (p: string) => boolean;
 }
 
 export function parseDoctorArgs(argv: string[]): DoctorOptions {
@@ -245,6 +264,17 @@ export async function executeDoctor(opts: DoctorOptions = {}): Promise<DoctorRes
   if (nodeCheck.status === "fail") {
     return finalize(checks, true, opts, fixOutcomes);
   }
+
+  // Check 1b (issue #299): integrity of teamagent's own dist. Walks every
+  // install-table entry and verifies the referenced bundle exists at its
+  // expected absolute path. Placed early — it has no dependency on Claude
+  // Code being installed or knowledge.db existing, and a missing bundle
+  // can itself BE the root cause of downstream "hook never runs" reports.
+  // Strict (fail-loud, exit non-zero on missing): the silent-skip branch
+  // in applyChannelOps is no longer the only line of defense.
+  checks.push(
+    checkInstallTableBundles(opts.installTableEnumerator, opts.bundleExistsFn),
+  );
 
   // Check 2: Claude Code installed
   const claudeCheck = checkClaudeCode(opts.claudeProbe);
@@ -893,6 +923,45 @@ export function checkSettingsJsonScope(
  *
  * Fix recipe: `teamagent init` re-runs the mirror step.
  */
+/**
+ * Issue #299: walk the install-table (ALL_CHANNELS in install-hook.ts) and
+ * assert every referenced `bundleFilename` actually exists at its expected
+ * absolute dist path. This closes the gap that lets the 0.11.0 release
+ * tarball ship without `bin-digital-twin-tap.cjs` while `applyChannelOps`
+ * silently continues past the missing bundle.
+ *
+ * Status semantics:
+ * - `pass` — every install-table bundle exists on disk.
+ * - `fail` — at least one is missing; detail lists every missing filename
+ *   so the maintainer can identify which build entry / tsup config block
+ *   omitted it. `fix` recipe rebuilds the package.
+ *
+ * Both deps are injectable for unit-test isolation; production defaults
+ * walk the real install table via `enumerateInstallTableBundlePaths()` and
+ * `fs.existsSync`.
+ */
+export function checkInstallTableBundles(
+  enumerate: InstallTableEnumerator = enumerateInstallTableBundlePaths,
+  existsFn: (p: string) => boolean = (p) => fs.existsSync(p),
+): DoctorCheckResult {
+  const entries = enumerate();
+  const missing = entries.filter((e) => !existsFn(e.absPath));
+  if (missing.length === 0) {
+    return {
+      name: "install-table-bundles",
+      status: "pass",
+      detail: `${entries.length} 个 install-table bundles 都在 dist/ 下`,
+    };
+  }
+  const filenames = Array.from(new Set(missing.map((m) => m.bundleFilename))).join(", ");
+  return {
+    name: "install-table-bundles",
+    status: "fail",
+    detail: `dist 缺失 install-table 引用的 bundle: ${filenames}`,
+    fix: "pnpm --filter teamagent build  （或重装 teamagent）",
+  };
+}
+
 export function checkStaticUserSkillsPropagated(home: string): DoctorCheckResult {
   const plan = planStaticUserSkillInstall({
     homeDir: home,

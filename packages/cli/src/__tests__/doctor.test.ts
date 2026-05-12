@@ -6,6 +6,7 @@ import { describe, it, expect } from "vitest";
 import { openDb } from "@teamagent/adapters";
 import {
   checkClaudeMd,
+  checkInstallTableBundles,
   executeDoctor,
   renderDoctorResult,
   renderDoctorHelp,
@@ -19,6 +20,8 @@ import {
   checkPluginSync,
   checkCodexBin,
   checkMcpReachability,
+  type InstallTableEnumerator,
+  type InstallTableEntry,
   type ClaudeProbe,
   type ClaudeProbeResult,
   type CodexProbe,
@@ -874,5 +877,69 @@ describe("checkHookSpawn (issue #280)", () => {
       expect(r.status).toBe("fail");
       expect(r.status).not.toBe("skip");
     }
+  });
+});
+
+describe("checkInstallTableBundles (issue #299)", () => {
+  const userScope: ReadonlyArray<"project" | "user"> = ["user"];
+
+  it("passes when every install-table bundle exists", () => {
+    const enumerate: InstallTableEnumerator = () => [
+      { channel: "Stop", tag: "teamagent-stop", bundleFilename: "bin-stop.cjs", absPath: "/fake/dist/bin-stop.cjs", scopes: userScope },
+      { channel: "Stop", tag: "teamagent-digital-twin-tap", bundleFilename: "bin-digital-twin-tap.cjs", absPath: "/fake/dist/bin-digital-twin-tap.cjs", scopes: userScope },
+    ];
+    const result = checkInstallTableBundles(enumerate, () => true);
+    expect(result.status).toBe("pass");
+    expect(result.name).toBe("install-table-bundles");
+  });
+
+  it("fails when one bundle is missing and names the filename in detail", () => {
+    const entries: InstallTableEntry[] = [
+      { channel: "Stop", tag: "teamagent-stop", bundleFilename: "bin-stop.cjs", absPath: "/fake/dist/bin-stop.cjs", scopes: userScope },
+      { channel: "Stop", tag: "teamagent-digital-twin-tap", bundleFilename: "bin-digital-twin-tap.cjs", absPath: "/fake/dist/bin-digital-twin-tap.cjs", scopes: userScope },
+    ];
+    const enumerate: InstallTableEnumerator = () => entries;
+    const existsFn = (p: string) => !p.includes("digital-twin-tap");
+    const result = checkInstallTableBundles(enumerate, existsFn);
+    expect(result.status).toBe("fail");
+    expect(result.detail).toContain("bin-digital-twin-tap.cjs");
+    expect(result.fix).toBeDefined();
+  });
+
+  it("lists every missing filename when multiple bundles are absent", () => {
+    const entries: InstallTableEntry[] = [
+      { channel: "PreToolUse", tag: "t1", bundleFilename: "bin-pre-tool-use.cjs", absPath: "/x/dist/bin-pre-tool-use.cjs", scopes: userScope },
+      { channel: "Stop", tag: "t2", bundleFilename: "bin-stop.cjs", absPath: "/x/dist/bin-stop.cjs", scopes: userScope },
+      { channel: "Stop", tag: "t3", bundleFilename: "bin-digital-twin-tap.cjs", absPath: "/x/dist/bin-digital-twin-tap.cjs", scopes: userScope },
+    ];
+    const enumerate: InstallTableEnumerator = () => entries;
+    const existsFn = (p: string) => p.includes("bin-pre-tool-use");
+    const result = checkInstallTableBundles(enumerate, existsFn);
+    expect(result.status).toBe("fail");
+    expect(result.detail).toContain("bin-stop.cjs");
+    expect(result.detail).toContain("bin-digital-twin-tap.cjs");
+    expect(result.detail).not.toContain("bin-pre-tool-use.cjs");
+  });
+});
+
+describe("executeDoctor → install-table-bundles wiring (issue #299)", () => {
+  it("flips allPassed=false when an install-table bundle is missing", async () => {
+    const enumerate: InstallTableEnumerator = () => [
+      { channel: "Stop", tag: "teamagent-digital-twin-tap", bundleFilename: "bin-digital-twin-tap.cjs", absPath: "/missing/bin-digital-twin-tap.cjs", scopes: ["user"] as const },
+    ];
+    const r = await executeDoctor({
+      cwd: os.tmpdir(),
+      homeDir: os.tmpdir(),
+      installTableEnumerator: enumerate,
+      bundleExistsFn: () => false,
+      // Suppress noise from unrelated checks; we only assert the install-table outcome.
+      claudeProbe: () => ({ ok: false, stdout: "", stderr: "" }),
+      codexProbe: () => ({ ok: false, stdout: "", stderr: "" }),
+      mcpProbe: async () => ({ reachable: false, detail: "skipped" }),
+    });
+    const itb = r.checks.find((c) => c.name === "install-table-bundles");
+    expect(itb).toBeDefined();
+    expect(itb?.status).toBe("fail");
+    expect(r.allPassed).toBe(false);
   });
 });

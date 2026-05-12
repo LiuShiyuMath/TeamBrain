@@ -1584,3 +1584,86 @@ describe("install-user-hook deprecation (B+C scope, 2026-05-09)", () => {
     }
   });
 });
+
+describe("applyChannelOps soft-warn on missing bundle (issue #299)", () => {
+  // The bug: when an install-table entry references a bundle whose file is
+  // absent (e.g. dist/bin-digital-twin-tap.cjs missing from a release tarball),
+  // applyChannelOps used to `continue;` silently — install reports success,
+  // settings.json never gets the entry, no stderr line.
+  // The fix: print one stderr line `teamagent: skipping channel <ch> — bundle
+  // <file> not found` then continue. Other channels still install.
+
+  let tmp: ReturnType<typeof mkTmp>;
+
+  beforeEach(() => {
+    tmp = mkTmp();
+  });
+
+  afterEach(() => {
+    tmp.cleanup();
+  });
+
+  it("writes a stderr line naming the channel + bundle filename when a user-level Stop bundle is missing", () => {
+    // Real PreToolUse bundle exists (this test file's own path), but the
+    // digital-twin Stop entry is intentionally pointed at a non-existent path
+    // → applyChannelOps must warn AND continue.
+    const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "install-hook-warn-"));
+    const captured: string[] = [];
+    const origWrite = process.stderr.write.bind(process.stderr);
+    (process.stderr as any).write = ((chunk: any, ...rest: any[]) => {
+      captured.push(typeof chunk === "string" ? chunk : chunk?.toString?.() ?? "");
+      return origWrite(chunk, ...rest);
+    }) as typeof process.stderr.write;
+
+    try {
+      installHook({
+        cwd: tmp.cwd,
+        hookEntry: FAKE_HOOK_ENTRY,
+        userLevel: true,
+        homeDir: fakeHome,
+        // Point the digital-twin entry at a missing path; everything else
+        // defaults so the rest of the channels still resolve via cliRoot().
+        digitalTwinEntry: path.join(fakeHome, "does", "not", "exist", "bin-digital-twin-tap.cjs"),
+      });
+    } finally {
+      (process.stderr as any).write = origWrite;
+    }
+
+    const joined = captured.join("");
+    expect(joined).toContain("teamagent: skipping channel Stop");
+    expect(joined).toContain("bin-digital-twin-tap.cjs");
+    expect(joined).toContain("not found");
+
+    fs.rmSync(fakeHome, { recursive: true, force: true });
+  });
+
+  it("install still succeeds with other channels intact when one bundle is missing", () => {
+    const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "install-hook-partial-"));
+    try {
+      const r = installHook({
+        cwd: tmp.cwd,
+        hookEntry: FAKE_HOOK_ENTRY,
+        userLevel: true,
+        homeDir: fakeHome,
+        digitalTwinEntry: path.join(fakeHome, "does", "not", "exist", "bin-digital-twin-tap.cjs"),
+      });
+
+      // Project-level settings.local.json was written → install succeeded.
+      expect(fs.existsSync(r.settingsPath)).toBe(true);
+      const userSettingsPath = path.join(fakeHome, ".claude", "settings.json");
+      expect(fs.existsSync(userSettingsPath)).toBe(true);
+
+      // The non-digital-twin user-level Stop entry (bin-stop.cjs) — if its
+      // bundle exists in cliRoot/dist — should still be present.
+      const user = JSON.parse(fs.readFileSync(userSettingsPath, "utf-8"));
+      const stopList = user.hooks?.Stop ?? [];
+      const hasDigitalTwin = (stopList as any[]).some(
+        (e) => e._teamagentTag === "teamagent-digital-twin-tap",
+      );
+      // Missing-bundle entry must NOT be in settings.
+      expect(hasDigitalTwin).toBe(false);
+    } finally {
+      fs.rmSync(fakeHome, { recursive: true, force: true });
+    }
+  });
+});
